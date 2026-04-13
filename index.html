@@ -2689,7 +2689,7 @@ const Game={
       });
     }
     if(S.lms){
-      const alpha=S.lmsTrackerT>0?Math.min(1,S.lmsTrackerT):1;
+      const alpha=1;
       if(me.role==='survivor'){
         const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
         if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
@@ -2705,7 +2705,7 @@ const Game={
     if(!ctx)return;
     ctx.save();Game._beginCam();Game._drawWorld(me);Game._endCam();
     Game._drawFog(me);
-    ctx.save();Game._beginCam();Game._drawTrackers(me||W.players[S.myId]);ctx.restore();
+    Game._drawTrackers(me||W.players[S.myId]);
     ctx.restore();
   },
 
