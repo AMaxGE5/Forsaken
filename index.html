@@ -719,10 +719,57 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 // ══════════════════════════════════════════
 //  AUTH & STATS
 // ══════════════════════════════════════════
+// ── PERSISTENT STORAGE (survives file re-downloads) ──
+// Uses window.storage (Anthropic artifact storage) with localStorage fallback.
+// Key is fixed 'forsaken_db' — not tied to file path or version.
+const PersistDB={
+  _UKEY:'forsaken_users_v1',
+  _RKEY:'forsaken_remember_v1',
+  _cache:null,
+  async _load(){
+    // Try window.storage first (artifact persistent storage)
+    if(typeof window.storage!=='undefined'){
+      try{
+        const r=await window.storage.get(this._UKEY);
+        const data=r?JSON.parse(r.value):{};
+        // Merge with localStorage in case there's older data there
+        try{const loc=JSON.parse(localStorage.getItem('fsk_users')||'{}');Object.assign(data,loc);}catch(e){}
+        this._cache=data;return data;
+      }catch(e){}
+    }
+    // Fallback: localStorage
+    try{this._cache=JSON.parse(localStorage.getItem('fsk_users')||'{}');return this._cache;}catch(e){this._cache={};return {};}
+  },
+  async _store(db){
+    this._cache=db;
+    const str=JSON.stringify(db);
+    if(typeof window.storage!=='undefined'){
+      try{await window.storage.set(this._UKEY,str);}catch(e){}
+    }
+    try{localStorage.setItem('fsk_users',str);}catch(e){}
+  },
+  async getRemember(){
+    if(typeof window.storage!=='undefined'){
+      try{const r=await window.storage.get(this._RKEY);if(r)return r.value;}catch(e){}
+    }
+    return localStorage.getItem('fsk_remember');
+  },
+  async setRemember(user){
+    if(typeof window.storage!=='undefined'){try{await window.storage.set(this._RKEY,user);}catch(e){}}
+    try{localStorage.setItem('fsk_remember',user);}catch(e){}
+  },
+  async clearRemember(){
+    if(typeof window.storage!=='undefined'){try{await window.storage.delete(this._RKEY);}catch(e){}}
+    try{localStorage.removeItem('fsk_remember');}catch(e){}
+  },
+};
+
 const Auth={
   _tab:'login',
-  _db(){try{return JSON.parse(localStorage.getItem('fsk_users')||'{}');}catch(e){return {};}},
-  _save(db){localStorage.setItem('fsk_users',JSON.stringify(db));},
+  _dbLoaded:false,
+  _db(){return PersistDB._cache||{};},
+  async _ensureDB(){if(!this._dbLoaded){await PersistDB._load();this._dbLoaded=true;}},
+  _save(db){PersistDB._store(db);},
   switchTab(t){
     this._tab=t;
     document.getElementById('tabLogin').classList.toggle('active',t==='login');
@@ -735,7 +782,8 @@ const Auth={
     const el=document.getElementById('authMsg');
     el.textContent=txt;el.className='auth-msg '+(ok?'ok':'err');
   },
-  submit(){
+  async submit(){
+    await this._ensureDB();
     const user=document.getElementById('authUser').value.trim();
     const pass=document.getElementById('authPass').value;
     if(!user||user.length<2){this.msg('Usuario muy corto (mín 2 chars)');return;}
@@ -761,13 +809,13 @@ const Auth={
   },
   _handleRemember(user){
     if(document.getElementById('rememberMe')?.checked){
-      localStorage.setItem('fsk_remember',user);
+      PersistDB.setRemember(user);
     } else {
-      localStorage.removeItem('fsk_remember');
+      PersistDB.clearRemember();
     }
   },
   logout(){
-    localStorage.removeItem('fsk_remember');
+    PersistDB.clearRemember();
     Stats._key=null;Stats.username='';
     document.getElementById('authUser').value='';
     document.getElementById('authPass').value='';
@@ -780,13 +828,24 @@ const Auth={
     const btn=document.getElementById('logoutBtn');
     if(btn&&Stats.username)btn.textContent='🚪 CERRAR SESIÓN ('+Stats.username+')';
   },
-  loadRemember(){
-    const saved=localStorage.getItem('fsk_remember');
+  async loadRemember(){
+    // First load the DB from persistent storage
+    await PersistDB._load();
+    Auth._dbLoaded=true;
+    const saved=await PersistDB.getRemember();
     if(saved){
       const el=document.getElementById('authUser');
       if(el)el.value=saved;
       const cb=document.getElementById('rememberMe');
       if(cb)cb.checked=true;
+      // Auto-login if remember is set and account exists
+      const db=Auth._db();
+      if(db[saved.toLowerCase()]){
+        const acc=db[saved.toLowerCase()];
+        Stats.load(saved.toLowerCase());
+        Auth.updateLogoutBtn();
+        setTimeout(()=>UI.show('s-menu'),100);
+      }
     }
   },
 };
@@ -1618,7 +1677,14 @@ const LobbyWorld={
 // ══════════════════════════════════════════
 const Net={
   gc(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>a[Math.random()*a.length|0]).join('');},
-  pid(c){return 'FSK2025V7_'+c;},
+  pid(c){return 'FSK2025V8_'+c;},
+  _cfg(){return {debug:0,config:{iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'stun:stun2.l.google.com:19302'},
+    {urls:'stun:stun3.l.google.com:19302'},
+    {urls:'stun:stun4.l.google.com:19302'},
+  ],iceTransportPolicy:'all'}};},
   uid(){return 'u'+Math.random().toString(36).slice(2,10);},
   cleanup(){
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
@@ -1632,7 +1698,7 @@ const Net={
   createRoom(){
     Net.cleanup();S.isHost=true;S.code=Net.gc();S.myId=Net.uid();
     document.getElementById('codeDisplay').textContent=S.code;
-    const peer=new Peer(Net.pid(S.code),{debug:0});S.peer=peer;
+    const peer=new Peer(Net.pid(S.code),Net._cfg());S.peer=peer;
     peer.on('open',()=>{
       document.getElementById('createWaiting').textContent='sala activa — esperando jugadores···';
       S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
@@ -1653,9 +1719,9 @@ const Net={
     if(code.length!==6){document.getElementById('joinErr').textContent='El código debe tener 6 caracteres.';return;}
     Net.cleanup();S.isHost=false;S.code=code;S.myId=Net.uid();
     document.getElementById('joinErr').textContent='Conectando···';
-    const peer=new Peer(null,{debug:0});S.peer=peer;
+    const peer=new Peer(null,Net._cfg());S.peer=peer;
     peer.on('open',()=>{
-      const conn=peer.connect(Net.pid(code),{reliable:true,serialization:'json'});
+      const conn=peer.connect(Net.pid(code),{reliable:true,serialization:'json',metadata:{id:S.myId}});
       S.conns=[conn];let opened=false;
       conn.on('open',()=>{
         opened=true;
@@ -1664,10 +1730,13 @@ const Net={
       });
       conn.on('data',d=>Net.onClient(d));
       conn.on('close',()=>{if(!S.running){alert('Desconectado.');UI.goMenu();}});
-      conn.on('error',()=>document.getElementById('joinErr').textContent='No se pudo conectar.');
-      setTimeout(()=>{if(!opened)document.getElementById('joinErr').textContent='Tiempo agotado.';},9000);
+      conn.on('error',(e)=>{const msg=e&&e.type?e.type:'sin respuesta';document.getElementById('joinErr').textContent='Error al conectar: '+msg+'. Verifica el código.';});
+      setTimeout(()=>{if(!opened)document.getElementById('joinErr').textContent='Tiempo agotado — verifica que el host esté activo y el código sea correcto.';},12000);
     });
-    peer.on('error',err=>document.getElementById('joinErr').textContent='Error: '+err.type);
+    peer.on('error',err=>{
+      const msg=err.type==='peer-unavailable'?'Sala no encontrada — verifica el código o pide al host que espere conectado.':('Error: '+err.type);
+      document.getElementById('joinErr').textContent=msg;
+    });
   },
   broadcast(msg){S.conns.forEach(c=>{try{if(c.open)c.send(msg);}catch(e){}});},
   sendHost(msg){const c=S.conns[0];try{if(c&&c.open)c.send(msg);}catch(e){}},
@@ -1909,7 +1978,7 @@ const Game={
 
   updateCamera(me){
     if(!me)return;
-    const effScale=me.role==='killer'?SCALE*.72:SCALE;
+    const effScale=me.role==='killer'?SCALE*.72:SCALE*.88;
     CAM._effScale=effScale;
     const worldW=MAP_W*TILE,worldH=MAP_H*TILE;
     const vpW=VW/effScale,vpH=VH/effScale;
@@ -3006,7 +3075,7 @@ const KillerWin={
 //  INIT
 // ══════════════════════════════════════════
 Inp.init();
-Auth.loadRemember();
+Auth.loadRemember(); // async — handles auto-login if remembered
 
 // Click outside profile modal to close
 document.getElementById('profileModal').addEventListener('click',function(e){
