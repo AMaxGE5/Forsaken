@@ -1673,40 +1673,108 @@ const LobbyWorld={
 };
 
 // ══════════════════════════════════════════
-//  NETWORKING
+//  NETWORKING — reescrito desde 0
+//  P2P con PeerJS: host crea sala con código
+//  de 6 chars; cliente se conecta con ese código.
+//  Mejoras: TURN servers, auto-retry en ID
+//  ocupado, heartbeat, mejor manejo de errores.
 // ══════════════════════════════════════════
 const Net={
-  gc(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>a[Math.random()*a.length|0]).join('');},
-  pid(c){return 'FSK2025V8_'+c;},
-  _cfg(){return {debug:0,host:'0.peerjs.com',port:443,secure:true,key:'peerjs',config:{iceServers:[
-    {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'stun:stun2.l.google.com:19302'},
-    {urls:'stun:stun.services.mozilla.com'},
-    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:80?transport=tcp',username:'openrelayproject',credential:'openrelayproject'},
-  ],iceTransportPolicy:'all'}};},
+  // ── Prefijo versión — cámbialo si ves conflictos de ID ──────────────────────
+  _PFX:'FSK26_',
+
+  // ── Genera código de sala de 6 chars sin chars ambiguos ─────────────────────
+  gc(){
+    const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({length:6},()=>a[Math.random()*a.length|0]).join('');
+  },
+
+  // ── Peer ID del host = prefijo + código ──────────────────────────────────────
+  pid(code){return this._PFX+code;},
+
+  // ── Config PeerJS con STUN + TURN (para NAT estricto / móvil) ───────────────
+  _peerCfg(){
+    return {
+      debug:0,
+      config:{
+        iceServers:[
+          // STUN de Google — rápidos y gratuitos
+          {urls:'stun:stun.l.google.com:19302'},
+          {urls:'stun:stun1.l.google.com:19302'},
+          {urls:'stun:stun2.l.google.com:19302'},
+          // TURN gratuito — necesario cuando STUN falla (NAT simétrico)
+          {urls:'turn:openrelay.metered.ca:80',
+           username:'openrelayproject',credential:'openrelayproject'},
+          {urls:'turn:openrelay.metered.ca:443',
+           username:'openrelayproject',credential:'openrelayproject'},
+          {urls:'turn:openrelay.metered.ca:443?transport=tcp',
+           username:'openrelayproject',credential:'openrelayproject'},
+        ],
+        iceCandidatePoolSize:10,
+      },
+    };
+  },
+
+  // ── ID local único por sesión ────────────────────────────────────────────────
   uid(){return 'u'+Math.random().toString(36).slice(2,10);},
+
+  // ── Heartbeat vars ───────────────────────────────────────────────────────────
+  _hbInt:null,
+  _createAttempts:0,
+
+  // ── Limpia todo estado de red ────────────────────────────────────────────────
   cleanup(){
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
     if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+    if(this._hbInt){clearInterval(this._hbInt);this._hbInt=null;}
     S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
     LobbyWorld.stop();
     if(S.peer){try{S.peer.destroy();}catch(e){}S.peer=null;}
     S.conns=[];S.players=[];Inp.clear();
   },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  CREAR SALA (HOST)
+  // ══════════════════════════════════════════════════════════════════
   createRoom(){
-    Net.cleanup();S.isHost=true;S.code=Net.gc();S.myId=Net.uid();
+    Net.cleanup();
+    S.isHost=true;
+    S.myId=Net.uid();
+
+    // Primera vez genera código; si es retry mantiene el actual
+    if(this._createAttempts===0) S.code=Net.gc();
+    this._createAttempts++;
+
+    const setErr=t=>{const e=document.getElementById('createErr');if(e)e.textContent=t;};
+    const setWait=t=>{const e=document.getElementById('createWaiting');if(e)e.textContent=t;};
+
     document.getElementById('codeDisplay').textContent=S.code;
-    const peer=new Peer(Net.pid(S.code),Net._cfg());S.peer=peer;
+    setErr('');
+    setWait('⏳ iniciando servidor···');
+
+    const peer=new Peer(Net.pid(S.code),Net._peerCfg());
+    S.peer=peer;
+
+    // Timeout para conexión al broker PeerJS
+    const brokerTO=setTimeout(()=>{
+      if(!peer.open){
+        setErr('Sin respuesta del servidor. Verifica tu internet.');
+        try{peer.destroy();}catch(e){}
+      }
+    },16000);
+
+    // ── Conectado al broker ──────────────────────────────────────────
     peer.on('open',()=>{
-      document.getElementById('createWaiting').textContent='sala activa — esperando jugadores···';
-      S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
+      clearTimeout(brokerTO);
+      this._createAttempts=0;
+      setWait('✓ sala activa — comparte el código');
+      S.players=[{id:S.myId,name:Stats.username||'HOST',
+        username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
       UI.showLobby();
     });
+
+    // ── Nuevo jugador se conecta ─────────────────────────────────────
     peer.on('connection',conn=>{
       conn.on('open',()=>{
         S.conns.push(conn);
@@ -1715,72 +1783,194 @@ const Net={
         conn.on('error',()=>Net.onDisc(conn));
       });
     });
-    peer.on('error',err=>document.getElementById('createErr').textContent='Error: '+err.type);
+
+    // ── Errores del peer ─────────────────────────────────────────────
+    peer.on('error',err=>{
+      clearTimeout(brokerTO);
+      if(err.type==='unavailable-id'){
+        // El código está en uso (sesión reciente aún registrada)
+        if(this._createAttempts<8){
+          S.code=Net.gc(); // intenta código nuevo
+          setWait('Código ocupado, generando otro···');
+          setErr('');
+          setTimeout(()=>Net.createRoom(),900);
+        } else {
+          this._createAttempts=0;
+          setErr('No se pudo crear sala. Intenta de nuevo en unos segundos.');
+        }
+      } else if(err.type==='network'||err.type==='server-error'){
+        setErr('Error de red — verifica tu conexión a internet.');
+      } else {
+        setErr('Error: '+err.type);
+      }
+    });
+
+    // ── Desconexión del broker: intenta reconectar ───────────────────
+    peer.on('disconnected',()=>{
+      if(S.isHost&&!peer.destroyed){
+        try{peer.reconnect();}catch(e){}
+      }
+    });
   },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  UNIRSE A SALA (CLIENTE)
+  // ══════════════════════════════════════════════════════════════════
   joinRoom(){
-    const code=document.getElementById('codeInput').value.trim().toUpperCase();
-    if(code.length!==6){document.getElementById('joinErr').textContent='El código debe tener 6 caracteres.';return;}
-    Net.cleanup();S.isHost=false;S.code=code;S.myId=Net.uid();
-    document.getElementById('joinErr').textContent='Conectando···';
-    const peer=new Peer(null,Net._cfg());S.peer=peer;
-    let joined=false;
-    let timeoutId=null;
+    // Limpia código: sólo alfanumérico, mayúsculas, 6 chars
+    const raw=document.getElementById('codeInput').value
+      .trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const setErr=t=>document.getElementById('joinErr').textContent=t;
+
+    if(raw.length!==6){setErr('El código debe tener 6 caracteres.');return;}
+
+    Net.cleanup();
+    S.isHost=false;
+    S.code=raw;
+    S.myId=Net.uid();
+    setErr('⏳ Conectando al servidor···');
+
+    const peer=new Peer(null,Net._peerCfg());
+    S.peer=peer;
+
+    // Timeout para conexión al broker
+    const brokerTO=setTimeout(()=>{
+      if(!peer.open){
+        setErr('❌ No se pudo conectar. Verifica tu internet.');
+        try{peer.destroy();}catch(e){}
+      }
+    },16000);
+
+    // ── Conectado al broker ──────────────────────────────────────────
     peer.on('open',()=>{
-      const conn=peer.connect(Net.pid(code),{reliable:true,serialization:'json',metadata:{id:S.myId}});
+      clearTimeout(brokerTO);
+      setErr('⏳ Buscando sala···');
+
+      const hostId=Net.pid(raw);
+      const conn=peer.connect(hostId,{
+        reliable:true,
+        serialization:'json',
+        metadata:{clientId:S.myId,v:2},
+      });
       S.conns=[conn];
-      timeoutId=setTimeout(()=>{
-        if(!joined){
-          document.getElementById('joinErr').textContent='Tiempo agotado — verifica que el host esté activo y el código sea correcto.';
-          try{conn.close();}catch(e){}
+
+      let opened=false;
+
+      // Timeout para la conexión WebRTC con el host
+      const connTO=setTimeout(()=>{
+        if(!opened){
+          setErr('❌ La sala no responde. ¿El host sigue conectado?');
           try{peer.destroy();}catch(e){}
-          S.peer=null;S.conns=[];
         }
       },20000);
+
       conn.on('open',()=>{
-        joined=true;
-        document.getElementById('joinErr').textContent='';
-        conn.send({t:'join',id:S.myId,name:Stats.username||('JUGADOR '+(10+Math.random()*89|0)),username:Stats.username||'?'});
+        opened=true;
+        clearTimeout(connTO);
+        setErr('');
+
+        // Presentarse al host
+        conn.send({
+          t:'join',
+          id:S.myId,
+          name:Stats.username||('JUGADOR '+(10+Math.random()*89|0)),
+          username:Stats.username||'?',
+        });
+
+        // Iniciar heartbeat para detectar desconexión silenciosa
+        Net._startHeartbeat();
       });
+
       conn.on('data',d=>Net.onClient(d));
+
       conn.on('close',()=>{
-        if(timeoutId){clearTimeout(timeoutId);timeoutId=null;}
-        if(joined){
-          document.getElementById('joinErr').textContent='Desconectado del host.';
-          Net.cleanup();UI.show('s-menu');
+        if(S.running||S.inLobbyWorld){
+          alert('Desconectado del host.');
+          Net.cleanup();
+          UI.show('s-menu');
         }
       });
-      conn.on('error',(e)=>{
-        if(timeoutId){clearTimeout(timeoutId);timeoutId=null;}
-        const msg=e&&e.type?e.type:'sin respuesta';
-        document.getElementById('joinErr').textContent='Error al conectar: '+msg+'. Verifica el código.';
+
+      conn.on('error',e=>{
+        const msg=e&&e.type?e.type:'desconocido';
+        setErr('❌ Error de conexión: '+msg);
       });
     });
+
+    // ── Errores del peer ─────────────────────────────────────────────
     peer.on('error',err=>{
-      if(timeoutId){clearTimeout(timeoutId);timeoutId=null;}
-      const msg=err.type==='peer-unavailable'?'Sala no encontrada — verifica el código o pide al host que espere conectado.':('Error de red: '+err.type);
-      document.getElementById('joinErr').textContent=msg;
+      clearTimeout(brokerTO);
+      if(err.type==='peer-unavailable'){
+        setErr('❌ Sala no encontrada. Verifica el código o espera a que el host la abra.');
+      } else if(err.type==='network'){
+        setErr('❌ Error de red. Verifica tu conexión.');
+      } else {
+        setErr('❌ Error: '+err.type);
+      }
     });
   },
-  broadcast(msg){S.conns.forEach(c=>{try{if(c.open)c.send(msg);}catch(e){}});},
-  sendHost(msg){const c=S.conns[0];try{if(c&&c.open)c.send(msg);}catch(e){}},
+
+  // ── Heartbeat: el cliente le manda ping al host cada 5s ──────────────────────
+  _startHeartbeat(){
+    if(this._hbInt)clearInterval(this._hbInt);
+    this._hbInt=setInterval(()=>{
+      if(!S.isHost){
+        const c=S.conns[0];
+        if(c&&c.open){try{c.send({t:'ping'});}catch(e){}}
+      }
+    },5000);
+  },
+
+  // ── Enviar a todos los clientes (host→clientes) ──────────────────────────────
+  broadcast(msg){
+    S.conns.forEach(c=>{try{if(c&&c.open)c.send(msg);}catch(e){}});
+  },
+
+  // ── Enviar sólo al host (cliente→host) ──────────────────────────────────────
+  sendHost(msg){
+    const c=S.conns[0];
+    try{if(c&&c.open)c.send(msg);}catch(e){}
+  },
+
+  // ── Broadcast posición en lobby ───────────────────────────────────────────────
   broadcastLobbyPos(){
-    const msg={t:'lobbyPos',id:S.myId,x:S.lobbyP.x,y:S.lobbyP.y,facing:S.lobbyP.facing,
+    const msg={t:'lobbyPos',id:S.myId,
+      x:S.lobbyP.x,y:S.lobbyP.y,facing:S.lobbyP.facing,
       name:(S.players.find(p=>p.id===S.myId)||{}).name||Stats.username||'?',
-      username:Stats.username||'?',timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins};
-    if(S.isHost) Net.broadcast(msg);
+      username:Stats.username||'?',
+      timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins};
+    if(S.isHost)Net.broadcast(msg);
     else Net.sendHost(msg);
   },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  HOST: PROCESA MENSAJES ENTRANTES
+  // ══════════════════════════════════════════════════════════════════
   onHost(conn,d){
+    // Ping/pong para heartbeat
+    if(d.t==='ping'){try{conn.send({t:'pong'});}catch(e){}return;}
+
     if(d.t==='join'){
       if(S.running){
-        conn.send({t:'spectate',gs:Game.serial(),players:S.players});return;
+        // Partida en curso → espectador
+        conn.send({t:'spectate',gs:Game.serial(),players:S.players});
+        return;
       }
       if(!S.players.find(p=>p.id===d.id)){
-        S.players.push({id:d.id,name:d.name,username:d.username||d.name,host:false,connId:conn.peer,color:PCOLORS[S.players.length%PCOLORS.length]});
+        S.players.push({
+          id:d.id,name:d.name,
+          username:d.username||d.name,
+          host:false,connId:conn.peer,
+          color:PCOLORS[S.players.length%PCOLORS.length],
+        });
       }
+      // Avisar a todos la lista actualizada
       Net.broadcast({t:'list',players:S.players,code:S.code});
+      // Confirmar lobby al recién llegado
       conn.send({t:'lobby',players:S.players,code:S.code});
-      UI.renderLobbyPlayers();Net.checkCd();
+      UI.renderLobbyPlayers();
+      Net.checkCd();
+
     } else if(d.t==='input'){
       if(!S.running)return;
       const p=W.players[d.pid];
@@ -1793,35 +1983,62 @@ const Net={
         if(d.q&&!p.qPrev)Game.doBloxy(d.pid);
         p.qPrev=d.q;
       }
+
     } else if(d.t==='lobbyPos'){
-      // relay to all clients and store
-      LobbyWorld.lobbyPlayers[d.id]={id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
-        username:d.username,timePlayed:d.timePlayed||0,survWins:d.survWins||0,killWins:d.killWins||0};
-      Net.broadcast(d); // relay
+      // Guardar y reenviar a los demás clientes
+      LobbyWorld.lobbyPlayers[d.id]={
+        id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
+        username:d.username,timePlayed:d.timePlayed||0,
+        survWins:d.survWins||0,killWins:d.killWins||0,
+      };
+      Net.broadcast(d);
     }
   },
+
+  // ══════════════════════════════════════════════════════════════════
+  //  CLIENTE: PROCESA MENSAJES ENTRANTES
+  // ══════════════════════════════════════════════════════════════════
   onClient(d){
-    if(d.t==='lobby'){S.players=d.players;S.code=d.code;UI.showLobby();}
-    else if(d.t==='list'){S.players=d.players;UI.renderLobbyPlayers();Net.checkCd();}
-    else if(d.t==='cd'){
+    if(d.t==='pong')return; // heartbeat response
+
+    if(d.t==='lobby'){
+      S.players=d.players;S.code=d.code;
+      UI.showLobby();
+
+    } else if(d.t==='list'){
+      S.players=d.players;
+      UI.renderLobbyPlayers();
+      Net.checkCd();
+
+    } else if(d.t==='cd'){
       S.cdVal=d.v;
       if(d.v>0&&!S.cdInt){
         document.getElementById('lobbyWaitMsg').style.display='none';
         document.getElementById('lobbyCDLabel').textContent='INICIANDO EN';
-        S.cdInt=setInterval(()=>{},1e9);
+        S.cdInt=setInterval(()=>{},1e9); // dummy — sólo para detectar "ya corriendo"
       }
       UI.tickCd(d.v);
-    }
-    else if(d.t==='start'){Game.clientStart(d);}
-    else if(d.t==='lms'){GameAudio.playLMS();}
-    else if(d.t==='gs'){if(S.running)Game.applyState(d.gs);}
-    else if(d.t==='over'){Game.handleRoundEnd(d.winner,d.reason);}
-    else if(d.t==='lobbyPos'){
-      // store other players' lobby positions + stats
-      LobbyWorld.lobbyPlayers[d.id]={id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
-        username:d.username,timePlayed:d.timePlayed||0,survWins:d.survWins||0,killWins:d.killWins||0};
-    }
-    else if(d.t==='spectate'){
+
+    } else if(d.t==='start'){
+      Game.clientStart(d);
+
+    } else if(d.t==='lms'){
+      GameAudio.playLMS();
+
+    } else if(d.t==='gs'){
+      if(S.running)Game.applyState(d.gs);
+
+    } else if(d.t==='over'){
+      Game.handleRoundEnd(d.winner,d.reason);
+
+    } else if(d.t==='lobbyPos'){
+      LobbyWorld.lobbyPlayers[d.id]={
+        id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
+        username:d.username,timePlayed:d.timePlayed||0,
+        survWins:d.survWins||0,killWins:d.killWins||0,
+      };
+
+    } else if(d.t==='spectate'){
       S.isDeadSpec=true;S.players=d.players;
       Game.initFromSerial(d.gs);
       Game.setupCanvas();
@@ -1832,25 +2049,25 @@ const Net={
       document.getElementById('deathOv').classList.remove('show');
       UI.updSpecFollow();
       S.running=true;Game.specLoop();
-    }
-    else if(d.t==='stopCd'){
-      // Host cancelled countdown (player disconnected below minimum)
+
+    } else if(d.t==='stopCd'){
       if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
       document.getElementById('lobbyCDBig').textContent='';
       document.getElementById('lobbyCDLabel').textContent='ESPERANDO JUGADORES';
       document.getElementById('lobbyWaitMsg').style.display='block';
-    }
-    else if(d.t==='returnLobby'){
-      // Host tells everyone to go back to lobby
+
+    } else if(d.t==='returnLobby'){
       Game.doReturnToLobby();
     }
   },
+
+  // ── Jugador desconectado ──────────────────────────────────────────────────────
   onDisc(conn){
     S.conns=S.conns.filter(c=>c!==conn);
     const idx=S.players.findIndex(p=>p.connId===conn.peer);
     const discId=idx!==-1?S.players[idx].id:null;
     if(idx!==-1)S.players.splice(idx,1);
-    // Mark disconnected player as dead/escaped so game-end logic works
+    // Si el juego está corriendo, marcar al jugador como muerto
     if(S.running&&S.isHost&&discId&&W.players&&W.players[discId]){
       const dp=W.players[discId];
       dp.alive=false;dp.escaped=false;
@@ -1860,13 +2077,14 @@ const Net={
     if(!S.running)Net.checkCd();
     else if(S.isHost)Game.checkWin();
   },
+
+  // ── Decide si arrancar la cuenta regresiva ───────────────────────────────────
   checkCd(){
     if(!S.isHost)return;
     if(S.players.length>=2){
       UI.startCd();
     } else {
       UI.stopCd();
-      // Tell all clients to reset their countdown display
       Net.broadcast({t:'stopCd'});
     }
   },
