@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -501,7 +502,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <input class="code-input" id="codeInput" type="text" maxlength="6" placeholder="XXXXXX"
       oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
     <div class="err" id="joinErr"></div>
-    <button class="btn" onclick="Net.joinRoom(false)"><span>CONECTAR →</span></button>
+    <button class="btn" onclick="Net.joinRoom()"><span>CONECTAR →</span></button>
     <button class="btn btn-sec" onclick="UI.goMenu()"><span>← VOLVER</span></button>
   </div>
 </div>
@@ -975,7 +976,7 @@ const SPAWN_DEFS=[
 // ══════════════════════════════════════════
 const S={
   peer:null,conns:[],isHost:false,code:'',myId:'',
-  players:[],myRole:'',running:false,raf:null,cdInt:null,cdVal:40,
+  players:[],myRole:'',running:false,raf:null,cdInt:null,cdVal:30,
   // spectate
   isDeadSpec:false,  // local player died and chose spectate
   specTarget:null,
@@ -1075,7 +1076,7 @@ function pointInRotRect(px,py,cx,cy,hw,hh,ang){
 // ══════════════════════════════════════════
 const UI={
   show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');},
-  showCreate(){UI.show('s-create');document.getElementById('createErr').textContent='';document.getElementById('createWaiting').textContent='conectando···';Net.createRoom(false);},
+  showCreate(){UI.show('s-create');document.getElementById('createErr').textContent='';document.getElementById('createWaiting').textContent='conectando···';Net.createRoom();},
   showJoin(){UI.show('s-join');document.getElementById('codeInput').value='';document.getElementById('joinErr').textContent='';},
   goMenu(){Net.cleanup();Stats.stopSession();UI.show('s-menu');},
 
@@ -1141,7 +1142,7 @@ const UI={
   tickCd(v=S.cdVal){
     const el=document.getElementById('lobbyCDBig');
     el.textContent=v>0?v:'¡YA!';
-    el.className='lobby-cd-val'+(v<=10&&v>0?' urgent':'');
+    el.className=v<=10&&v>0?'urgent':'';
   },
 
   updateHUD(){
@@ -1678,26 +1679,13 @@ const LobbyWorld={
 const Net={
   gc(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return Array.from({length:6},()=>a[Math.random()*a.length|0]).join('');},
   pid(c){return 'FSK2025V8_'+c;},
-  // ── Signaling server: PeerJS cloud explícito (evita defaults inestables)
-  // ── ICE: STUN públicos + TURN de Open Relay (gratuito, sin auth requerida
-  //    para traversal básico) para cruzar NAT entre redes distintas.
-  _cfg(){return {
-    host:'0.peerjs.com',port:443,path:'/',secure:true,
-    debug:0,
-    config:{iceServers:[
-      {urls:'stun:stun.l.google.com:19302'},
-      {urls:'stun:stun1.l.google.com:19302'},
-      {urls:'stun:stun2.l.google.com:19302'},
-      {urls:'stun:global.stun.twilio.com:3478'},
-      // TURN — Open Relay Project (free, sin clave)
-      {urls:'turn:openrelay.metered.ca:80',
-       username:'openrelayproject',credential:'openrelayproject'},
-      {urls:'turn:openrelay.metered.ca:443',
-       username:'openrelayproject',credential:'openrelayproject'},
-      {urls:'turn:openrelay.metered.ca:443?transport=tcp',
-       username:'openrelayproject',credential:'openrelayproject'},
-    ],iceTransportPolicy:'all'}
-  };},
+  _cfg(){return {debug:0,config:{iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'stun:stun2.l.google.com:19302'},
+    {urls:'stun:stun3.l.google.com:19302'},
+    {urls:'stun:stun4.l.google.com:19302'},
+  ],iceTransportPolicy:'all'}};},
   uid(){return 'u'+Math.random().toString(36).slice(2,10);},
   cleanup(){
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
@@ -1708,29 +1696,12 @@ const Net={
     if(S.peer){try{S.peer.destroy();}catch(e){}S.peer=null;}
     S.conns=[];S.players=[];Inp.clear();
   },
-  _cfgFallback(){return {
-    host:'peerjs.fly.dev',port:443,path:'/',secure:true,
-    debug:0,
-    config:{iceServers:[
-      {urls:'stun:stun.l.google.com:19302'},
-      {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-      {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-    ],iceTransportPolicy:'all'}
-  };},
-  createRoom(retry){
+  createRoom(){
     Net.cleanup();S.isHost=true;S.code=Net.gc();S.myId=Net.uid();
     document.getElementById('codeDisplay').textContent=S.code;
-    const cfg=retry?Net._cfgFallback():Net._cfg();
-    if(retry)document.getElementById('createErr').textContent='Reintentando con servidor alternativo···';
-    const peer=new Peer(Net.pid(S.code),cfg);S.peer=peer;
-    let opened=false;
-    const errT=setTimeout(()=>{
-      if(!opened&&!retry){document.getElementById('createErr').textContent='Servidor lento, reintentando···';Net.createRoom(true);}
-    },8000);
+    const peer=new Peer(Net.pid(S.code),Net._cfg());S.peer=peer;
     peer.on('open',()=>{
-      clearTimeout(errT);opened=true;
       document.getElementById('createWaiting').textContent='sala activa — esperando jugadores···';
-      document.getElementById('createErr').textContent='';
       S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
       UI.showLobby();
     });
@@ -1742,70 +1713,35 @@ const Net={
         conn.on('error',()=>Net.onDisc(conn));
       });
     });
-    peer.on('error',err=>{
-      clearTimeout(errT);
-      if(err.type==='unavailable-id'&&!retry){
-        document.getElementById('createErr').textContent='Código en uso, generando uno nuevo···';
-        Net.createRoom(false);return;
-      }
-      if(!retry&&(err.type==='server-error'||err.type==='network'||err.type==='socket-error'||err.type==='socket-closed')){
-        document.getElementById('createErr').textContent='Servidor caído, cambiando a servidor alternativo···';
-        setTimeout(()=>Net.createRoom(true),1200);return;
-      }
-      const msgs={network:'Sin red o servidor inaccesible','socket-error':'Error de socket','socket-closed':'Conexión cerrada al servidor','server-error':'Error del servidor de señalización','unavailable-id':'ID de sala ocupado'};
-      document.getElementById('createErr').textContent='Error P2P: '+(msgs[err.type]||err.type);
-    });
+    peer.on('error',err=>document.getElementById('createErr').textContent='Error: '+err.type);
   },
-  joinRoom(retry){
+  joinRoom(){
     const code=document.getElementById('codeInput').value.trim().toUpperCase();
     if(code.length!==6){document.getElementById('joinErr').textContent='El código debe tener 6 caracteres.';return;}
     Net.cleanup();S.isHost=false;S.code=code;S.myId=Net.uid();
-    const label=retry?'Reintentando con servidor alternativo···':'Conectando al servidor P2P···';
-    document.getElementById('joinErr').textContent=label;
-    const cfg=retry?Net._cfgFallback():Net._cfg();
-    const peer=new Peer(null,cfg);S.peer=peer;
-    let connOpened=false;
-    const globalTimeout=setTimeout(()=>{
-      if(!connOpened&&!retry){document.getElementById('joinErr').textContent='Sin respuesta, reintentando···';Net.joinRoom(true);}
-      else if(!connOpened){document.getElementById('joinErr').textContent='Tiempo agotado — verifica que el host esté activo y el código sea correcto.';}
-    },14000);
+    document.getElementById('joinErr').textContent='Conectando···';
+    const peer=new Peer(null,Net._cfg());S.peer=peer;
     peer.on('open',()=>{
-      document.getElementById('joinErr').textContent='Servidor P2P OK — buscando sala···';
       const conn=peer.connect(Net.pid(code),{reliable:true,serialization:'json',metadata:{id:S.myId}});
-      S.conns=[conn];
+      S.conns=[conn];let opened=false;
       conn.on('open',()=>{
-        clearTimeout(globalTimeout);connOpened=true;
+        opened=true;
         document.getElementById('joinErr').textContent='';
         conn.send({t:'join',id:S.myId,name:Stats.username||('JUGADOR '+(10+Math.random()*89|0)),username:Stats.username||'?'});
       });
       conn.on('data',d=>Net.onClient(d));
-      conn.on('close',()=>{if(!S.running){alert('Desconectado del host.');UI.goMenu();}});
-      conn.on('error',(e)=>{
-        clearTimeout(globalTimeout);
-        const t=e&&e.type?e.type:'desconocido';
-        document.getElementById('joinErr').textContent='Error de conexión: '+t+' — verifica el código.';
-      });
+      conn.on('close',()=>{alert('Desconectado del host.');Net.cleanup();UI.show('s-menu');});
+      conn.on('error',(e)=>{const msg=e&&e.type?e.type:'sin respuesta';document.getElementById('joinErr').textContent='Error al conectar: '+msg+'. Verifica el código.';});
+      setTimeout(()=>{if(!opened)document.getElementById('joinErr').textContent='Tiempo agotado — verifica que el host esté activo y el código sea correcto.';},12000);
     });
     peer.on('error',err=>{
-      clearTimeout(globalTimeout);
-      if(!retry&&(err.type==='server-error'||err.type==='network'||err.type==='socket-error'||err.type==='socket-closed')){
-        document.getElementById('joinErr').textContent='Servidor caído, cambiando a servidor alternativo···';
-        setTimeout(()=>Net.joinRoom(true),1200);return;
-      }
-      const msgs={
-        'peer-unavailable':'Sala no encontrada — verifica el código o pide al host que espere en el lobby.',
-        network:'Sin red o servidor inaccesible',
-        'socket-error':'Error de socket — revisa tu conexión',
-        'socket-closed':'Conexión al servidor cerrada',
-        'server-error':'Error del servidor de señalización',
-      };
-      document.getElementById('joinErr').textContent=msgs[err.type]||('Error P2P: '+err.type);
+      const msg=err.type==='peer-unavailable'?'Sala no encontrada — verifica el código o pide al host que espere conectado.':('Error: '+err.type);
+      document.getElementById('joinErr').textContent=msg;
     });
   },
   broadcast(msg){S.conns.forEach(c=>{try{if(c.open)c.send(msg);}catch(e){}});},
   sendHost(msg){const c=S.conns[0];try{if(c&&c.open)c.send(msg);}catch(e){}},
   broadcastLobbyPos(){
-    const card=Stats.getCard();
     const msg={t:'lobbyPos',id:S.myId,x:S.lobbyP.x,y:S.lobbyP.y,facing:S.lobbyP.facing,
       name:(S.players.find(p=>p.id===S.myId)||{}).name||Stats.username||'?',
       username:Stats.username||'?',timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins};
@@ -1875,6 +1811,13 @@ const Net={
       UI.updSpecFollow();
       S.running=true;Game.specLoop();
     }
+    else if(d.t==='stopCd'){
+      // Host cancelled countdown (player disconnected below minimum)
+      if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+      document.getElementById('lobbyCDBig').textContent='';
+      document.getElementById('lobbyCDLabel').textContent='ESPERANDO JUGADORES';
+      document.getElementById('lobbyWaitMsg').style.display='block';
+    }
     else if(d.t==='returnLobby'){
       // Host tells everyone to go back to lobby
       Game.doReturnToLobby();
@@ -1883,13 +1826,28 @@ const Net={
   onDisc(conn){
     S.conns=S.conns.filter(c=>c!==conn);
     const idx=S.players.findIndex(p=>p.connId===conn.peer);
+    const discId=idx!==-1?S.players[idx].id:null;
     if(idx!==-1)S.players.splice(idx,1);
+    // Mark disconnected player as dead/escaped so game-end logic works
+    if(S.running&&S.isHost&&discId&&W.players&&W.players[discId]){
+      const dp=W.players[discId];
+      dp.alive=false;dp.escaped=false;
+    }
     Net.broadcast({t:'list',players:S.players,code:S.code});
     UI.renderLobbyPlayers();
     if(!S.running)Net.checkCd();
     else if(S.isHost)Game.checkWin();
   },
-  checkCd(){if(!S.isHost)return;S.players.length>=2?UI.startCd():UI.stopCd();},
+  checkCd(){
+    if(!S.isHost)return;
+    if(S.players.length>=2){
+      UI.startCd();
+    } else {
+      UI.stopCd();
+      // Tell all clients to reset their countdown display
+      Net.broadcast({t:'stopCd'});
+    }
+  },
 };
 
 // ══════════════════════════════════════════
