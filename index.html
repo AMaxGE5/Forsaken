@@ -1655,66 +1655,141 @@ const LobbyWorld={
 };
 
 // ══════════════════════════════════════════
-//  SISTEMA DE SALAS FIJAS (estilo cup)
+// ══════════════════════════════════════════
+//  SISTEMA DE SALAS FIJAS — v2 (robusto)
 //  5 salas, 9 jugadores por sala.
-//  Al crear o unirse → va directo al lobby.
-//  El juego arranca automáticamente con ≥2.
+//  Probe via fetch HTTP al broker PeerJS:
+//  mucho más rápido y sin errores de red.
 // ══════════════════════════════════════════
 const MP_ROOM_COUNT=5;
 const MP_ROOM_CAP=9;
-const MP_ROOM_BASE='forsaken2025-room';
-const MP_PEER_CFG={debug:0,config:{iceServers:[
-  {urls:'stun:stun.l.google.com:19302'},
-  {urls:'stun:stun1.l.google.com:19302'},
-  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-],iceCandidatePoolSize:10}};
+const MP_ROOM_BASE='fsk2025r';   // prefijo corto y único
+// PeerJS broker público — solo STUN para conectar peers
+// TURN para clientes que fallen NAT
+const MP_PEER_CFG={
+  debug:0,
+  config:{iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'},
+  ],iceCandidatePoolSize:6},
+};
 
-// Estado MP
-let mpPeer=null;
-let mpHostConn=null; // cliente → host
-let mpRoomStatus=[null,null,null,null,null]; // null=desconocido, false=vacía, {count}=activa
+// Estado de salas — se mantiene en memoria, actualizado por probes
+// Cada entrada: null=sin sondear, false=vacía/sin host, {count:N}=activa
+let mpRoomStatus=Array(MP_ROOM_COUNT).fill(null);
+// Peer actual (host o cliente)
+let mpMainPeer=null;
+// Timer de auto-refresh mientras la pantalla de salas está abierta
+let mpRefreshTimer=null;
+// Si tenemos un probe en vuelo por sala, lo registramos para no lanzar duplicados
+let mpProbeInFlight=Array(MP_ROOM_COUNT).fill(false);
 
-// ── Pre-conexión silenciosa para reducir latencia ──
-let mpIdlePeer=null,mpIdleReady=false;
-function mpPreConnect(){
-  if(mpIdlePeer){try{mpIdlePeer.destroy();}catch(e){}}
-  mpIdlePeer=null;mpIdleReady=false;
-  try{
-    let p=new Peer(MP_PEER_CFG);
-    p.on('open',()=>{mpIdlePeer=p;mpIdleReady=true;});
-    p.on('error',()=>{mpIdlePeer=null;mpIdleReady=false;});
-  }catch(e){}
+// ─────────────────────────────────────────
+//  PROBE: verifica si un peer ID existe en el broker PeerJS
+//  Usa la API HTTP del broker — instantáneo, sin crear WebRTC
+// ─────────────────────────────────────────
+function mpCheckPeerExists(peerId,cb){
+  // PeerJS cloud broker expone GET /peerjs/peers  (no siempre disponible)
+  // Fallback: intentamos abrir conexión con timeout corto
+  // Usamos fetch a la API pública de peerjs
+  const url=`https://0.peerjs.com/peerjs/peers`;
+  fetch(url,{signal:AbortSignal.timeout(3000)})
+    .then(r=>r.json())
+    .then(list=>{
+      cb(Array.isArray(list)&&list.includes(peerId));
+    })
+    .catch(()=>cb(null)); // null = desconocido, no error
 }
-setTimeout(mpPreConnect,800);
 
-function mpGetReadyPeer(cb){
-  if(mpIdleReady&&mpIdlePeer&&!mpIdlePeer.destroyed){
-    let p=mpIdlePeer;mpIdlePeer=null;mpIdleReady=false;
-    setTimeout(mpPreConnect,1000);
-    cb(p);
-  } else {
-    let p=new Peer(MP_PEER_CFG);
-    p.on('open',()=>cb(p));
-    p.on('error',err=>cb(null,err));
-  }
+// Sondea una sala — primero HTTP (rápido), luego WebRTC si confirma peer
+function mpProbeRoom(i){
+  if(mpProbeInFlight[i])return;
+  mpProbeInFlight[i]=true;
+  const peerId=MP_ROOM_BASE+'-'+(i+1);
+
+  mpCheckPeerExists(peerId,(exists)=>{
+    if(exists===false){
+      // El broker confirma que ese peer NO existe → sala vacía
+      mpRoomStatus[i]=false;
+      mpProbeInFlight[i]=false;
+      MP.renderRooms();
+      return;
+    }
+    // exists===true o null (broker no disponible) → intentamos conectar WebRTC
+    // Usamos un peer temporal de vida corta
+    let probe;
+    try{ probe=new Peer(MP_PEER_CFG); }catch(e){
+      mpRoomStatus[i]=false;mpProbeInFlight[i]=false;MP.renderRooms();return;
+    }
+    let done=false;
+    const finish=(status)=>{
+      if(done)return;done=true;
+      mpRoomStatus[i]=status;
+      mpProbeInFlight[i]=false;
+      try{probe.destroy();}catch(e){}
+      MP.renderRooms();
+    };
+    const globalTO=setTimeout(()=>finish(false),5000);
+    probe.on('open',()=>{
+      const conn=probe.connect(peerId,{reliable:false,serialization:'json'});
+      const connTO=setTimeout(()=>finish(false),3500);
+      conn.on('open',()=>{
+        clearTimeout(connTO);
+        conn.send({t:'probe'});
+        const dataTO=setTimeout(()=>finish(false),2000);
+        conn.on('data',raw=>{
+          clearTimeout(dataTO);clearTimeout(globalTO);
+          try{
+            const d=typeof raw==='string'?JSON.parse(raw):raw;
+            if(d.t==='probeReply') finish({count:d.count});
+            else finish(false);
+          }catch(e){finish(false);}
+        });
+        conn.on('error',()=>{clearTimeout(dataTO);clearTimeout(connTO);clearTimeout(globalTO);finish(false);});
+        conn.on('close',()=>{clearTimeout(dataTO);clearTimeout(connTO);clearTimeout(globalTO);finish(false);});
+      });
+      conn.on('error',()=>{clearTimeout(connTO);clearTimeout(globalTO);finish(false);});
+    });
+    probe.on('error',()=>{clearTimeout(globalTO);finish(false);});
+  });
+}
+
+function mpProbeAll(){
+  for(let i=0;i<MP_ROOM_COUNT;i++) mpProbeRoom(i);
+}
+
+// Limpia estado net compartido con el resto del juego
+function mpCleanState(){
+  if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
+  if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
+  if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+  if(Net._hbInt){clearInterval(Net._hbInt);Net._hbInt=null;}
+  S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
+  LobbyWorld.stop();
+  // No destruimos S.peer aquí — lo hace quien llama
+  S.conns=[];S.players=[];Inp.clear();
 }
 
 const MP={
-  // ── Abre la pantalla de lista de salas ──
+  // ── Abre pantalla de salas y empieza a sondear ──
   openLobby(){
+    if(mpRefreshTimer){clearInterval(mpRefreshTimer);mpRefreshTimer=null;}
+    mpRoomStatus=Array(MP_ROOM_COUNT).fill(null);
+    mpProbeInFlight=Array(MP_ROOM_COUNT).fill(false);
     UI.show('s-rooms');
-    MP.renderRooms();
-    MP.probeAllRooms();
-    if(window._mpRefreshInterval)clearInterval(window._mpRefreshInterval);
-    window._mpRefreshInterval=setInterval(()=>{
-      const el=document.getElementById('mpRoomList');
-      if(el&&el.closest('#s-rooms')&&document.getElementById('s-rooms').classList.contains('active')){
-        MP.probeAllRooms();
+    MP.renderRooms();   // muestra "..." inmediatamente
+    mpProbeAll();       // lanza probes
+    // Auto-refresh cada 4s mientras la pantalla esté visible
+    mpRefreshTimer=setInterval(()=>{
+      if(document.getElementById('s-rooms').classList.contains('active')){
+        mpProbeAll();
       } else {
-        clearInterval(window._mpRefreshInterval);
+        clearInterval(mpRefreshTimer);mpRefreshTimer=null;
       }
-    },6000);
+    },4000);
   },
 
   // ── Renderiza la lista de salas ──
@@ -1724,26 +1799,35 @@ const MP={
     list.innerHTML='';
     for(let i=0;i<MP_ROOM_COUNT;i++){
       const st=mpRoomStatus[i];
-      const cnt=st&&st.count!=null?st.count:0;
-      const full=st&&st.count>=MP_ROOM_CAP;
-      const active=st&&st.count>0;
+      const probing=mpProbeInFlight[i];
+      const cnt=(st&&st.count!=null)?st.count:0;
+      const full=st&&cnt>=MP_ROOM_CAP;
+      const active=st&&cnt>0;
       const unknown=st===null;
-      const countText=unknown?'...':st===false?`0/${MP_ROOM_CAP}`:`${cnt}/${MP_ROOM_CAP}`;
-      const statusLabel=full?'🔴 LLENA':active?`🟡 ${countText}`:unknown?`⬜ ${countText}`:`🟢 DISPONIBLE`;
-      const statusColor=full?'#e74c3c':active?'#f39c12':unknown?'#44445a':'#2ecc71';
-      const canHost=!st||cnt===0;
-      const canJoin=!full&&active;
+      // Estado textual
+      let statusLabel,statusColor;
+      if(probing&&unknown){
+        statusLabel='🔍 VERIFICANDO...';statusColor='#44445a';
+      } else if(full){
+        statusLabel=`🔴 LLENA ${cnt}/${MP_ROOM_CAP}`;statusColor='#e74c3c';
+      } else if(active){
+        statusLabel=`🟡 ${cnt}/${MP_ROOM_CAP} JUGADORES`;statusColor='#f39c12';
+      } else {
+        statusLabel='🟢 DISPONIBLE';statusColor='#2ecc71';
+      }
+      const canCreate=!active;           // puede crear si no hay host
+      const canJoin=active&&!full;       // puede unirse si hay host y no está llena
       const div=document.createElement('div');
-      div.style.cssText='background:rgba(5,5,15,0.85);border:1px solid #1a1a2a;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;';
+      div.style.cssText='background:rgba(5,5,15,0.85);border:1px solid #1a1a2a;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;';
       div.innerHTML=`
-        <div>
-          <span style="color:#bbbac8;font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.2em;">SALA ${i+1}</span>
-          <span style="color:${statusColor};font-family:'Share Tech Mono',monospace;font-size:.68rem;margin-left:14px;letter-spacing:.15em;">${statusLabel}</span>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <span style="color:#bbbac8;font-family:'Oswald',sans-serif;font-size:.95rem;letter-spacing:.2em;white-space:nowrap;">SALA ${i+1}</span>
+          <span style="color:${statusColor};font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.12em;">${statusLabel}</span>
         </div>
-        <div style="display:flex;gap:8px;">
-          ${canHost?`<button onclick="MP.createRoom(${i})" style="background:transparent;border:1.5px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;padding:6px 16px;cursor:pointer;text-transform:uppercase;transition:background .15s,color .15s;" onmouseover="this.style.background='var(--blood)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--blood)'">CREAR</button>`:''}
-          ${canJoin?`<button onclick="MP.joinRoom(${i})" style="background:transparent;border:1.5px solid #2ecc71;color:#2ecc71;font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;padding:6px 16px;cursor:pointer;text-transform:uppercase;transition:background .15s,color .15s;" onmouseover="this.style.background='#2ecc71';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='#2ecc71'">UNIRSE</button>`:''}
-          ${full?`<span style="color:#e74c3c;font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;">LLENA</span>`:''}
+        <div style="display:flex;gap:7px;align-items:center;">
+          ${canCreate?`<button onclick="MP.createRoom(${i})" style="background:transparent;border:1.5px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.12em;padding:5px 14px;cursor:pointer;text-transform:uppercase;" onmouseover="this.style.background='var(--blood)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--blood)'">CREAR</button>`:''}
+          ${canJoin?`<button onclick="MP.joinRoom(${i})" style="background:transparent;border:1.5px solid #2ecc71;color:#2ecc71;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.12em;padding:5px 14px;cursor:pointer;text-transform:uppercase;" onmouseover="this.style.background='#2ecc71';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='#2ecc71'">UNIRSE</button>`:''}
+          ${full?`<span style="color:#e74c3c;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.12em;">SALA LLENA</span>`:''}
         </div>`;
       list.appendChild(div);
     }
@@ -1754,190 +1838,210 @@ const MP={
     if(el){el.textContent=msg;el.style.color=col||'var(--dim)';}
   },
 
-  // ── Prueba todas las salas ──
-  probeAllRooms(){
-    for(let i=0;i<MP_ROOM_COUNT;i++) MP.probeRoom(i);
-  },
-
-  probeRoom(i){
-    const roomPeerId=MP_ROOM_BASE+'-'+(i+1);
-    const probe=new Peer(MP_PEER_CFG);
-    probe.on('open',()=>{
-      const conn=probe.connect(roomPeerId,{reliable:true});
-      const timer=setTimeout(()=>{
-        mpRoomStatus[i]=false;
-        probe.destroy();MP.renderRooms();
-      },2000);
-      conn.on('open',()=>{
-        conn.send(JSON.stringify({t:'probe'}));
-      });
-      conn.on('data',raw=>{
-        clearTimeout(timer);
-        try{
-          const d=typeof raw==='string'?JSON.parse(raw):raw;
-          if(d.t==='probeReply') mpRoomStatus[i]={count:d.count};
-        }catch(e){}
-        probe.destroy();MP.renderRooms();
-      });
-      conn.on('error',()=>{mpRoomStatus[i]=false;clearTimeout(timer);probe.destroy();MP.renderRooms();});
-    });
-    probe.on('error',()=>{mpRoomStatus[i]=false;MP.renderRooms();});
-  },
-
-  // ── HOST: Crear sala ──
+  // ── HOST: Crear sala ──────────────────────────────────────────────
   createRoom(roomIndex){
-    const roomPeerId=MP_ROOM_BASE+'-'+(roomIndex+1);
+    const peerId=MP_ROOM_BASE+'-'+(roomIndex+1);
     MP.setStatus('Creando sala '+(roomIndex+1)+'...','#a0c0ff');
-    if(mpPeer){try{mpPeer.destroy();}catch(e){}}mpPeer=null;
-    // Limpiar estado anterior sin destruir el peer que acabamos de crear
-    if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
-    if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
-    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
-    S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
-    LobbyWorld.stop();
-    S.conns=[];S.players=[];Inp.clear();
+    // Destruir peer anterior si existe
+    if(mpMainPeer){try{mpMainPeer.destroy();}catch(e){}}mpMainPeer=null;
+    if(S.peer){try{S.peer.destroy();}catch(e){}}S.peer=null;
+    mpCleanState();
 
-    const peer=new Peer(roomPeerId,MP_PEER_CFG);
-    mpPeer=peer;S.peer=peer;
+    const peer=new Peer(peerId,MP_PEER_CFG);
+    mpMainPeer=peer;S.peer=peer;
+
+    // Timeout: si en 12s no abre, error
+    const openTO=setTimeout(()=>{
+      if(!peer.open){
+        MP.setStatus('Error: sin respuesta del servidor. Reintenta.','#e74c3c');
+        try{peer.destroy();}catch(e){}
+      }
+    },12000);
 
     peer.on('open',()=>{
+      clearTimeout(openTO);
       S.isHost=true;
       S.myId=Net.uid();
+      S.code='';
       S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
-      MP.setStatus('✓ Sala '+(roomIndex+1)+' lista','#2ecc71');
+      // Actualizar estado local de la sala para que aparezca inmediatamente al volver
+      mpRoomStatus[roomIndex]={count:1};
+      MP.setStatus('✓ Sala '+(roomIndex+1)+' lista — Esperando jugadores...','#2ecc71');
       UI.showLobby();
-      peer.on('connection',conn=>{MP.handleIncoming(conn);});
-      peer.on('error',e=>{if(e.type!=='peer-unavailable')MP.setStatus('Error: '+e.type,'#e74c3c');});
-      setTimeout(mpPreConnect,500);
+      peer.on('connection',conn=>MP.handleIncoming(conn));
+      // Si hay reconexión al broker, no destruir
+      peer.on('disconnected',()=>{
+        if(!peer.destroyed)try{peer.reconnect();}catch(e){}
+      });
+      peer.on('error',e=>{
+        // peer-unavailable es normal (alguien conecta y no existe aún), ignorar
+        if(e.type!=='peer-unavailable')console.warn('host peer err',e.type);
+      });
     });
+
     peer.on('error',err=>{
+      clearTimeout(openTO);
       if(err.type==='unavailable-id'){
-        MP.setStatus('Sala '+(roomIndex+1)+' ya tiene host. Intenta unirte.','#f39c12');
+        // La sala ya tiene host — actualizar status y sugerir unirse
+        mpRoomStatus[roomIndex]={count:1};
+        MP.renderRooms();
+        MP.setStatus('Sala '+(roomIndex+1)+' ya ocupada. Pulsa UNIRSE.','#f39c12');
+        try{peer.destroy();}catch(e){}
+        mpMainPeer=null;S.peer=null;
+      } else if(err.type==='network'||err.type==='server-error'){
+        MP.setStatus('Error de red. Verifica tu conexión y reintenta.','#e74c3c');
+        try{peer.destroy();}catch(e){}
+        mpMainPeer=null;S.peer=null;
       } else {
-        MP.setStatus('Error al crear: '+err.type,'#e74c3c');
+        MP.setStatus('Error: '+err.type,'#e74c3c');
       }
     });
   },
 
-  // ── CLIENTE: Unirse a sala ──
+  // ── CLIENTE: Unirse a sala ────────────────────────────────────────
   joinRoom(roomIndex){
-    const roomPeerId=MP_ROOM_BASE+'-'+(roomIndex+1);
+    const peerId=MP_ROOM_BASE+'-'+(roomIndex+1);
     MP.setStatus('Conectando a sala '+(roomIndex+1)+'...','#a0c0ff');
-    if(mpPeer){try{mpPeer.destroy();}catch(e){}}mpPeer=null;
+    if(mpMainPeer){try{mpMainPeer.destroy();}catch(e){}}mpMainPeer=null;
     if(S.peer){try{S.peer.destroy();}catch(e){}}S.peer=null;
-    // Limpiar estado
-    if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
-    if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
-    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
-    S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
-    LobbyWorld.stop();
-    S.conns=[];S.players=[];Inp.clear();
+    mpCleanState();
     S.isHost=false;
 
-    mpGetReadyPeer((p,peerErr)=>{
-      if(!p){MP.setStatus('Error al conectar: '+(peerErr?peerErr.type:'timeout'),'#e74c3c');return;}
-      mpPeer=p;S.peer=p;
-      S.myId=Net.uid();
-      const conn=p.connect(roomPeerId,{reliable:true,serialization:'json'});
-      mpHostConn=conn;
+    // Creamos un peer sin ID fijo (cliente)
+    const peer=new Peer(MP_PEER_CFG);
+    mpMainPeer=peer;S.peer=peer;
+    S.myId=Net.uid();
+
+    const openTO=setTimeout(()=>{
+      if(!peer.open){
+        MP.setStatus('Error: no se pudo conectar al servidor.','#e74c3c');
+        try{peer.destroy();}catch(e){}
+      }
+    },12000);
+
+    peer.on('open',()=>{
+      clearTimeout(openTO);
+      // Conectar al host
+      const conn=peer.connect(peerId,{reliable:true,serialization:'json'});
       S.conns=[conn];
 
-      const timeout=setTimeout(()=>{
-        MP.setStatus('No se encontró la sala.','#f39c12');
-      },9000);
+      const connTO=setTimeout(()=>{
+        MP.setStatus('La sala no responde. ¿El host sigue conectado?','#f39c12');
+      },10000);
 
       conn.on('open',()=>{
-        clearTimeout(timeout);
+        clearTimeout(connTO);
+        MP.setStatus('Conectado — identificándose...','#a0c0ff');
         conn.send({t:'join',id:S.myId,name:Stats.username||'JUGADOR',username:Stats.username||'?'});
-        MP.setStatus('Esperando respuesta del host...','var(--dim)');
       });
 
-      conn.on('data',d=>{
+      conn.on('data',raw=>{
         try{
-          const msg=typeof d==='string'?JSON.parse(d):d;
-          if(msg.t==='lobby'){
-            S.players=msg.players;S.code=msg.code||'';
-            UI.showLobby();
+          const d=typeof raw==='string'?JSON.parse(raw):raw;
+          if(d.t==='lobby'){
+            // Bienvenida del host → ir al lobby
+            S.players=d.players;S.code='';
             Net._startHeartbeat();
-          } else if(msg.t==='rejected'){
-            MP.setStatus('Sala llena ('+MP_ROOM_CAP+'/'+MP_ROOM_CAP+'). Elige otra sala.','#e74c3c');
-            p.destroy();mpPeer=null;mpHostConn=null;
+            UI.showLobby();
+          } else if(d.t==='rejected'){
+            MP.setStatus('Sala llena. Elige otra sala.','#e74c3c');
+            try{peer.destroy();}catch(e){}
+            mpMainPeer=null;S.peer=null;
           } else {
-            Net.onClient(msg);
+            Net.onClient(d);
           }
         }catch(e){}
       });
 
       conn.on('close',()=>{
+        clearTimeout(connTO);
         if(S.running||S.inLobbyWorld){
           alert('Desconectado del host.');
           MP.leaveRoom();
         }
       });
-      conn.on('error',e=>{
-        clearTimeout(timeout);
-        MP.setStatus('Error de conexión: '+(e&&e.type?e.type:'?'),'#e74c3c');
+      conn.on('error',()=>{
+        clearTimeout(connTO);
+        MP.setStatus('Error de conexión con la sala.','#e74c3c');
       });
-      p.on('error',e=>{
-        if(e.type==='peer-unavailable'){clearTimeout(timeout);MP.setStatus('Sala no encontrada.','#f39c12');}
-      });
+    });
+
+    peer.on('error',e=>{
+      clearTimeout(openTO);
+      if(e.type==='peer-unavailable'){
+        // El host aún no registrado o se fue → actualizar probe y renderizar
+        mpRoomStatus[roomIndex]=false;
+        MP.renderRooms();
+        MP.setStatus('Sala no encontrada. Actualiza la lista.','#f39c12');
+      } else if(e.type==='network'){
+        MP.setStatus('Error de red. Verifica tu conexión.','#e74c3c');
+      } else {
+        MP.setStatus('Error: '+e.type,'#e74c3c');
+      }
+      try{peer.destroy();}catch(ex){}
+      mpMainPeer=null;S.peer=null;
     });
   },
 
-  // ── HOST: Procesa conexiones entrantes ──
+  // ── HOST: Maneja conexión entrante (probe o jugador real) ─────────
   handleIncoming(conn){
-    let _isProbe=false;
+    // Esperamos el primer mensaje para saber si es probe o join
     conn.on('open',()=>{
-      const _probeTimer=setTimeout(()=>{
-        if(_isProbe)return;
-        MP.registerClient(conn,null);
-      },80);
-      conn._probeTimer=_probeTimer;
+      // timeout: si en 3s no manda nada, ignora
+      const idleTO=setTimeout(()=>{
+        try{conn.close();}catch(e){}
+      },3000);
+      conn._idleTO=idleTO;
     });
     conn.on('data',raw=>{
+      clearTimeout(conn._idleTO);
       try{
         const d=typeof raw==='string'?JSON.parse(raw):raw;
         if(d.t==='probe'){
-          _isProbe=true;
-          clearTimeout(conn._probeTimer);
-          conn.send(JSON.stringify({t:'probeReply',count:S.players.length}));
+          // Responder inmediatamente con count y cerrar — no registrar como cliente
+          conn.send({t:'probeReply',count:S.players.length});
+          setTimeout(()=>{try{conn.close();}catch(e){}},300);
           return;
         }
-        if(d.t==='join'&&!S.conns.find(c=>c===conn)){
-          clearTimeout(conn._probeTimer);
-          MP.registerClient(conn,d);
+        if(d.t==='join'){
+          // Jugador real quiere entrar
+          if(S.players.length>=MP_ROOM_CAP){
+            conn.send({t:'rejected',reason:'full'});
+            setTimeout(()=>{try{conn.close();}catch(e){}},300);
+            return;
+          }
+          // Registrar
+          if(!S.conns.find(c=>c===conn)) S.conns.push(conn);
+          if(!S.players.find(p=>p.id===d.id)){
+            S.players.push({
+              id:d.id,name:d.name||'JUGADOR',
+              username:d.username||d.name||'?',
+              host:false,connId:conn.peer,
+              color:PCOLORS[S.players.length%PCOLORS.length],
+            });
+          }
+          Net.broadcast({t:'list',players:S.players,code:''});
+          conn.send({t:'lobby',players:S.players,code:''});
+          UI.renderLobbyPlayers();
+          Net.checkCd();
+          // Eventos de vida del cliente
+          conn.on('close',()=>Net.onDisc(conn));
+          conn.on('error',()=>Net.onDisc(conn));
           return;
         }
-        // Mensajes normales del host
+        // Mensaje de juego normal
         Net.onHost(conn,d);
       }catch(e){}
     });
-    conn.on('close',()=>Net.onDisc(conn));
-    conn.on('error',()=>Net.onDisc(conn));
+    conn.on('error',()=>{ clearTimeout(conn._idleTO); });
   },
 
-  registerClient(conn,joinMsg){
-    if(S.players.length>=MP_ROOM_CAP){
-      conn.send(JSON.stringify({t:'rejected',reason:'full'}));
-      return;
-    }
-    S.conns.push(conn);
-    const name=(joinMsg&&joinMsg.name)||'JUGADOR';
-    const username=(joinMsg&&joinMsg.username)||name;
-    const id=(joinMsg&&joinMsg.id)||Net.uid();
-    S.players.push({id,name,username,host:false,connId:conn.peer,color:PCOLORS[S.players.length%PCOLORS.length]});
-    Net.broadcast({t:'list',players:S.players,code:S.code||''});
-    conn.send({t:'lobby',players:S.players,code:S.code||''});
-    UI.renderLobbyPlayers();
-    Net.checkCd();
-  },
-
-  // ── Salir de sala ──
+  // ── Salir de sala (host o cliente) ───────────────────────────────
   leaveRoom(){
-    if(window._mpRefreshInterval){clearInterval(window._mpRefreshInterval);window._mpRefreshInterval=null;}
+    if(mpRefreshTimer){clearInterval(mpRefreshTimer);mpRefreshTimer=null;}
     Net.cleanup();
-    if(mpPeer){try{mpPeer.destroy();}catch(e){}}mpPeer=null;
-    mpHostConn=null;
+    if(mpMainPeer){try{mpMainPeer.destroy();}catch(e){}}mpMainPeer=null;
+    S.peer=null;
     UI.show('s-menu');
   },
 };
@@ -2037,40 +2141,10 @@ const Net={
   onHost(conn,d){
     // Ping/pong para heartbeat
     if(d.t==='ping'){try{conn.send({t:'pong'});}catch(e){}return;}
+    // probe y join son manejados en MP.handleIncoming antes de llegar aquí
+    if(d.t==='probe'||d.t==='join')return;
 
-    // Probe de sala — responde con count y no registra como cliente
-    if(d.t==='probe'){
-      try{conn.send(JSON.stringify({t:'probeReply',count:S.players.length}));}catch(e){}
-      return;
-    }
-
-    if(d.t==='join'){
-      if(S.running){
-        // Partida en curso → espectador
-        conn.send({t:'spectate',gs:Game.serial(),players:S.players});
-        return;
-      }
-      // Capacidad máxima
-      if(S.players.length>=MP_ROOM_CAP){
-        try{conn.send(JSON.stringify({t:'rejected',reason:'full'}));}catch(e){}
-        return;
-      }
-      if(!S.players.find(p=>p.id===d.id)){
-        S.players.push({
-          id:d.id,name:d.name,
-          username:d.username||d.name,
-          host:false,connId:conn.peer,
-          color:PCOLORS[S.players.length%PCOLORS.length],
-        });
-      }
-      // Avisar a todos la lista actualizada
-      Net.broadcast({t:'list',players:S.players,code:S.code||''});
-      // Confirmar lobby al recién llegado
-      conn.send({t:'lobby',players:S.players,code:S.code||''});
-      UI.renderLobbyPlayers();
-      Net.checkCd();
-
-    } else if(d.t==='input'){
+    if(d.t==='input'){
       if(!S.running)return;
       const p=W.players[d.pid];
       if(p){
