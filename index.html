@@ -475,35 +475,19 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
   <div class="logo" style="font-size:clamp(3rem,9vw,5.5rem);margin-bottom:10px">FORSAKEN</div>
   <div class="tagline">horror · survival · online</div>
   <div class="menu-btns">
-    <button class="btn" onclick="UI.showCreate()"><span>⚔ CREAR SALA</span></button>
-    <button class="btn btn-sec" onclick="UI.showJoin()"><span>🔑 UNIRSE A SALA</span></button>
+    <button class="btn" onclick="MP.openLobby()"><span>🌐 MULTIJUGADOR</span></button>
     <button class="btn-logout" id="logoutBtn" onclick="Auth.logout()">🚪 CERRAR SESIÓN</button>
   </div>
 </div>
 
-<!-- CREATE -->
-<div id="s-create" class="screen">
-  <div class="panel">
-    <div class="panel-title">CREAR SALA</div>
-    <div class="hint">COMPARTE ESTE CÓDIGO</div>
-    <div class="code-display" id="codeDisplay">——————</div>
-    <div class="waiting" id="createWaiting">conectando···</div>
-    <div class="err" id="createErr"></div>
-    <button class="btn btn-sec" onclick="UI.goMenu()" style="margin-top:6px"><span>← VOLVER</span></button>
-  </div>
-</div>
-
-<!-- JOIN -->
-<div id="s-join" class="screen">
-  <div class="panel">
-    <div class="panel-title">UNIRSE A SALA</div>
-    <div class="hint">INGRESA EL CÓDIGO</div>
-    <input class="code-input" id="codeInput" type="text" maxlength="6" placeholder="XXXXXX"
-      oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
-    <div class="err" id="joinErr"></div>
-    <button class="btn" onclick="Net.joinRoom()"><span>CONECTAR →</span></button>
-    <button class="btn btn-sec" onclick="UI.goMenu()"><span>← VOLVER</span></button>
-  </div>
+<!-- MP ROOM LIST -->
+<div id="s-rooms" class="screen" style="background:radial-gradient(ellipse at 50% 30%,#0a0318 0%,#05050a 65%);">
+  <div style="font-family:'Oswald',sans-serif;font-size:1.5rem;letter-spacing:.35em;color:#fff;text-shadow:0 0 20px var(--blood);margin-bottom:4px;">FORSAKEN</div>
+  <div style="font-size:.62rem;letter-spacing:.4em;color:var(--dim);margin-bottom:22px;">SALAS ONLINE · MÁX 9 JUGADORES POR SALA</div>
+  <div id="mpRoomList" style="display:flex;flex-direction:column;gap:10px;width:min(460px,92vw);margin-bottom:12px;"></div>
+  <button onclick="MP.probeAllRooms();MP.renderRooms();" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;transition:color .15s,border-color .15s;margin-bottom:6px;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">🔄 ACTUALIZAR LISTA</button>
+  <div id="mpStatusMsg" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;"></div>
+  <button onclick="UI.goMenu()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:8px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">← VOLVER AL MENÚ</button>
 </div>
 
 <!-- LOBBY (world map) -->
@@ -524,8 +508,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
       <div id="lobbyPlayerList"></div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="lobby-btn" id="lobbyHitboxBtn" onclick="S.showHitbox=!S.showHitbox;this.classList.toggle('on',S.showHitbox);this.textContent=S.showHitbox?'⚙ HITBOX: ON':'⚙ HITBOX: OFF'" style="font-size:.6rem;">⚙ HITBOX: OFF</button>
-        <button class="lobby-btn" id="copyCodeBtn" onclick="LobbyWorld.copyCode()">📋 COPIAR CÓDIGO</button>
-        <button class="lobby-btn" onclick="UI.goMenu()">← SALIR</button>
+        <button class="lobby-btn" onclick="MP.leaveRoom()">← SALIR</button>
       </div>
     </div>
     <div style="position:absolute;bottom:54px;left:50%;transform:translateX(-50%);font-size:.55rem;color:rgba(255,255,255,.28);letter-spacing:.18em;pointer-events:none;">WASD / ↑↓←→ PARA MOVERSE</div>
@@ -1075,14 +1058,13 @@ function pointInRotRect(px,py,cx,cy,hw,hh,ang){
 // ══════════════════════════════════════════
 const UI={
   show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');},
-  showCreate(){UI.show('s-create');document.getElementById('createErr').textContent='';document.getElementById('createWaiting').textContent='conectando···';Net.createRoom();},
-  showJoin(){UI.show('s-join');document.getElementById('codeInput').value='';document.getElementById('joinErr').textContent='';},
   goMenu(){Net.cleanup();Stats.stopSession();UI.show('s-menu');},
 
   showLobby(){
     S.inLobbyWorld=true;
     Stats.startSession();
-    document.getElementById('lobbyCodeBadge').textContent=S.code;
+    const badge=document.getElementById('lobbyCodeBadge');
+    if(badge) badge.textContent=S.isHost?'HOST':'SALA';
     document.getElementById('lobbyCDBig').textContent='';
     document.getElementById('lobbyWaitMsg').style.display='block';
     document.getElementById('lobbyCDLabel').textContent='ESPERANDO JUGADORES';
@@ -1673,12 +1655,294 @@ const LobbyWorld={
 };
 
 // ══════════════════════════════════════════
-//  NETWORKING — reescrito desde 0
-//  P2P con PeerJS: host crea sala con código
-//  de 6 chars; cliente se conecta con ese código.
-//  Mejoras: TURN servers, auto-retry en ID
-//  ocupado, heartbeat, mejor manejo de errores.
+//  SISTEMA DE SALAS FIJAS (estilo cup)
+//  5 salas, 9 jugadores por sala.
+//  Al crear o unirse → va directo al lobby.
+//  El juego arranca automáticamente con ≥2.
 // ══════════════════════════════════════════
+const MP_ROOM_COUNT=5;
+const MP_ROOM_CAP=9;
+const MP_ROOM_BASE='forsaken2025-room';
+const MP_PEER_CFG={debug:0,config:{iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+],iceCandidatePoolSize:10}};
+
+// Estado MP
+let mpPeer=null;
+let mpHostConn=null; // cliente → host
+let mpRoomStatus=[null,null,null,null,null]; // null=desconocido, false=vacía, {count}=activa
+
+// ── Pre-conexión silenciosa para reducir latencia ──
+let mpIdlePeer=null,mpIdleReady=false;
+function mpPreConnect(){
+  if(mpIdlePeer){try{mpIdlePeer.destroy();}catch(e){}}
+  mpIdlePeer=null;mpIdleReady=false;
+  try{
+    let p=new Peer(MP_PEER_CFG);
+    p.on('open',()=>{mpIdlePeer=p;mpIdleReady=true;});
+    p.on('error',()=>{mpIdlePeer=null;mpIdleReady=false;});
+  }catch(e){}
+}
+setTimeout(mpPreConnect,800);
+
+function mpGetReadyPeer(cb){
+  if(mpIdleReady&&mpIdlePeer&&!mpIdlePeer.destroyed){
+    let p=mpIdlePeer;mpIdlePeer=null;mpIdleReady=false;
+    setTimeout(mpPreConnect,1000);
+    cb(p);
+  } else {
+    let p=new Peer(MP_PEER_CFG);
+    p.on('open',()=>cb(p));
+    p.on('error',err=>cb(null,err));
+  }
+}
+
+const MP={
+  // ── Abre la pantalla de lista de salas ──
+  openLobby(){
+    UI.show('s-rooms');
+    MP.renderRooms();
+    MP.probeAllRooms();
+    if(window._mpRefreshInterval)clearInterval(window._mpRefreshInterval);
+    window._mpRefreshInterval=setInterval(()=>{
+      const el=document.getElementById('mpRoomList');
+      if(el&&el.closest('#s-rooms')&&document.getElementById('s-rooms').classList.contains('active')){
+        MP.probeAllRooms();
+      } else {
+        clearInterval(window._mpRefreshInterval);
+      }
+    },6000);
+  },
+
+  // ── Renderiza la lista de salas ──
+  renderRooms(){
+    const list=document.getElementById('mpRoomList');
+    if(!list)return;
+    list.innerHTML='';
+    for(let i=0;i<MP_ROOM_COUNT;i++){
+      const st=mpRoomStatus[i];
+      const cnt=st&&st.count!=null?st.count:0;
+      const full=st&&st.count>=MP_ROOM_CAP;
+      const active=st&&st.count>0;
+      const unknown=st===null;
+      const countText=unknown?'...':st===false?`0/${MP_ROOM_CAP}`:`${cnt}/${MP_ROOM_CAP}`;
+      const statusLabel=full?'🔴 LLENA':active?`🟡 ${countText}`:unknown?`⬜ ${countText}`:`🟢 DISPONIBLE`;
+      const statusColor=full?'#e74c3c':active?'#f39c12':unknown?'#44445a':'#2ecc71';
+      const canHost=!st||cnt===0;
+      const canJoin=!full&&active;
+      const div=document.createElement('div');
+      div.style.cssText='background:rgba(5,5,15,0.85);border:1px solid #1a1a2a;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;';
+      div.innerHTML=`
+        <div>
+          <span style="color:#bbbac8;font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.2em;">SALA ${i+1}</span>
+          <span style="color:${statusColor};font-family:'Share Tech Mono',monospace;font-size:.68rem;margin-left:14px;letter-spacing:.15em;">${statusLabel}</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          ${canHost?`<button onclick="MP.createRoom(${i})" style="background:transparent;border:1.5px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;padding:6px 16px;cursor:pointer;text-transform:uppercase;transition:background .15s,color .15s;" onmouseover="this.style.background='var(--blood)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--blood)'">CREAR</button>`:''}
+          ${canJoin?`<button onclick="MP.joinRoom(${i})" style="background:transparent;border:1.5px solid #2ecc71;color:#2ecc71;font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;padding:6px 16px;cursor:pointer;text-transform:uppercase;transition:background .15s,color .15s;" onmouseover="this.style.background='#2ecc71';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='#2ecc71'">UNIRSE</button>`:''}
+          ${full?`<span style="color:#e74c3c;font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;">LLENA</span>`:''}
+        </div>`;
+      list.appendChild(div);
+    }
+  },
+
+  setStatus(msg,col){
+    const el=document.getElementById('mpStatusMsg');
+    if(el){el.textContent=msg;el.style.color=col||'var(--dim)';}
+  },
+
+  // ── Prueba todas las salas ──
+  probeAllRooms(){
+    for(let i=0;i<MP_ROOM_COUNT;i++) MP.probeRoom(i);
+  },
+
+  probeRoom(i){
+    const roomPeerId=MP_ROOM_BASE+'-'+(i+1);
+    const probe=new Peer(MP_PEER_CFG);
+    probe.on('open',()=>{
+      const conn=probe.connect(roomPeerId,{reliable:true});
+      const timer=setTimeout(()=>{
+        mpRoomStatus[i]=false;
+        probe.destroy();MP.renderRooms();
+      },2000);
+      conn.on('open',()=>{
+        conn.send(JSON.stringify({t:'probe'}));
+      });
+      conn.on('data',raw=>{
+        clearTimeout(timer);
+        try{
+          const d=typeof raw==='string'?JSON.parse(raw):raw;
+          if(d.t==='probeReply') mpRoomStatus[i]={count:d.count};
+        }catch(e){}
+        probe.destroy();MP.renderRooms();
+      });
+      conn.on('error',()=>{mpRoomStatus[i]=false;clearTimeout(timer);probe.destroy();MP.renderRooms();});
+    });
+    probe.on('error',()=>{mpRoomStatus[i]=false;MP.renderRooms();});
+  },
+
+  // ── HOST: Crear sala ──
+  createRoom(roomIndex){
+    const roomPeerId=MP_ROOM_BASE+'-'+(roomIndex+1);
+    MP.setStatus('Creando sala '+(roomIndex+1)+'...','#a0c0ff');
+    if(mpPeer){try{mpPeer.destroy();}catch(e){}}mpPeer=null;
+    // Limpiar estado anterior sin destruir el peer que acabamos de crear
+    if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
+    if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
+    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+    S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
+    LobbyWorld.stop();
+    S.conns=[];S.players=[];Inp.clear();
+
+    const peer=new Peer(roomPeerId,MP_PEER_CFG);
+    mpPeer=peer;S.peer=peer;
+
+    peer.on('open',()=>{
+      S.isHost=true;
+      S.myId=Net.uid();
+      S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
+      MP.setStatus('✓ Sala '+(roomIndex+1)+' lista','#2ecc71');
+      UI.showLobby();
+      peer.on('connection',conn=>{MP.handleIncoming(conn);});
+      peer.on('error',e=>{if(e.type!=='peer-unavailable')MP.setStatus('Error: '+e.type,'#e74c3c');});
+      setTimeout(mpPreConnect,500);
+    });
+    peer.on('error',err=>{
+      if(err.type==='unavailable-id'){
+        MP.setStatus('Sala '+(roomIndex+1)+' ya tiene host. Intenta unirte.','#f39c12');
+      } else {
+        MP.setStatus('Error al crear: '+err.type,'#e74c3c');
+      }
+    });
+  },
+
+  // ── CLIENTE: Unirse a sala ──
+  joinRoom(roomIndex){
+    const roomPeerId=MP_ROOM_BASE+'-'+(roomIndex+1);
+    MP.setStatus('Conectando a sala '+(roomIndex+1)+'...','#a0c0ff');
+    if(mpPeer){try{mpPeer.destroy();}catch(e){}}mpPeer=null;
+    if(S.peer){try{S.peer.destroy();}catch(e){}}S.peer=null;
+    // Limpiar estado
+    if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
+    if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
+    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+    S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
+    LobbyWorld.stop();
+    S.conns=[];S.players=[];Inp.clear();
+    S.isHost=false;
+
+    mpGetReadyPeer((p,peerErr)=>{
+      if(!p){MP.setStatus('Error al conectar: '+(peerErr?peerErr.type:'timeout'),'#e74c3c');return;}
+      mpPeer=p;S.peer=p;
+      S.myId=Net.uid();
+      const conn=p.connect(roomPeerId,{reliable:true,serialization:'json'});
+      mpHostConn=conn;
+      S.conns=[conn];
+
+      const timeout=setTimeout(()=>{
+        MP.setStatus('No se encontró la sala.','#f39c12');
+      },9000);
+
+      conn.on('open',()=>{
+        clearTimeout(timeout);
+        conn.send({t:'join',id:S.myId,name:Stats.username||'JUGADOR',username:Stats.username||'?'});
+        MP.setStatus('Esperando respuesta del host...','var(--dim)');
+      });
+
+      conn.on('data',d=>{
+        try{
+          const msg=typeof d==='string'?JSON.parse(d):d;
+          if(msg.t==='lobby'){
+            S.players=msg.players;S.code=msg.code||'';
+            UI.showLobby();
+            Net._startHeartbeat();
+          } else if(msg.t==='rejected'){
+            MP.setStatus('Sala llena ('+MP_ROOM_CAP+'/'+MP_ROOM_CAP+'). Elige otra sala.','#e74c3c');
+            p.destroy();mpPeer=null;mpHostConn=null;
+          } else {
+            Net.onClient(msg);
+          }
+        }catch(e){}
+      });
+
+      conn.on('close',()=>{
+        if(S.running||S.inLobbyWorld){
+          alert('Desconectado del host.');
+          MP.leaveRoom();
+        }
+      });
+      conn.on('error',e=>{
+        clearTimeout(timeout);
+        MP.setStatus('Error de conexión: '+(e&&e.type?e.type:'?'),'#e74c3c');
+      });
+      p.on('error',e=>{
+        if(e.type==='peer-unavailable'){clearTimeout(timeout);MP.setStatus('Sala no encontrada.','#f39c12');}
+      });
+    });
+  },
+
+  // ── HOST: Procesa conexiones entrantes ──
+  handleIncoming(conn){
+    let _isProbe=false;
+    conn.on('open',()=>{
+      const _probeTimer=setTimeout(()=>{
+        if(_isProbe)return;
+        MP.registerClient(conn,null);
+      },80);
+      conn._probeTimer=_probeTimer;
+    });
+    conn.on('data',raw=>{
+      try{
+        const d=typeof raw==='string'?JSON.parse(raw):raw;
+        if(d.t==='probe'){
+          _isProbe=true;
+          clearTimeout(conn._probeTimer);
+          conn.send(JSON.stringify({t:'probeReply',count:S.players.length}));
+          return;
+        }
+        if(d.t==='join'&&!S.conns.find(c=>c===conn)){
+          clearTimeout(conn._probeTimer);
+          MP.registerClient(conn,d);
+          return;
+        }
+        // Mensajes normales del host
+        Net.onHost(conn,d);
+      }catch(e){}
+    });
+    conn.on('close',()=>Net.onDisc(conn));
+    conn.on('error',()=>Net.onDisc(conn));
+  },
+
+  registerClient(conn,joinMsg){
+    if(S.players.length>=MP_ROOM_CAP){
+      conn.send(JSON.stringify({t:'rejected',reason:'full'}));
+      return;
+    }
+    S.conns.push(conn);
+    const name=(joinMsg&&joinMsg.name)||'JUGADOR';
+    const username=(joinMsg&&joinMsg.username)||name;
+    const id=(joinMsg&&joinMsg.id)||Net.uid();
+    S.players.push({id,name,username,host:false,connId:conn.peer,color:PCOLORS[S.players.length%PCOLORS.length]});
+    Net.broadcast({t:'list',players:S.players,code:S.code||''});
+    conn.send({t:'lobby',players:S.players,code:S.code||''});
+    UI.renderLobbyPlayers();
+    Net.checkCd();
+  },
+
+  // ── Salir de sala ──
+  leaveRoom(){
+    if(window._mpRefreshInterval){clearInterval(window._mpRefreshInterval);window._mpRefreshInterval=null;}
+    Net.cleanup();
+    if(mpPeer){try{mpPeer.destroy();}catch(e){}}mpPeer=null;
+    mpHostConn=null;
+    UI.show('s-menu');
+  },
+};
+
+// ── Compatibilidad: Net sigue siendo el objeto de lógica de juego ──
 const Net={
   // ── Prefijo versión — cámbialo si ves conflictos de ID ──────────────────────
   _PFX:'FSK26_',
@@ -1734,182 +1998,6 @@ const Net={
     S.conns=[];S.players=[];Inp.clear();
   },
 
-  // ══════════════════════════════════════════════════════════════════
-  //  CREAR SALA (HOST)
-  // ══════════════════════════════════════════════════════════════════
-  createRoom(){
-    Net.cleanup();
-    S.isHost=true;
-    S.myId=Net.uid();
-
-    // Primera vez genera código; si es retry mantiene el actual
-    if(this._createAttempts===0) S.code=Net.gc();
-    this._createAttempts++;
-
-    const setErr=t=>{const e=document.getElementById('createErr');if(e)e.textContent=t;};
-    const setWait=t=>{const e=document.getElementById('createWaiting');if(e)e.textContent=t;};
-
-    document.getElementById('codeDisplay').textContent=S.code;
-    setErr('');
-    setWait('⏳ iniciando servidor···');
-
-    const peer=new Peer(Net.pid(S.code),Net._peerCfg());
-    S.peer=peer;
-
-    // Timeout para conexión al broker PeerJS
-    const brokerTO=setTimeout(()=>{
-      if(!peer.open){
-        setErr('Sin respuesta del servidor. Verifica tu internet.');
-        try{peer.destroy();}catch(e){}
-      }
-    },16000);
-
-    // ── Conectado al broker ──────────────────────────────────────────
-    peer.on('open',()=>{
-      clearTimeout(brokerTO);
-      this._createAttempts=0;
-      setWait('✓ sala activa — comparte el código');
-      S.players=[{id:S.myId,name:Stats.username||'HOST',
-        username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
-      UI.showLobby();
-    });
-
-    // ── Nuevo jugador se conecta ─────────────────────────────────────
-    peer.on('connection',conn=>{
-      conn.on('open',()=>{
-        S.conns.push(conn);
-        conn.on('data',d=>Net.onHost(conn,d));
-        conn.on('close',()=>Net.onDisc(conn));
-        conn.on('error',()=>Net.onDisc(conn));
-      });
-    });
-
-    // ── Errores del peer ─────────────────────────────────────────────
-    peer.on('error',err=>{
-      clearTimeout(brokerTO);
-      if(err.type==='unavailable-id'){
-        // El código está en uso (sesión reciente aún registrada)
-        if(this._createAttempts<8){
-          S.code=Net.gc(); // intenta código nuevo
-          setWait('Código ocupado, generando otro···');
-          setErr('');
-          setTimeout(()=>Net.createRoom(),900);
-        } else {
-          this._createAttempts=0;
-          setErr('No se pudo crear sala. Intenta de nuevo en unos segundos.');
-        }
-      } else if(err.type==='network'||err.type==='server-error'){
-        setErr('Error de red — verifica tu conexión a internet.');
-      } else {
-        setErr('Error: '+err.type);
-      }
-    });
-
-    // ── Desconexión del broker: intenta reconectar ───────────────────
-    peer.on('disconnected',()=>{
-      if(S.isHost&&!peer.destroyed){
-        try{peer.reconnect();}catch(e){}
-      }
-    });
-  },
-
-  // ══════════════════════════════════════════════════════════════════
-  //  UNIRSE A SALA (CLIENTE)
-  // ══════════════════════════════════════════════════════════════════
-  joinRoom(){
-    // Limpia código: sólo alfanumérico, mayúsculas, 6 chars
-    const raw=document.getElementById('codeInput').value
-      .trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-    const setErr=t=>document.getElementById('joinErr').textContent=t;
-
-    if(raw.length!==6){setErr('El código debe tener 6 caracteres.');return;}
-
-    Net.cleanup();
-    S.isHost=false;
-    S.code=raw;
-    S.myId=Net.uid();
-    setErr('⏳ Conectando al servidor···');
-
-    const peer=new Peer(null,Net._peerCfg());
-    S.peer=peer;
-
-    // Timeout para conexión al broker
-    const brokerTO=setTimeout(()=>{
-      if(!peer.open){
-        setErr('❌ No se pudo conectar. Verifica tu internet.');
-        try{peer.destroy();}catch(e){}
-      }
-    },16000);
-
-    // ── Conectado al broker ──────────────────────────────────────────
-    peer.on('open',()=>{
-      clearTimeout(brokerTO);
-      setErr('⏳ Buscando sala···');
-
-      const hostId=Net.pid(raw);
-      const conn=peer.connect(hostId,{
-        reliable:true,
-        serialization:'json',
-        metadata:{clientId:S.myId,v:2},
-      });
-      S.conns=[conn];
-
-      let opened=false;
-
-      // Timeout para la conexión WebRTC con el host
-      const connTO=setTimeout(()=>{
-        if(!opened){
-          setErr('❌ La sala no responde. ¿El host sigue conectado?');
-          try{peer.destroy();}catch(e){}
-        }
-      },20000);
-
-      conn.on('open',()=>{
-        opened=true;
-        clearTimeout(connTO);
-        setErr('');
-
-        // Presentarse al host
-        conn.send({
-          t:'join',
-          id:S.myId,
-          name:Stats.username||('JUGADOR '+(10+Math.random()*89|0)),
-          username:Stats.username||'?',
-        });
-
-        // Iniciar heartbeat para detectar desconexión silenciosa
-        Net._startHeartbeat();
-      });
-
-      conn.on('data',d=>Net.onClient(d));
-
-      conn.on('close',()=>{
-        if(S.running||S.inLobbyWorld){
-          alert('Desconectado del host.');
-          Net.cleanup();
-          UI.show('s-menu');
-        }
-      });
-
-      conn.on('error',e=>{
-        const msg=e&&e.type?e.type:'desconocido';
-        setErr('❌ Error de conexión: '+msg);
-      });
-    });
-
-    // ── Errores del peer ─────────────────────────────────────────────
-    peer.on('error',err=>{
-      clearTimeout(brokerTO);
-      if(err.type==='peer-unavailable'){
-        setErr('❌ Sala no encontrada. Verifica el código o espera a que el host la abra.');
-      } else if(err.type==='network'){
-        setErr('❌ Error de red. Verifica tu conexión.');
-      } else {
-        setErr('❌ Error: '+err.type);
-      }
-    });
-  },
-
   // ── Heartbeat: el cliente le manda ping al host cada 5s ──────────────────────
   _startHeartbeat(){
     if(this._hbInt)clearInterval(this._hbInt);
@@ -1950,10 +2038,21 @@ const Net={
     // Ping/pong para heartbeat
     if(d.t==='ping'){try{conn.send({t:'pong'});}catch(e){}return;}
 
+    // Probe de sala — responde con count y no registra como cliente
+    if(d.t==='probe'){
+      try{conn.send(JSON.stringify({t:'probeReply',count:S.players.length}));}catch(e){}
+      return;
+    }
+
     if(d.t==='join'){
       if(S.running){
         // Partida en curso → espectador
         conn.send({t:'spectate',gs:Game.serial(),players:S.players});
+        return;
+      }
+      // Capacidad máxima
+      if(S.players.length>=MP_ROOM_CAP){
+        try{conn.send(JSON.stringify({t:'rejected',reason:'full'}));}catch(e){}
         return;
       }
       if(!S.players.find(p=>p.id===d.id)){
@@ -1965,9 +2064,9 @@ const Net={
         });
       }
       // Avisar a todos la lista actualizada
-      Net.broadcast({t:'list',players:S.players,code:S.code});
+      Net.broadcast({t:'list',players:S.players,code:S.code||''});
       // Confirmar lobby al recién llegado
-      conn.send({t:'lobby',players:S.players,code:S.code});
+      conn.send({t:'lobby',players:S.players,code:S.code||''});
       UI.renderLobbyPlayers();
       Net.checkCd();
 
@@ -2002,7 +2101,7 @@ const Net={
     if(d.t==='pong')return; // heartbeat response
 
     if(d.t==='lobby'){
-      S.players=d.players;S.code=d.code;
+      S.players=d.players;S.code=d.code||'';
       UI.showLobby();
 
     } else if(d.t==='list'){
@@ -2072,7 +2171,7 @@ const Net={
       const dp=W.players[discId];
       dp.alive=false;dp.escaped=false;
     }
-    Net.broadcast({t:'list',players:S.players,code:S.code});
+    Net.broadcast({t:'list',players:S.players,code:S.code||''});
     UI.renderLobbyPlayers();
     if(!S.running)Net.checkCd();
     else if(S.isHost)Game.checkWin();
