@@ -260,11 +260,11 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 /* Abilities right */
 #hudAbilities{position:absolute;bottom:10px;right:18px;display:flex;align-items:flex-end;gap:10px;}
 .ability-slot{display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;}
-.ability-icon-wrap{width:72px;height:72px;border-radius:8px;border:2px solid rgba(255,255,255,.25);background:rgba(10,10,20,.75);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;transition:border-color .2s;}
+.ability-icon-wrap{width:101px;height:101px;border-radius:8px;border:2px solid rgba(255,255,255,.25);background:rgba(10,10,20,.75);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;transition:border-color .2s;}
 .ability-icon-wrap.ready{border-color:rgba(255,255,255,.7);box-shadow:0 0 10px rgba(255,255,255,.2);}
 .ability-icon-wrap.on-cd{border-color:rgba(255,255,255,.15);}
 .ability-cd-overlay{position:absolute;inset:0;border-radius:6px;background:rgba(0,0,0,.72);transform-origin:top center;pointer-events:none;}
-.ability-icon-emoji{font-size:2rem;z-index:1;position:relative;}
+.ability-icon-emoji{font-size:2.8rem;z-index:1;position:relative;}
 .ability-cd-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:1.55rem;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9);z-index:2;pointer-events:none;}
 .ability-key{font-size:.55rem;letter-spacing:.18em;color:rgba(255,255,255,.4);background:rgba(0,0,0,.5);padding:2px 7px;border-radius:2px;border:1px solid rgba(255,255,255,.1);}
 .ability-name{font-size:.55rem;letter-spacing:.1em;color:rgba(255,255,255,.55);}
@@ -640,6 +640,15 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           </div>
           <div class="ability-key">CLICK</div>
         </div>
+        <div class="ability-slot" id="abilityBeheadSlot" style="display:none">
+          <div class="ability-name">BEHEAD</div>
+          <div class="ability-icon-wrap" id="abilityBeheadWrap">
+            <div class="ability-cd-overlay" id="abilityBeheadOverlay"></div>
+            <div class="ability-icon-emoji">💀</div>
+            <div class="ability-cd-num" id="abilityBeheadNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">Q</div>
+        </div>
         <div class="ability-slot" id="abilityBloxySlot" style="display:none">
           <div class="ability-name" id="bloxyName">BLOXY COLA</div>
           <div class="ability-icon-wrap" id="abilityBloxyWrap">
@@ -887,9 +896,9 @@ setInterval(()=>{if(S&&S.inLobbyWorld)Stats.tickSession();},5000);
 const TILE = 36;
 const MAP_W = 65, MAP_H = 45;
 const VP_TILES_W = 14;
-const SW = 90, SR = 160;
-const KW = 108, KR = 178;
-const SMAX=100, KSMAX=110, SDRAIN=30, SREGEN=55, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
+const SW = 45, SR = 90;
+const KW = 60, KR = 120;
+const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
 const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
 const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
@@ -1176,9 +1185,11 @@ const UI={
 
     // M1 ability
     const m1Slot=document.getElementById('abilityM1Slot');
+    const beheadSlot=document.getElementById('abilityBeheadSlot');
     const bloxySlot=document.getElementById('abilityBloxySlot');
     if(me.role==='killer'){
       m1Slot.style.display='flex';
+      beheadSlot.style.display='flex';
       bloxySlot.style.display='none';
       const cdPct=me.m1Cd>0?me.m1Cd/M1_CD:0;
       document.getElementById('abilityM1Overlay').style.transform=`scaleY(${cdPct})`;
@@ -1186,8 +1197,17 @@ const UI={
       const numEl=document.getElementById('abilityM1Num');
       numEl.style.display=cdPct>0?'flex':'none';
       if(cdPct>0)numEl.textContent=me.m1Cd.toFixed(1);
+      // Behead (Q) cooldown
+      const bqCd=me.qCd||0;
+      const bqPct=bqCd>0?bqCd/Q_CD:0;
+      document.getElementById('abilityBeheadOverlay').style.transform=`scaleY(${bqPct})`;
+      document.getElementById('abilityBeheadWrap').className='ability-icon-wrap'+(bqPct>0?' on-cd':' ready');
+      const bqNum=document.getElementById('abilityBeheadNum');
+      bqNum.style.display=bqPct>0?'flex':'none';
+      if(bqPct>0)bqNum.textContent=bqCd.toFixed(1);
     } else {
       m1Slot.style.display='none';
+      beheadSlot.style.display='none';
       bloxySlot.style.display='flex';
       const bCdPct=me.bloxyCd>0?me.bloxyCd/BLOXY_CD:0;
       document.getElementById('abilityBloxyOverlay').style.transform=`scaleY(${bCdPct})`;
@@ -2153,7 +2173,7 @@ const Net={
         p.m1Prev=d.m1;
         if(d.e&&!p.ePrev)Game.doActionE(d.pid);
         p.ePrev=d.e;
-        if(d.q&&!p.qPrev)Game.doBloxy(d.pid);
+        if(d.q&&!p.qPrev)Game.doQ(d.pid);
         p.qPrev=d.q;
       }
 
@@ -2380,6 +2400,7 @@ const Game={
         interacting:false,interactTarget:null,
         inp:{},shift:false,ePrev:false,facing:0,
         m1Cd:0,m1Prev:false,m1HitSet:null,
+        qCd:0,qPrev:false,
         bleedTicks:0,bleedTimer:0,
         bloxyCd:0,bloxyActive:false,bloxyTimer:0,speedBuff:1,
         color:p.color||PCOLORS[i%PCOLORS.length],
@@ -2413,7 +2434,7 @@ const Game={
 
   updateCamera(me){
     if(!me)return;
-    const effScale=me.role==='killer'?SCALE*.72:SCALE*.90;
+    const effScale=me.role==='killer'?SCALE*.72:SCALE*.684;
     CAM._effScale=effScale;
     const worldW=MAP_W*TILE,worldH=MAP_H*TILE;
     const vpW=VW/effScale,vpH=VH/effScale;
@@ -2471,7 +2492,7 @@ const Game={
         Inp.m1p=Inp.m1;
         if(Inp.e&&!Inp.ep)Game.doActionE(S.myId);
         Inp.ep=Inp.e;
-        if(Inp.q&&!Inp.qp)Game.doBloxy(S.myId);
+        if(Inp.q&&!Inp.qp)Game.doQ(S.myId);
         Inp.qp=Inp.q;
 
         // Tick bloxy timers for all players
@@ -2481,6 +2502,7 @@ const Game={
             p.bloxyTimer=Math.max(0,p.bloxyTimer-dt);
             if(p.bloxyTimer<=0){p.bloxyActive=false;p.speedBuff=1;}
           }
+          if(p.role==='killer'&&p.qCd>0)p.qCd=Math.max(0,p.qCd-dt);
         });
 
         Object.values(W.players).forEach(p=>{
@@ -2565,12 +2587,13 @@ const Game={
     p.sprinting=isSprint;
     if(isSprint){
       const prev=p.stamina;
-      p.stamina=Math.max(0,p.stamina-SDRAIN*dt);
+      const drain=p.role==='killer'?KDRAIN:SDRAIN;
+      p.stamina=Math.max(0,p.stamina-drain*dt);
       if(prev>0&&p.stamina===0)p.staminaCd=SREGEN_DEL_EMPTY;
       else p.staminaCd=SREGEN_DEL;
     } else {
       if(p.staminaCd>0)p.staminaCd-=dt;
-      else p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+SREGEN*dt);
+      else p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+(p.role==='killer'?KREGEN:SREGEN)*dt);
     }
     if(moving)p.facing=Math.atan2(dy,dx);
     const bw=p.role==='killer'?KW:SW,rw=p.role==='killer'?KR:SR;
@@ -2587,6 +2610,52 @@ const Game={
     fireM1(pid);
   },
 
+  doQ(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    if(p.role==='killer')Game.doBehead(pid);
+    else Game.doBloxy(pid);
+  },
+
+  doBehead(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||p.role!=='killer')return;
+    if(p.qCd>0)return;
+    p.qCd=Q_CD;
+    // Dash forward dealing Q_DMG and applying helpless
+    const ang=p.facing;
+    const dashDist=TILE*Q_DASH_MULT*6;
+    const tx=p.x+Math.cos(ang)*dashDist;
+    const ty=p.y+Math.sin(ang)*dashDist;
+    // Instant teleport-dash (snap to furthest non-wall point)
+    const steps=12;
+    let bx=p.x,by=p.y;
+    for(let i=1;i<=steps;i++){
+      const nx=p.x+Math.cos(ang)*dashDist*(i/steps);
+      const ny=p.y+Math.sin(ang)*dashDist*(i/steps);
+      if(wallAt(nx,ny,TILE*.28))break;
+      bx=nx;by=ny;
+    }
+    p.x=bx;p.y=by;
+    // Hit check at destination
+    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
+    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+    slashFX.push({x:cx,y:cy,ang,hw:Q_HB_SIZE/2,hh:Q_HB_SIZE/2,life:.25,maxLife:.25,idx:0,behead:true});
+    Object.values(W.players).forEach(s=>{
+      if(s.role!=='survivor'||!s.alive)return;
+      if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.2){
+        s.hp=Math.max(0,s.hp-Q_DMG);
+        s.helpless=true;
+        s.helplessTimer=Q_HELPLESS_DUR;
+        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+          if(S.isHost){W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
+        } else {
+          s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+        }
+        if(S.isHost)Game.checkWin();
+      }
+    });
+  },
   doBloxy(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='survivor')return;
@@ -2749,6 +2818,7 @@ const Game={
         maxStamina:p.maxStamina||SMAX,
         m1Cd:p.m1Cd,bleedTicks:p.bleedTicks,bleedTimer:p.bleedTimer,
         bloxyCd:p.bloxyCd||0,bloxyActive:p.bloxyActive||false,bloxyTimer:p.bloxyTimer||0,speedBuff:p.speedBuff||1,
+        qCd:p.qCd||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
       exit:{open:W.exit.open},time:W.time,
@@ -2783,6 +2853,7 @@ const Game={
       if(id!==S.myId)p.facing=d.facing;
       p.m1Cd=d.m1Cd;p.bleedTicks=d.bleedTicks;p.bleedTimer=d.bleedTimer;
       if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;}
+      if(d.qCd!==undefined)p.qCd=d.qCd;
 
       // Show death overlay for local player
       if(id===S.myId&&wasAlive&&!d.alive&&!d.escaped){
@@ -3075,29 +3146,153 @@ const Game={
     Object.values(W.players).forEach(p=>{
       if(p.escaped)return;
       const r=TILE*.32,isMe=p.id===S.myId,dead=!p.alive;
+      // Sprint aura
       if(p.sprinting&&p.alive){
         ctx.beginPath();ctx.arc(p.x,p.y,r+6,0,Math.PI*2);
         ctx.fillStyle=p.role==='killer'?'rgba(231,76,60,.08)':'rgba(255,215,0,.07)';ctx.fill();
       }
+      // Ground shadow
       ctx.beginPath();ctx.ellipse(p.x,p.y+r*.55,r*.65,r*.22,0,0,Math.PI*2);
-      ctx.fillStyle='rgba(0,0,0,.35)';ctx.fill();
-      ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
-      ctx.fillStyle=dead?'#0e0e1a':p.role==='killer'?'#5a0c0c':'#0c2252';ctx.fill();
-      ctx.strokeStyle=dead?'#1a1a2a':isMe?'#ffffff':(p.role==='killer'?'#e74c3c':'#3498db');
-      ctx.lineWidth=isMe?2.5:1.5;ctx.stroke();
-      if(!dead&&p.role==='killer'){
-        const fx=p.x+Math.cos(p.facing)*(r+4),fy=p.y+Math.sin(p.facing)*(r+4);
-        ctx.beginPath();ctx.arc(fx,fy,3,0,Math.PI*2);ctx.fillStyle='#ff4444';ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,.38)';ctx.fill();
+
+      // ── Roblox-style character ──
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      if(!dead) ctx.rotate(p.facing+Math.PI/2);
+      const s=r;
+
+      if(dead){
+        ctx.font=`${TILE*.38}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle='#303040';ctx.fillText('💀',0,0);
+      } else if(p.role==='killer'){
+        // ── RED SLASHER ──
+        ctx.shadowColor='#ff1100';ctx.shadowBlur=12;
+        // Legs — dark crimson
+        ctx.fillStyle='#5a0000';
+        ctx.fillRect(-s*.38,s*.28,s*.33,s*.58);
+        ctx.fillRect(s*.05,s*.28,s*.33,s*.58);
+        // Boot toes
+        ctx.fillStyle='#3a0000';
+        ctx.fillRect(-s*.42,s*.76,s*.36,s*.12);
+        ctx.fillRect(s*.06,s*.76,s*.36,s*.12);
+        // Torso
+        ctx.fillStyle='#8B0000';
+        ctx.fillRect(-s*.5,-s*.38,s,s*.72);
+        // Chest plate shine
+        ctx.fillStyle='rgba(255,80,80,.12)';
+        ctx.fillRect(-s*.36,-s*.3,s*.38,s*.5);
+        // Arms
+        ctx.fillStyle='#6b0000';
+        ctx.fillRect(-s*.83,-s*.3,s*.3,s*.62);
+        ctx.fillRect(s*.53,-s*.3,s*.3,s*.62);
+        // Clenched fists
+        ctx.fillStyle='#550000';
+        ctx.fillRect(-s*.86,s*.22,s*.32,s*.2);
+        ctx.fillRect(s*.54,s*.22,s*.32,s*.2);
+        // Neck
+        ctx.fillStyle='#aa1100';
+        ctx.fillRect(-s*.14,-s*.44,s*.28,s*.12);
+        // Head / skull mask
+        ctx.fillStyle='#cc2200';
+        ctx.fillRect(-s*.42,-s*1.08,s*.84,s*.7);
+        ctx.shadowBlur=0;
+        // Skull eye sockets
+        ctx.fillStyle='#000';
+        ctx.fillRect(-s*.3,-s*.9,s*.22,s*.2);
+        ctx.fillRect(s*.08,-s*.9,s*.22,s*.2);
+        // Eye glow (red pupils)
+        ctx.fillStyle='rgba(255,0,0,.7)';
+        ctx.fillRect(-s*.25,-s*.88,s*.12,s*.14);
+        ctx.fillRect(s*.13,-s*.88,s*.12,s*.14);
+        // Nose cavity
+        ctx.fillStyle='#000';
+        ctx.fillRect(-s*.06,-s*.72,s*.12,s*.11);
+        // Teeth
+        ctx.fillStyle='rgba(0,0,0,.55)';
+        ctx.fillRect(-s*.3,-s*.59,s*.6,s*.07);
+        ctx.fillStyle='rgba(220,200,180,.55)';
+        for(let i=0;i<5;i++) ctx.fillRect(-s*.28+i*s*.11,-s*.59,s*.08,s*.1);
+        // ── Machete / sword ──
+        // Handle
+        ctx.fillStyle='#5c3317';
+        ctx.fillRect(-s*.07,-s*1.12,s*.14,s*.25);
+        // Guard
+        ctx.fillStyle='#888';
+        ctx.fillRect(-s*.2,-s*1.12,s*.4,s*.07);
+        // Blade
+        ctx.fillStyle='#c8c8c8';
+        ctx.fillRect(-s*.07,-s*2.0,s*.14,s*.92);
+        // Blade bevel
+        ctx.fillStyle='#e8e8e8';
+        ctx.fillRect(-s*.04,-s*1.98,s*.06,s*.88);
+        // Blood on blade
+        ctx.fillStyle='rgba(180,0,0,.8)';
+        ctx.fillRect(-s*.06,-s*1.65,s*.1,s*.25);
+        ctx.beginPath();ctx.arc(s*.02,-s*1.66,s*.06,0,Math.PI*2);ctx.fill();
+        // "ME" outline
+        if(isMe){ctx.shadowColor='#fff';ctx.shadowBlur=8;ctx.strokeStyle='rgba(255,255,255,.4)';ctx.lineWidth=1.5;ctx.strokeRect(-s*.52,-s*1.1,s*1.04,s*2.02);}
+
+      } else {
+        // ── NOOB SURVIVOR ──
+        // Legs — green
+        ctx.fillStyle='#1a8c1a';
+        ctx.fillRect(-s*.38,s*.28,s*.33,s*.58);
+        ctx.fillRect(s*.05,s*.28,s*.33,s*.58);
+        // Shoes
+        ctx.fillStyle='#0f5c0f';
+        ctx.fillRect(-s*.42,s*.76,s*.36,s*.12);
+        ctx.fillRect(s*.06,s*.76,s*.36,s*.12);
+        // Torso — blue
+        ctx.fillStyle='#1155cc';
+        ctx.fillRect(-s*.5,-s*.38,s,s*.72);
+        // Shirt shine
+        ctx.fillStyle='rgba(100,160,255,.13)';
+        ctx.fillRect(-s*.38,-s*.3,s*.38,s*.5);
+        // Arms — yellow
+        ctx.fillStyle='#ffcc00';
+        ctx.fillRect(-s*.83,-s*.3,s*.3,s*.62);
+        ctx.fillRect(s*.53,-s*.3,s*.3,s*.62);
+        // Hands
+        ctx.fillStyle='#e6b800';
+        ctx.fillRect(-s*.86,s*.22,s*.32,s*.2);
+        ctx.fillRect(s*.54,s*.22,s*.32,s*.2);
+        // Neck
+        ctx.fillStyle='#ffcc00';
+        ctx.fillRect(-s*.14,-s*.44,s*.28,s*.12);
+        // Head — yellow
+        ctx.fillStyle='#ffcc00';
+        ctx.fillRect(-s*.42,-s*1.08,s*.84,s*.72);
+        // Head shine
+        ctx.fillStyle='rgba(255,255,200,.3)';
+        ctx.beginPath();ctx.ellipse(-s*.15,-s*.98,s*.16,s*.09,-.3,0,Math.PI*2);ctx.fill();
+        // Eyes
+        ctx.fillStyle='#1a1a1a';
+        ctx.fillRect(-s*.28,-s*.82,s*.15,s*.16);
+        ctx.fillRect(s*.13,-s*.82,s*.15,s*.16);
+        // Eye shine
+        ctx.fillStyle='#fff';
+        ctx.fillRect(-s*.24,-s*.8,s*.05,s*.05);
+        ctx.fillRect(s*.17,-s*.8,s*.05,s*.05);
+        // Smile
+        ctx.strokeStyle='#1a1a1a';ctx.lineWidth=s*.08;ctx.lineCap='round';
+        ctx.beginPath();ctx.arc(0,-s*.54,s*.22,0.22,Math.PI-.22);ctx.stroke();
+        // "ME" outline
+        if(isMe){ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=1.5;ctx.strokeRect(-s*.52,-s*1.1,s*1.04,s*2.02);}
       }
-      ctx.font=`${TILE*.36}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-      if(!dead){ctx.fillStyle=p.role==='killer'?'#ff7070':'#70b0ff';ctx.fillText(p.role==='killer'?'⚔':'🏃',p.x,p.y);}
-      else{ctx.fillStyle='#303040';ctx.fillText('💀',p.x,p.y);}
+
+      ctx.restore();
+
+      // Name label
       if(!dead){
+        ctx.save();
         ctx.fillStyle=isMe?'#fff':'#7a7a9a';
         ctx.font=`${isMe?11:9}px 'Share Tech Mono',monospace`;
         ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.shadowColor=p.role==='killer'?'#ff0000':'#002244';ctx.shadowBlur=4;
         ctx.fillText(isMe?'▶ TÚ':(p.username||p.name||'?').slice(0,12),p.x,p.y-r-14);
+        ctx.restore();
       }
+      // HP bar
       if(!dead&&p.maxHp>0){
         const bw=TILE*.9,bh=5,bx=p.x-bw/2,by=p.y-r-10;
         const pct=p.hp/p.maxHp;
