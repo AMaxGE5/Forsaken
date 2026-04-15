@@ -2616,8 +2616,16 @@ const Game={
     if(!S.isHost||!S.running)return;
     const surv=Object.values(W.players).filter(p=>p.role==='survivor');
     if(!surv.length)return;
-    if(surv.every(p=>!p.alive&&!p.escaped))Game.handleRoundEnd('killer','☠ Todos los supervivientes fueron eliminados');
-    else if(surv.every(p=>p.escaped))Game.handleRoundEnd('survivors','🚪 ¡Todos los supervivientes escaparon!');
+    const aliveInMatch=surv.filter(p=>p.alive&&!p.escaped);
+    if(aliveInMatch.length===0){
+      const escapedCount=surv.filter(p=>p.escaped).length;
+      if(escapedCount>0){
+        const allEscaped=escapedCount===surv.length;
+        Game.handleRoundEnd('survivors',allEscaped?'🚪 ¡Todos los supervivientes escaparon!':'🚪 Algunos supervivientes escaparon');
+      }else{
+        Game.handleRoundEnd('killer','☠ Todos los supervivientes fueron eliminados');
+      }
+    }
   },
 
   // ── ROUND END: show overlay then return to lobby ──
@@ -2659,7 +2667,7 @@ const Game={
     if(winner==='killer'){
       // Find killer name for the overlay
       const killerP=Object.values(W.players||{}).find(p=>p.role==='killer');
-      const killerName=(killerP?killerP.name:'SLASHER').toUpperCase();
+      const killerName=(killerP?(killerP.username||killerP.name):'SLASHER').toUpperCase();
       KillerWin.show(killerName,()=>showEndOverlay());
     } else {
       showEndOverlay();
@@ -3075,31 +3083,92 @@ const Game={
     Object.values(W.players).forEach(p=>{
       if(p.escaped)return;
       const r=TILE*.32,isMe=p.id===S.myId,dead=!p.alive;
+      const animT=Date.now()*0.006;
+      const bob=dead?0:Math.sin(animT+(p.id?.length||0))*1.2;
+      const ang=p.facing||0;
+      const dirX=Math.cos(ang),dirY=Math.sin(ang);
+      const perpX=-dirY,perpY=dirX;
       if(p.sprinting&&p.alive){
         ctx.beginPath();ctx.arc(p.x,p.y,r+6,0,Math.PI*2);
         ctx.fillStyle=p.role==='killer'?'rgba(231,76,60,.08)':'rgba(255,215,0,.07)';ctx.fill();
       }
-      ctx.beginPath();ctx.ellipse(p.x,p.y+r*.55,r*.65,r*.22,0,0,Math.PI*2);
+      // soft shadow
+      ctx.beginPath();ctx.ellipse(p.x,p.y+r*.65,r*.78,r*.28,0,0,Math.PI*2);
       ctx.fillStyle='rgba(0,0,0,.35)';ctx.fill();
-      ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
-      ctx.fillStyle=dead?'#0e0e1a':p.role==='killer'?'#5a0c0c':'#0c2252';ctx.fill();
-      ctx.strokeStyle=dead?'#1a1a2a':isMe?'#ffffff':(p.role==='killer'?'#e74c3c':'#3498db');
-      ctx.lineWidth=isMe?2.5:1.5;ctx.stroke();
-      if(!dead&&p.role==='killer'){
-        const fx=p.x+Math.cos(p.facing)*(r+4),fy=p.y+Math.sin(p.facing)*(r+4);
-        ctx.beginPath();ctx.arc(fx,fy,3,0,Math.PI*2);ctx.fillStyle='#ff4444';ctx.fill();
+
+      const bodyX=p.x,bodyY=p.y+bob;
+      const roleCol=p.role==='killer'?'#e74c3c':'#3498db';
+      const bodyFill=dead?'#0e0e1a':(p.role==='killer'?'#3b0909':'#0d1a3f');
+
+      // torso
+      ctx.beginPath();
+      ctx.ellipse(bodyX,bodyY+r*.12,r*.82,r*.68,0,0,Math.PI*2);
+      ctx.fillStyle=bodyFill;ctx.fill();
+      ctx.strokeStyle=dead?'#1a1a2a':(isMe?'#ffffff':roleCol);
+      ctx.lineWidth=isMe?2.5:1.6;
+      ctx.stroke();
+
+      // head
+      ctx.beginPath();ctx.arc(bodyX,bodyY-r*.62,r*.42,0,Math.PI*2);
+      const headGrad=ctx.createRadialGradient(bodyX-r*.16,bodyY-r*.8,r*.08,bodyX,bodyY-r*.62,r*.52);
+      headGrad.addColorStop(0,dead?'#252536':(p.role==='killer'?'#ffd9d4':'#d6e8ff'));
+      headGrad.addColorStop(1,dead?'#121221':(p.role==='killer'?'#8d3a34':'#446b9f'));
+      ctx.fillStyle=headGrad;ctx.fill();
+      ctx.strokeStyle=dead?'#1a1a2a':'rgba(0,0,0,.45)';
+      ctx.lineWidth=1.1;ctx.stroke();
+
+      if(!dead){
+        // eyes
+        const eyeY=bodyY-r*.66;
+        const eyeShift=r*.16;
+        ctx.fillStyle=p.role==='killer'?'#ff4b4b':'#9fd1ff';
+        ctx.beginPath();ctx.arc(bodyX-eyeShift,eyeY,r*.07,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(bodyX+eyeShift,eyeY,r*.07,0,Math.PI*2);ctx.fill();
+
+        // role-specific silhouettes
+        if(p.role==='killer'){
+          // blade
+          const bx=bodyX+dirX*(r*.88)+perpX*(r*.32);
+          const by=bodyY+dirY*(r*.88)+perpY*(r*.32);
+          ctx.save();ctx.translate(bx,by);ctx.rotate(ang+.35);
+          ctx.fillStyle='rgba(255,235,235,.88)';
+          ctx.beginPath();
+          ctx.moveTo(0,-r*.62);ctx.lineTo(r*.12,r*.18);ctx.lineTo(0,r*.28);ctx.lineTo(-r*.12,r*.18);
+          ctx.closePath();ctx.fill();
+          ctx.fillStyle='#5a1b1b';ctx.fillRect(-r*.1,r*.28,r*.2,r*.2);
+          ctx.restore();
+
+          // shoulder spikes
+          ctx.fillStyle='rgba(255,80,80,.45)';
+          ctx.beginPath();ctx.moveTo(bodyX-r*.75,bodyY-r*.12);ctx.lineTo(bodyX-r*.48,bodyY-r*.38);ctx.lineTo(bodyX-r*.35,bodyY-r*.03);ctx.fill();
+          ctx.beginPath();ctx.moveTo(bodyX+r*.75,bodyY-r*.12);ctx.lineTo(bodyX+r*.48,bodyY-r*.38);ctx.lineTo(bodyX+r*.35,bodyY-r*.03);ctx.fill();
+        }else{
+          // survivor vest stripe
+          ctx.strokeStyle='rgba(170,220,255,.55)';
+          ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(bodyX-r*.44,bodyY-r*.08);ctx.lineTo(bodyX+r*.38,bodyY+r*.2);ctx.stroke();
+          // lantern
+          const lx=bodyX+dirX*(r*.72)-perpX*(r*.35);
+          const ly=bodyY+dirY*(r*.72)-perpY*(r*.35);
+          ctx.fillStyle='rgba(255,220,110,.9)';
+          ctx.beginPath();ctx.arc(lx,ly,r*.12,0,Math.PI*2);ctx.fill();
+          ctx.strokeStyle='rgba(255,180,60,.9)';
+          ctx.lineWidth=1;
+          ctx.beginPath();ctx.arc(lx,ly,r*.2,0,Math.PI*2);ctx.stroke();
+        }
+      }else{
+        ctx.font=`${TILE*.36}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle='#303040';ctx.fillText('💀',bodyX,bodyY-r*.05);
       }
-      ctx.font=`${TILE*.36}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-      if(!dead){ctx.fillStyle=p.role==='killer'?'#ff7070':'#70b0ff';ctx.fillText(p.role==='killer'?'⚔':'🏃',p.x,p.y);}
-      else{ctx.fillStyle='#303040';ctx.fillText('💀',p.x,p.y);}
+
       if(!dead){
         ctx.fillStyle=isMe?'#fff':'#7a7a9a';
         ctx.font=`${isMe?11:9}px 'Share Tech Mono',monospace`;
         ctx.textAlign='center';ctx.textBaseline='bottom';
-        ctx.fillText(isMe?'▶ TÚ':(p.username||p.name||'?').slice(0,12),p.x,p.y-r-14);
+        ctx.fillText(isMe?'▶ TÚ':(p.username||p.name||'?').slice(0,12),bodyX,bodyY-r-14);
       }
       if(!dead&&p.maxHp>0){
-        const bw=TILE*.9,bh=5,bx=p.x-bw/2,by=p.y-r-10;
+        const bw=TILE*.9,bh=5,bx=bodyX-bw/2,by=bodyY-r-10;
         const pct=p.hp/p.maxHp;
         ctx.fillStyle='#10101e';ctx.fillRect(bx,by,bw,bh);
         ctx.fillStyle=p.role==='killer'?'#c0392b':pct>.5?'#2ecc71':pct>.25?'#f39c12':'#e74c3c';
