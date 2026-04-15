@@ -1998,7 +1998,27 @@ const MP={
         }
         if(d.t==='join'){
           if(S.running){
-            conn.send({t:'spectate',gs:Game.serial(),players:S.players});
+            // Registrar la conexión y el jugador aunque la ronda esté activa,
+            // para que: (a) reciban broadcasts futuros (returnLobby, list, gs),
+            // (b) sean incluidos en la siguiente ronda.
+            if(!S.conns.find(c=>c===conn)) S.conns.push(conn);
+            if(!S.players.find(p=>p.id===d.id)){
+              S.players.push({
+                id:d.id,name:d.name||'JUGADOR',
+                username:d.username||d.name||'?',
+                host:false,connId:conn.peer,
+                color:PCOLORS[S.players.length%PCOLORS.length],
+              });
+            }
+            // Enviar estado del juego en curso para spectating.
+            // Solo pasar los jugadores que están realmente EN la partida activa.
+            const inGamePlayers=S.players.filter(p=>W.players&&W.players[p.id]);
+            conn.send({t:'spectate',gs:Game.serial(),players:inGamePlayers});
+            // Notificar a los demás que hay un nuevo jugador esperando
+            Net.broadcast({t:'list',players:S.players,code:S.code||''});
+            UI.renderLobbyPlayers();
+            conn.on('close',()=>Net.onDisc(conn));
+            conn.on('error',()=>Net.onDisc(conn));
             return;
           }
           if(S.players.length>=MP_ROOM_CAP){
