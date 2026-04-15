@@ -896,8 +896,15 @@ const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
 const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8, HB_H = TILE*2.0;
 const INTERACT_SEC = 4;
 const GEN_TIME_BONUS = 14;
-const LMS_TIME = 74, LMS_TRACKER_DUR = 6;
+const LMS_TIME = 74, LMS_TRACKER_DUR = 5;
 const BLOXY_CD = 40, BLOXY_DUR = 8; // Bloxy Cola cooldown & effect duration
+// ── Habilidad Q del Killer: HELPLESS ──
+const Q_CD = 18;           // cooldown en segundos
+const Q_DASH_DUR = 0.2;    // duración del dash
+const Q_DASH_MULT = 2.0;   // multiplicador de velocidad (Velocidad II aprox.)
+const Q_DMG = 20;          // daño del golpe
+const Q_HB_SIZE = HB_W;    // hitbox cuadrada — mismo largo que ancho del M1
+const Q_HELPLESS_DUR = 4;  // duración del efecto helpless en segundos
 const GAME_DUR = 210;        // 3:30
 const KILL_TIME_BONUS = 30;  // seconds added per kill
 const ROUND_END_DELAY = 8;
@@ -1998,27 +2005,7 @@ const MP={
         }
         if(d.t==='join'){
           if(S.running){
-            // Registrar la conexión y el jugador aunque la ronda esté activa,
-            // para que: (a) reciban broadcasts futuros (returnLobby, list, gs),
-            // (b) sean incluidos en la siguiente ronda.
-            if(!S.conns.find(c=>c===conn)) S.conns.push(conn);
-            if(!S.players.find(p=>p.id===d.id)){
-              S.players.push({
-                id:d.id,name:d.name||'JUGADOR',
-                username:d.username||d.name||'?',
-                host:false,connId:conn.peer,
-                color:PCOLORS[S.players.length%PCOLORS.length],
-              });
-            }
-            // Enviar estado del juego en curso para spectating.
-            // Solo pasar los jugadores que están realmente EN la partida activa.
-            const inGamePlayers=S.players.filter(p=>W.players&&W.players[p.id]);
-            conn.send({t:'spectate',gs:Game.serial(),players:inGamePlayers});
-            // Notificar a los demás que hay un nuevo jugador esperando
-            Net.broadcast({t:'list',players:S.players,code:S.code||''});
-            UI.renderLobbyPlayers();
-            conn.on('close',()=>Net.onDisc(conn));
-            conn.on('error',()=>Net.onDisc(conn));
+            conn.send({t:'spectate',gs:Game.serial(),players:S.players});
             return;
           }
           if(S.players.length>=MP_ROOM_CAP){
@@ -2426,7 +2413,7 @@ const Game={
 
   updateCamera(me){
     if(!me)return;
-    const effScale=me.role==='killer'?SCALE*.72:SCALE*.88;
+    const effScale=me.role==='killer'?SCALE*.72:SCALE*.90;
     CAM._effScale=effScale;
     const worldW=MAP_W*TILE,worldH=MAP_H*TILE;
     const vpW=VW/effScale,vpH=VH/effScale;
