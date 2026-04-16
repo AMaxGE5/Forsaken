@@ -75,6 +75,13 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .lsp-pill:hover{border-color:rgba(192,57,43,.55);color:#fff;background:rgba(192,57,43,.08);}
 .lsp-pill-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3);flex-shrink:0;}
 .lsp-pill-dot.me{background:var(--blood);box-shadow:0 0 5px var(--blood);}
+.mal-badge{
+  font-family:'Oswald',sans-serif;font-size:.58rem;letter-spacing:.04em;
+  color:rgba(231,76,60,.95);background:rgba(192,57,43,.18);
+  border:1px solid rgba(192,57,43,.4);padding:1px 5px;border-radius:3px;
+  margin-left:5px;flex-shrink:0;
+}
+.lp-mal{color:rgba(231,76,60,.85);font-size:.58rem;margin-left:5px;font-family:'Oswald',sans-serif;}
 
 /* ── PROFILE MODAL ── */
 #profileModal{
@@ -783,7 +790,7 @@ const Auth={
     const db=this._db();
     if(this._tab==='register'){
       if(db[user.toLowerCase()]){this.msg('Ese usuario ya existe — inicia sesión');return;}
-      db[user.toLowerCase()]={user,pass,timePlayed:0,survWins:0,killWins:0};
+      db[user.toLowerCase()]={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0};
       this._save(db);
       Stats.load(user.toLowerCase());
       this._handleRemember(user);
@@ -852,6 +859,7 @@ const Stats={
     this.timePlayed=acc.timePlayed||0;
     this.survWins=acc.survWins||0;
     this.killWins=acc.killWins||0;
+    this.malicia=acc.malicia||0;
     this.username=acc.user||key;
   },
   save(){
@@ -861,6 +869,7 @@ const Stats={
     db[this._key].timePlayed=this.timePlayed;
     db[this._key].survWins=this.survWins;
     db[this._key].killWins=this.killWins;
+    db[this._key].malicia=this.malicia||0;
     Auth._save(db);
   },
   startSession(){this._session.start=Date.now();},
@@ -879,6 +888,13 @@ const Stats={
     if(role==='killer')this.killWins++;else this.survWins++;
     this.save();
   },
+  addMalicia(n){
+    this.malicia=Math.max(0,(this.malicia||0)+n);
+    this.save();
+    // Sync into S.players entry so host sees updated value
+    const sp=S.players.find(p=>p.id===S.myId);
+    if(sp)sp.malicia=this.malicia;
+  },
   fmtTime(secs){
     const d=Math.floor(secs/86400),h=Math.floor((secs%86400)/3600);
     const m=Math.floor((secs%3600)/60),s=secs%60;
@@ -886,7 +902,7 @@ const Stats={
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   },
   getCard(){
-    return {username:this.username,timePlayed:this.timePlayed,survWins:this.survWins,killWins:this.killWins,id:''};
+    return {username:this.username,timePlayed:this.timePlayed,survWins:this.survWins,killWins:this.killWins,malicia:this.malicia||0,id:''};
   },
 };
 
@@ -1098,7 +1114,8 @@ const UI={
     S.players.forEach(p=>{
       const div=document.createElement('div');
       div.className='lp-entry'+(p.id===S.myId?' me':'');
-      div.textContent=(p.host?'👑 ':'🎮 ')+(p.username||p.name);
+      const mal=p.id===S.myId?Stats.malicia||0:p.malicia||0;
+      div.innerHTML=`${p.host?'👑 ':'🎮 '}${p.username||p.name}<span class="lp-mal">⚡${mal}</span>`;
       list.appendChild(div);
     });
     UI.renderStatsPanel();
@@ -1108,13 +1125,14 @@ const UI={
     const panel=document.getElementById('lobbyStatsPanel');
     if(!panel)return;
     panel.innerHTML='';
-    const self={id:S.myId,username:Stats.username,timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,isMe:true};
+    const self={id:S.myId,username:Stats.username,timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,malicia:Stats.malicia||0,isMe:true};
     const others=Object.values(LobbyWorld.lobbyPlayers||{}).filter(p=>p.id!==S.myId);
     [self,...others].forEach(p=>{
       const pill=document.createElement('div');
       pill.className='lsp-pill'+(p.isMe?' me':'');
       const uname=p.isMe?Stats.username:(p.username||p.name||'?');
-      pill.innerHTML=`<div class="lsp-pill-dot${p.isMe?' me':''}"></div>${p.isMe?'▶ ':''}${uname}`;
+      const mal=p.isMe?Stats.malicia||0:p.malicia||0;
+      pill.innerHTML=`<div class="lsp-pill-dot${p.isMe?' me':''}"></div>${p.isMe?'▶ ':''}${uname}<span class="mal-badge">⚡${mal}</span>`;
       pill.onclick=()=>LobbyWorld.showProfile(p);
       panel.appendChild(pill);
     });
@@ -1902,7 +1920,7 @@ const MP={
       S.isHost=true;
       S.myId=Net.uid();
       S.code='';
-      S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0]}];
+      S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0],malicia:Stats.malicia||0}];
       // Marcar sala como activa localmente de inmediato
       mpRoomStatus[roomIndex]={count:1};
       MP.setStatus('✓ Sala '+(roomIndex+1)+' lista. Esperando jugadores...','#2ecc71');
@@ -1965,7 +1983,7 @@ const MP={
       conn.on('open',()=>{
         clearTimeout(connTO);
         MP.setStatus('Conectado. Entrando al lobby...','#a0c0ff');
-        conn.send({t:'join',id:S.myId,name:Stats.username||'JUGADOR',username:Stats.username||'?'});
+        conn.send({t:'join',id:S.myId,name:Stats.username||'JUGADOR',username:Stats.username||'?',malicia:Stats.malicia||0});
       });
 
       conn.on('data',raw=>{
@@ -1986,7 +2004,14 @@ const MP={
 
       conn.on('close',()=>{
         clearTimeout(connTO);
-        if(S.running||S.inLobbyWorld){alert('Desconectado del host.');MP.leaveRoom();}
+        if(S.running||S.inLobbyWorld){
+          // Use a non-blocking notification instead of alert
+          const msg=document.createElement('div');
+          msg.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;font-family:Share Tech Mono,monospace;font-size:.8rem;letter-spacing:.2em;text-align:center;padding:14px;';
+          msg.textContent='⚠ DESCONECTADO DEL HOST — volviendo al menú...';
+          document.body.appendChild(msg);
+          setTimeout(()=>MP.leaveRoom(),2200);
+        }
       });
       conn.on('error',()=>{
         clearTimeout(connTO);
@@ -2040,6 +2065,7 @@ const MP={
               username:d.username||d.name||'?',
               host:false,connId:conn.peer,
               color:PCOLORS[S.players.length%PCOLORS.length],
+              malicia:d.malicia||0,
             });
           }
           Net.broadcast({t:'list',players:S.players,code:''});
@@ -2150,7 +2176,8 @@ const Net={
       x:S.lobbyP.x,y:S.lobbyP.y,facing:S.lobbyP.facing,
       name:(S.players.find(p=>p.id===S.myId)||{}).name||Stats.username||'?',
       username:Stats.username||'?',
-      timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins};
+      timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,
+      malicia:Stats.malicia||0};
     if(S.isHost)Net.broadcast(msg);
     else Net.sendHost(msg);
   },
@@ -2182,8 +2209,10 @@ const Net={
       LobbyWorld.lobbyPlayers[d.id]={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
-        survWins:d.survWins||0,killWins:d.killWins||0,
+        survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
       };
+      // Sync malicia into S.players so hostStart picks correct killer
+      const sp=S.players.find(x=>x.id===d.id);if(sp)sp.malicia=d.malicia||0;
       Net.broadcast(d);
     }
   },
@@ -2222,13 +2251,13 @@ const Net={
       if(S.running)Game.applyState(d.gs);
 
     } else if(d.t==='over'){
-      Game.handleRoundEnd(d.winner,d.reason);
+      Game.handleRoundEnd(d.winner,d.reason,d.lmsLastSurvivorId||null);
 
     } else if(d.t==='lobbyPos'){
       LobbyWorld.lobbyPlayers[d.id]={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
-        survWins:d.survWins||0,killWins:d.killWins||0,
+        survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
       };
 
     } else if(d.t==='spectate'){
@@ -2251,6 +2280,9 @@ const Net={
 
     } else if(d.t==='returnLobby'){
       Game.doReturnToLobby();
+    } else if(d.t==='maliciaGen'){
+      // +1 malicia for the survivor who completed the generator
+      if(d.pid===S.myId)Stats.addMalicia(1);
     }
   },
 
@@ -2326,8 +2358,14 @@ function doSlashHit(killerPid,ang,slashIdx){
 const Game={
   hostStart(){
     const plist=[...S.players];
-    // Pick one random killer index (explicitly random, not biased)
-    const killerIdx=Math.floor(Math.random()*plist.length);
+    // Sync own malicia into S.players before picking
+    const myEntry=plist.find(p=>p.id===S.myId);
+    if(myEntry)myEntry.malicia=Stats.malicia||0;
+    // Pick killer: player with highest malicia; tiebreak = random among tied
+    const maxMal=Math.max(...plist.map(p=>p.malicia||0));
+    const topPlayers=plist.filter(p=>(p.malicia||0)===maxMal);
+    const killerPick=topPlayers[Math.floor(Math.random()*topPlayers.length)];
+    const killerIdx=plist.indexOf(killerPick);
     const roles={},spawns={};
     const shuffledSpawns=[...SPAWN_DEFS].sort(()=>Math.random()-.5);
     plist.forEach((p,i)=>{
@@ -2516,6 +2554,9 @@ const Game={
             g.prog=100;g.on=true;p.interacting=false;p.interactTarget=null;
             if(!S.lms)W.time=Math.max(1,W.time-GEN_TIME_BONUS);
             if(W.gens.every(g=>g.on))W.exit.open=true;
+            // +1 malicia al superviviente que completó el generador
+            Net.broadcast({t:'maliciaGen',pid:p.id});
+            if(p.id===S.myId)Stats.addMalicia(1);
           }
         });
 
@@ -2523,7 +2564,7 @@ const Game={
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive&&!p.escaped);
           if(aliveSurv.length===1){
             const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
-            if(killer){S.lms=true;W.time=Math.min(W.time,LMS_TIME);S.lmsTrackerT=LMS_TRACKER_DUR;
+            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;W.time=Math.min(W.time,LMS_TIME);S.lmsTrackerT=LMS_TRACKER_DUR;
               // Broadcast LMS to clients so they can trigger music
               Net.broadcast({t:'lms'});
               GameAudio.playLMS();
@@ -2690,7 +2731,7 @@ const Game={
   },
 
   // ── ROUND END: show overlay then return to lobby ──
-  handleRoundEnd(winner,reason){
+  handleRoundEnd(winner,reason,lmsLastSurvivorId){
     if(!S.running)return;
     S.running=false;
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
@@ -2700,7 +2741,21 @@ const Game={
     if((winner==='killer'&&myRole==='killer')||(winner==='survivors'&&myRole==='survivor')){
       Stats.addWin(myRole);
     }
-    if(S.isHost)Net.broadcast({t:'over',winner,reason});
+
+    // ── Malicia ──
+    const lmsLastId=lmsLastSurvivorId||(S.isHost?S.lmsLastSurvivorId||null:null);
+    if(myRole==='killer'){
+      // El killer siempre queda con malicia 1 al terminar su ronda
+      Stats.malicia=1;Stats.save();
+      const sp=S.players.find(p=>p.id===S.myId);if(sp)sp.malicia=1;
+    } else {
+      // Todos los supervivientes +1 al terminar la ronda (hayan ganado o no)
+      Stats.addMalicia(1);
+      // +1 extra si eras el último superviviente en LMS y ganaste
+      if(lmsLastId&&lmsLastId===S.myId&&winner==='survivors')Stats.addMalicia(1);
+    }
+
+    if(S.isHost)Net.broadcast({t:'over',winner,reason,lmsLastSurvivorId:S.lmsLastSurvivorId||null});
 
     const showEndOverlay=()=>{
       const ov=document.getElementById('roundEndOv');
@@ -2747,7 +2802,7 @@ const Game={
     document.getElementById('killerWinOv').classList.remove('show');
     document.getElementById('killerWinOv').classList.remove('fading');
     KillerWin._stop();
-    S.lms=false;S.lmsTrackerT=0;
+    S.lms=false;S.lmsTrackerT=0;S.lmsLastSurvivorId=null;
     slashFX=[];
 
     // Reset lobby countdown
@@ -3706,6 +3761,16 @@ const KillerWin={
 // ══════════════════════════════════════════
 Inp.init();
 Auth.loadRemember(); // async — handles auto-login if remembered
+
+// ── Desconexión limpia al cerrar la pestaña/recargar ──
+window.addEventListener('beforeunload',()=>{
+  if(S.peer&&!S.peer.destroyed){
+    try{S.peer.destroy();}catch(e){}
+  }
+  if(mpMainPeer&&!mpMainPeer.destroyed){
+    try{mpMainPeer.destroy();}catch(e){}
+  }
+});
 
 // Click outside profile modal to close
 document.getElementById('profileModal').addEventListener('click',function(e){
