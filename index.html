@@ -612,7 +612,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="hudTimerWrap">
       <div id="hudTimerLabel">TIEMPO RESTANTE</div>
       <div id="hudTimer">5:00</div>
-      <div id="hudGens">generadores: 0/6</div>
+      <div id="hudGens">generadores: 0/5</div>
     </div>
     <div id="bloxyBuffBar">🥤 VELOCIDAD <span id="bloxySpeedRoman">II</span></div>
     <div id="hudAlivePanelWrap"></div>
@@ -912,8 +912,8 @@ setInterval(()=>{if(S&&S.inLobbyWorld)Stats.tickSession();},5000);
 const TILE = 36;
 const MAP_W = 65, MAP_H = 45;
 const VP_TILES_W = 14;
-const SW = 45, SR = 90;
-const KW = 60, KR = 120;
+const SW = 80, SR = 140;   // Survivor: walk 80, run 140
+const KW = 90, KR = 150;   // Killer:   walk 90, run 150
 const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
 const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
@@ -968,7 +968,7 @@ function buildMap(){
       if(y+dy>0&&y+dy<MAP_H-1&&x+dx>0&&x+dx<MAP_W-1) m[y+dy][x+dx]=1;
     }
   });
-  const genSpots=[[2,4],[61,4],[2,39],[61,39],[32,10],[32,34]];
+  const genSpots=[[2,4],[61,4],[2,39],[61,39],[32,10]];  // 5 generadores
   genSpots.forEach(([gx,gy])=>{ if(m[gy][gx]===0) m[gy][gx]=2; });
   m[22][32]=3;
   return m;
@@ -1229,12 +1229,13 @@ const UI={
       bloxySlot.style.display='flex';
       const bCdPct=me.bloxyCd>0?me.bloxyCd/BLOXY_CD:0;
       document.getElementById('abilityBloxyOverlay').style.transform=`scaleY(${bCdPct})`;
-      document.getElementById('abilityBloxyWrap').className='ability-icon-wrap'+(me.bloxyActive?'ready':bCdPct>0?' on-cd':' ready');
+      const isDrinking=me.bloxyDrinking||false;
+      document.getElementById('abilityBloxyWrap').className='ability-icon-wrap'+(me.bloxyActive?'ready':isDrinking?'ready':bCdPct>0?' on-cd':' ready');
       const bNum=document.getElementById('abilityBloxyNum');
-      bNum.style.display=bCdPct>0&&!me.bloxyActive?'flex':'none';
-      if(bCdPct>0&&!me.bloxyActive)bNum.textContent=Math.ceil(me.bloxyCd)+'s';
-      // Name shows tier
-      document.getElementById('bloxyName').textContent=me.bloxyActive?(S.lms?'VEL. I ACTIVA':'VEL. II ACTIVA'):'BLOXY COLA';
+      bNum.style.display=(bCdPct>0&&!me.bloxyActive&&!isDrinking)?'flex':'none';
+      if(bCdPct>0&&!me.bloxyActive&&!isDrinking)bNum.textContent=Math.ceil(me.bloxyCd)+'s';
+      // Name shows state
+      document.getElementById('bloxyName').textContent=isDrinking?'🥤 BEBIENDO...':(me.bloxyActive?(S.lms?'VEL. I ACTIVA':'VEL. II ACTIVA'):'BLOXY COLA');
     }
     // Bloxy buff bar
     const bbBar=document.getElementById('bloxyBuffBar');
@@ -2536,6 +2537,17 @@ const Game={
         // Tick bloxy timers for all players
         Object.values(W.players).forEach(p=>{
           if(p.bloxyCd>0)p.bloxyCd=Math.max(0,p.bloxyCd-dt);
+          // Bloxy drink delay: 0.5s where only walking is allowed
+          if(p.bloxyDrinking){
+            p.bloxyDrinkTimer=Math.max(0,(p.bloxyDrinkTimer||0)-dt);
+            if(p.bloxyDrinkTimer<=0){
+              p.bloxyDrinking=false;
+              // Speed I in LMS (+15%), Speed II normally (+30%)
+              p.speedBuff=S.lms?1.15:1.30;
+              p.bloxyActive=true;
+              p.bloxyTimer=BLOXY_DUR;
+            }
+          }
           if(p.bloxyActive){
             p.bloxyTimer=Math.max(0,p.bloxyTimer-dt);
             if(p.bloxyTimer<=0){p.bloxyActive=false;p.speedBuff=1;}
@@ -2623,7 +2635,7 @@ const Game={
     if(inp['d']||inp['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     const moving=dx!==0||dy!==0;
-    const canSprint=p.stamina>0;
+    const canSprint=p.stamina>0&&!p.bloxyDrinking;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
     if(isSprint){
@@ -2701,11 +2713,10 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='survivor')return;
     if(p.bloxyCd>0)return;
-    // Speed I in LMS (5%), Speed II normally (10%)
-    const buffMult=S.lms?1.05:1.10;
-    p.speedBuff=buffMult;
-    p.bloxyActive=true;
-    p.bloxyTimer=BLOXY_DUR;
+    if(p.bloxyDrinking)return; // already drinking
+    // 0.5s "drinking" delay: player can only walk, then effect kicks in
+    p.bloxyDrinking=true;
+    p.bloxyDrinkTimer=0.5;
     p.bloxyCd=BLOXY_CD;
   },
 
@@ -2873,6 +2884,7 @@ const Game={
         maxStamina:p.maxStamina||SMAX,
         m1Cd:p.m1Cd,bleedTicks:p.bleedTicks,bleedTimer:p.bleedTimer,
         bloxyCd:p.bloxyCd||0,bloxyActive:p.bloxyActive||false,bloxyTimer:p.bloxyTimer||0,speedBuff:p.speedBuff||1,
+        bloxyDrinking:p.bloxyDrinking||false,bloxyDrinkTimer:p.bloxyDrinkTimer||0,
         qCd:p.qCd||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
@@ -2907,7 +2919,7 @@ const Game={
       if(d.maxStamina)p.maxStamina=d.maxStamina;
       if(id!==S.myId)p.facing=d.facing;
       p.m1Cd=d.m1Cd;p.bleedTicks=d.bleedTicks;p.bleedTimer=d.bleedTimer;
-      if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;}
+      if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;p.bloxyDrinking=d.bloxyDrinking||false;p.bloxyDrinkTimer=d.bloxyDrinkTimer||0;}
       if(d.qCd!==undefined)p.qCd=d.qCd;
 
       // Show death overlay for local player
@@ -2944,49 +2956,53 @@ const Game={
         const seed=(tx*7+ty*13)%17;
         const seed2=(tx*3+ty*19)%11;
         if(t===1){
-          // Wall — crumbling asylum concrete
-          const wallBase=seed<6?'#1e1e28':seed<11?'#222230':'#1a1a24';
+          // Wall — thick asylum concrete, clearly distinguishable from floor
+          const wallBase=seed<6?'#2e2e3e':seed<11?'#323248':'#28283a';
           ctx.fillStyle=wallBase;ctx.fillRect(px,py,TILE,TILE);
-          // Top highlight (moss/stain line)
-          ctx.fillStyle=seed<5?'rgba(40,55,35,.6)':'rgba(50,45,60,.5)';
-          ctx.fillRect(px,py,TILE,3);
-          // Side shadow
-          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px,py,3,TILE);
-          // Inner bevel
-          ctx.fillStyle=seed2<4?'#131320':seed2<8?'#161622':'#111120';
-          ctx.fillRect(px+3,py+3,TILE-5,TILE-5);
+          // Strong top-left highlight to give 3D "raised block" feel
+          ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(px,py,TILE,3); // top edge bright
+          ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,3,TILE); // left edge
+          // Strong bottom-right shadow
+          ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px,py+TILE-3,TILE,3); // bottom dark
+          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+TILE-3,py,3,TILE); // right dark
+          // Inner face (slightly different shade)
+          ctx.fillStyle=seed2<4?'#222235':seed2<8?'#26263c':'#1e1e30';
+          ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
+          // Concrete texture — horizontal grout line
+          ctx.strokeStyle='rgba(0,0,0,.45)';ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(px+3,py+TILE/2);ctx.lineTo(px+TILE-3,py+TILE/2);ctx.stroke();
           // Crack detail on some walls
           if(seed<4){
-            ctx.strokeStyle='rgba(0,0,0,.55)';ctx.lineWidth=.8;
-            ctx.beginPath();ctx.moveTo(px+6,py+4);ctx.lineTo(px+11,py+14);ctx.lineTo(px+9,py+22);ctx.stroke();
+            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;
+            ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();
           }
-          if(seed2<3){
-            ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=.6;
-            ctx.beginPath();ctx.moveTo(px+TILE-8,py+5);ctx.lineTo(px+TILE-12,py+18);ctx.stroke();
-          }
-          // Mossy stain top of some walls
-          if(seed===3){ctx.fillStyle='rgba(30,55,25,.5)';ctx.fillRect(px+4,py+3,TILE-8,5);}
-          // Border
-          ctx.strokeStyle='rgba(8,8,16,.9)';ctx.lineWidth=1.5;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          // Mossy stain on some
+          if(seed===3){ctx.fillStyle='rgba(30,60,25,.4)';ctx.fillRect(px+4,py+3,TILE-8,4);}
+          // Clear outer border — makes wall shape very readable
+          ctx.strokeStyle='rgba(0,0,0,.95)';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          // Inner border accent
+          ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=.8;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
         } else {
-          // Floor — cracked hospital tile
-          const floorBase=seed<4?'#0c0c14':seed<9?'#0e0e18':'#0a0a12';
+          // Floor — lighter hospital tiles so contrast with walls is clear
+          const floorBase=seed<4?'#181828':seed<9?'#1a1a2c':'#161624';
           ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
-          // Tile grout lines
-          ctx.strokeStyle='rgba(6,6,12,.9)';ctx.lineWidth=.8;
+          // Tile grout lines — more visible
+          ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;
           ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
-          // Slight tile variation
-          if(seed2<3){ctx.fillStyle='rgba(255,255,255,.012)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
+          // Subtle tile gloss
+          if(seed2<4){ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
+          // Small inner highlight corner
+          ctx.fillStyle='rgba(255,255,255,.018)';ctx.fillRect(px+2,py+2,TILE*.4,2);
           // Blood stain on floor (rare)
           if(seed===5&&seed2===2){
-            ctx.save();ctx.globalAlpha=.18;
-            ctx.fillStyle='#7a0a0a';
+            ctx.save();ctx.globalAlpha=.22;
+            ctx.fillStyle='#8a0a0a';
             ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,0.3,0,Math.PI*2);ctx.fill();
             ctx.beginPath();ctx.ellipse(px+TILE*.6,py+TILE*.55,TILE*.12,TILE*.08,-.5,0,Math.PI*2);ctx.fill();
             ctx.restore();
           }
           // Grime/dust spots
-          if(seed===8){ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(px+TILE*.6,py+TILE*.6,TILE*.3,TILE*.3);}
+          if(seed===8){ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(px+TILE*.6,py+TILE*.6,TILE*.3,TILE*.3);}
         }
       }
     }
