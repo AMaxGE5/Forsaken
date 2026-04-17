@@ -1218,11 +1218,15 @@ const UI={
       // Behead (Q) cooldown
       const bqCd=me.qCd||0;
       const bqPct=bqCd>0?bqCd/Q_CD:0;
+      const isDashing=me.beheadDashing||false;
+      const isSlow=me.beheadSlow||false;
       document.getElementById('abilityBeheadOverlay').style.transform=`scaleY(${bqPct})`;
-      document.getElementById('abilityBeheadWrap').className='ability-icon-wrap'+(bqPct>0?' on-cd':' ready');
+      document.getElementById('abilityBeheadWrap').className='ability-icon-wrap'+(isDashing?'ready':isSlow?' on-cd':bqPct>0?' on-cd':' ready');
       const bqNum=document.getElementById('abilityBeheadNum');
-      bqNum.style.display=bqPct>0?'flex':'none';
-      if(bqPct>0)bqNum.textContent=bqCd.toFixed(1);
+      bqNum.style.display=(bqPct>0||isDashing||isSlow)?'flex':'none';
+      if(isDashing)bqNum.textContent='⚡';
+      else if(isSlow)bqNum.textContent='🐢';
+      else if(bqPct>0)bqNum.textContent=bqCd.toFixed(1);
     } else {
       m1Slot.style.display='none';
       beheadSlot.style.display='none';
@@ -2553,6 +2557,49 @@ const Game={
             if(p.bloxyTimer<=0){p.bloxyActive=false;p.speedBuff=1;}
           }
           if(p.role==='killer'&&p.qCd>0)p.qCd=Math.max(0,p.qCd-dt);
+
+          // ── Behead phases ──
+          if(p.role==='killer'&&p.beheadDashing){
+            p.beheadDashTimer=Math.max(0,p.beheadDashTimer-dt);
+            if(p.beheadDashTimer<=0)p.beheadDashing=false;
+          }
+          if(p.role==='killer'&&p.beheadHitTimer>0){
+            p.beheadHitTimer=Math.max(0,p.beheadHitTimer-dt);
+            if(p.beheadHitTimer===0&&!p.beheadHit){
+              // Fire the hit check now
+              const ang=p.beheadDashAng;
+              const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
+              const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+              slashFX.push({x:cx,y:cy,ang,hw:Q_HB_SIZE/2,hh:Q_HB_SIZE/2,life:.28,maxLife:.28,idx:0,behead:true});
+              let hitSomeone=false;
+              Object.values(W.players).forEach(s=>{
+                if(s.role!=='survivor'||!s.alive)return;
+                if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.2){
+                  hitSomeone=true;
+                  s.hp=Math.max(0,s.hp-Q_DMG);
+                  s.helpless=true;s.helplessTimer=Q_HELPLESS_DUR;
+                  if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+                    W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                  } else {
+                    s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+                  }
+                  Game.checkWin();
+                }
+              });
+              p.beheadHit=hitSomeone;
+              p.beheadHitTimer=-1; // mark as fired
+              if(!hitSomeone){
+                // Miss — apply Slow I (×0.6) for 2s
+                p.beheadSlow=true;
+                p.beheadSlowTimer=2.0;
+                p.speedBuff=0.6;
+              }
+            }
+          }
+          if(p.role==='killer'&&p.beheadSlow){
+            p.beheadSlowTimer=Math.max(0,p.beheadSlowTimer-dt);
+            if(p.beheadSlowTimer<=0){p.beheadSlow=false;p.speedBuff=p.speedBuff===0.6?1:p.speedBuff;}
+          }
         });
 
         Object.values(W.players).forEach(p=>{
@@ -2651,7 +2698,19 @@ const Game={
     if(moving)p.facing=Math.atan2(dy,dx);
     const bw=p.role==='killer'?KW:SW,rw=p.role==='killer'?KR:SR;
     const buff=p.speedBuff||1;
-    const spd=(isSprint?rw:bw)*dt*buff,r=TILE*.28;
+    // During behead dash phase: force Speed III (×2.0 of run) in locked direction
+    let spd,r=TILE*.28;
+    if(p.beheadDashing){
+      spd=rw*2.0*dt; // Speed III
+      // Override dx/dy to locked dash direction
+      const ang=p.beheadDashAng||p.facing;
+      const ndx=Math.cos(ang),ndy=Math.sin(ang);
+      const nx=p.x+ndx*spd,ny=p.y+ndy*spd;
+      if(!wallAt(nx,p.y,r))p.x=nx;
+      if(!wallAt(p.x,ny,r))p.y=ny;
+      return;
+    }
+    spd=(isSprint?rw:bw)*dt*buff;
     const nx=p.x+dx*spd,ny=p.y+dy*spd;
     if(!wallAt(nx,p.y,r))p.x=nx;
     if(!wallAt(p.x,ny,r))p.y=ny;
@@ -2675,39 +2734,16 @@ const Game={
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.qCd>0)return;
     p.qCd=Q_CD;
-    // Dash forward dealing Q_DMG and applying helpless
-    const ang=p.facing;
-    const dashDist=TILE*Q_DASH_MULT*6;
-    const tx=p.x+Math.cos(ang)*dashDist;
-    const ty=p.y+Math.sin(ang)*dashDist;
-    // Instant teleport-dash (snap to furthest non-wall point)
-    const steps=12;
-    let bx=p.x,by=p.y;
-    for(let i=1;i<=steps;i++){
-      const nx=p.x+Math.cos(ang)*dashDist*(i/steps);
-      const ny=p.y+Math.sin(ang)*dashDist*(i/steps);
-      if(wallAt(nx,ny,TILE*.28))break;
-      bx=nx;by=ny;
-    }
-    p.x=bx;p.y=by;
-    // Hit check at destination
-    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
-    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    slashFX.push({x:cx,y:cy,ang,hw:Q_HB_SIZE/2,hh:Q_HB_SIZE/2,life:.25,maxLife:.25,idx:0,behead:true});
-    Object.values(W.players).forEach(s=>{
-      if(s.role!=='survivor'||!s.alive)return;
-      if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.2){
-        s.hp=Math.max(0,s.hp-Q_DMG);
-        s.helpless=true;
-        s.helplessTimer=Q_HELPLESS_DUR;
-        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
-          if(S.isHost){W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
-        } else {
-          s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
-        }
-        if(S.isHost)Game.checkWin();
-      }
-    });
+    // Phase 1 — Speed III (×2.0) for 0.2s, locked facing direction
+    p.beheadDashing=true;
+    p.beheadDashTimer=0.2;
+    p.beheadDashAng=p.facing;    // lock direction at the moment of activation
+    p.beheadHit=false;
+    // Phase 2 — hit check fires at 0.3s (scheduled via beheadHitTimer)
+    p.beheadHitTimer=0.3;
+    // Slow-on-miss flag (applied after hit window if nobody was hit)
+    p.beheadSlow=false;
+    p.beheadSlowTimer=0;
   },
   doBloxy(pid){
     const p=W.players[pid];
@@ -2886,6 +2922,9 @@ const Game={
         bloxyCd:p.bloxyCd||0,bloxyActive:p.bloxyActive||false,bloxyTimer:p.bloxyTimer||0,speedBuff:p.speedBuff||1,
         bloxyDrinking:p.bloxyDrinking||false,bloxyDrinkTimer:p.bloxyDrinkTimer||0,
         qCd:p.qCd||0,
+        beheadDashing:p.beheadDashing||false,beheadDashTimer:p.beheadDashTimer||0,beheadDashAng:p.beheadDashAng||0,
+        beheadHitTimer:p.beheadHitTimer||0,beheadHit:p.beheadHit||false,
+        beheadSlow:p.beheadSlow||false,beheadSlowTimer:p.beheadSlowTimer||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
       exit:{open:W.exit.open},time:W.time,
@@ -2920,7 +2959,12 @@ const Game={
       if(id!==S.myId)p.facing=d.facing;
       p.m1Cd=d.m1Cd;p.bleedTicks=d.bleedTicks;p.bleedTimer=d.bleedTimer;
       if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;p.bloxyDrinking=d.bloxyDrinking||false;p.bloxyDrinkTimer=d.bloxyDrinkTimer||0;}
-      if(d.qCd!==undefined)p.qCd=d.qCd;
+      if(d.qCd!==undefined){
+        p.qCd=d.qCd;
+        p.beheadDashing=d.beheadDashing||false;p.beheadDashTimer=d.beheadDashTimer||0;p.beheadDashAng=d.beheadDashAng||0;
+        p.beheadHitTimer=d.beheadHitTimer||0;p.beheadHit=d.beheadHit||false;
+        p.beheadSlow=d.beheadSlow||false;p.beheadSlowTimer=d.beheadSlowTimer||0;
+      }
 
       // Show death overlay for local player
       if(id===S.myId&&wasAlive&&!d.alive&&!d.escaped){
