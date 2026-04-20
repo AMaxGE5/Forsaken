@@ -487,14 +487,42 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
   </div>
 </div>
 
-<!-- MP ROOM LIST -->
+<!-- MP MENU — elige modo -->
 <div id="s-rooms" class="screen" style="background:radial-gradient(ellipse at 50% 30%,#0a0318 0%,#05050a 65%);">
-  <div style="font-family:'Oswald',sans-serif;font-size:1.5rem;letter-spacing:.35em;color:#fff;text-shadow:0 0 20px var(--blood);margin-bottom:4px;">FORSAKEN</div>
-  <div style="font-size:.62rem;letter-spacing:.4em;color:var(--dim);margin-bottom:22px;">SALAS ONLINE · MÁX 9 JUGADORES POR SALA</div>
-  <div id="mpRoomList" style="display:flex;flex-direction:column;gap:10px;width:min(460px,92vw);margin-bottom:12px;"></div>
-  <button onclick="MP.probeAllRooms();MP.renderRooms();" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;transition:color .15s,border-color .15s;margin-bottom:6px;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">🔄 ACTUALIZAR LISTA</button>
-  <div id="mpStatusMsg" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;"></div>
-  <button onclick="UI.goMenu()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:8px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">← VOLVER AL MENÚ</button>
+  <div style="font-family:'Oswald',sans-serif;font-size:1.5rem;letter-spacing:.35em;color:#fff;text-shadow:0 0 20px var(--blood);margin-bottom:6px;">FORSAKEN</div>
+  <div style="font-size:.62rem;letter-spacing:.4em;color:var(--dim);margin-bottom:30px;">MODO ONLINE</div>
+  <div style="display:flex;flex-direction:column;gap:14px;width:min(380px,90vw);">
+    <button class="btn" onclick="MP.openRapidas()"><span>⚡ PARTIDA RÁPIDA</span></button>
+    <button class="btn btn-sec" onclick="MP.openPrivada()"><span>🔒 PARTIDA PRIVADA</span></button>
+    <div id="mpStatusMsg" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;margin-top:4px;"></div>
+    <button onclick="UI.goMenu()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">← VOLVER AL MENÚ</button>
+  </div>
+</div>
+
+<!-- PARTIDA RÁPIDA — salas numeradas -->
+<div id="s-rapidas" class="screen" style="background:radial-gradient(ellipse at 50% 30%,#0a0318 0%,#05050a 65%);">
+  <div style="font-family:'Oswald',sans-serif;font-size:1.3rem;letter-spacing:.3em;color:#fff;text-shadow:0 0 20px var(--blood);margin-bottom:4px;">PARTIDA RÁPIDA</div>
+  <div style="font-size:.58rem;letter-spacing:.35em;color:var(--dim);margin-bottom:24px;">PRIMERO EN ENTRAR ESPERA · SEGUNDO SE CONECTA SOLO</div>
+  <div id="rapidasList" style="display:flex;flex-direction:column;gap:8px;width:min(360px,90vw);margin-bottom:14px;"></div>
+  <div id="rapidasStatus" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;margin-bottom:10px;"></div>
+  <button onclick="UI.show('s-rooms')" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">← VOLVER</button>
+</div>
+
+<!-- PARTIDA PRIVADA — código -->
+<div id="s-privada" class="screen" style="background:radial-gradient(ellipse at 50% 30%,#0a0318 0%,#05050a 65%);">
+  <div style="font-family:'Oswald',sans-serif;font-size:1.3rem;letter-spacing:.3em;color:#fff;text-shadow:0 0 20px var(--blood);margin-bottom:4px;">PARTIDA PRIVADA</div>
+  <div style="font-size:.58rem;letter-spacing:.35em;color:var(--dim);margin-bottom:24px;">COMPARTE EL CÓDIGO CON TUS AMIGOS</div>
+  <div class="panel" style="gap:16px;width:min(380px,90vw);padding:28px 32px;">
+    <div class="panel-title">CREAR SALA</div>
+    <button class="btn" onclick="MP.createPrivate()"><span>+ CREAR Y ESPERAR</span></button>
+    <div style="border-top:1px solid var(--border);margin:6px 0;width:100%;"></div>
+    <div class="panel-title">UNIRSE CON CÓDIGO</div>
+    <input id="privCodeInput" class="code-input" maxlength="6" placeholder="CÓDIGO" style="font-size:1.4rem;letter-spacing:.5em;"
+      oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+    <button class="btn btn-sec" onclick="MP.joinPrivate()"><span>UNIRSE →</span></button>
+    <div id="privStatus" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;"></div>
+  </div>
+  <button onclick="UI.show('s-rooms')" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:14px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">← VOLVER</button>
 </div>
 
 <!-- LOBBY (world map) -->
@@ -656,6 +684,15 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           </div>
           <div class="ability-key">Q</div>
         </div>
+        <div class="ability-slot" id="abilityComboSlot" style="display:none">
+          <div class="ability-name" id="comboName">COMBO</div>
+          <div class="ability-icon-wrap" id="abilityComboWrap">
+            <div class="ability-cd-overlay" id="abilityComboOverlay"></div>
+            <div class="ability-icon-emoji">⛓️</div>
+            <div class="ability-cd-num" id="abilityComboNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">E</div>
+        </div>
         <div class="ability-slot" id="abilityBloxySlot" style="display:none">
           <div class="ability-name" id="bloxyName">BLOXY COLA</div>
           <div class="ability-icon-wrap" id="abilityBloxyWrap">
@@ -664,6 +701,15 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
             <div class="ability-cd-num" id="abilityBloxyNum" style="display:none"></div>
           </div>
           <div class="ability-key">Q</div>
+        </div>
+        <div class="ability-slot" id="abilitySSSlot" style="display:none">
+          <div class="ability-name" id="ssName">SLATE SKIN</div>
+          <div class="ability-icon-wrap" id="abilitySSWrap">
+            <div class="ability-cd-overlay" id="abilitySSOverlay"></div>
+            <div class="ability-icon-emoji">🧪</div>
+            <div class="ability-cd-num" id="abilitySSNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">E (sin gen)</div>
         </div>
       </div>
       <div id="hudVitalsRight"></div>
@@ -923,13 +969,38 @@ const INTERACT_SEC = 4;
 const GEN_TIME_BONUS = 14;
 const LMS_TIME = 74, LMS_TRACKER_DUR = 5;
 const BLOXY_CD = 40, BLOXY_DUR = 8; // Bloxy Cola cooldown & effect duration
-// ── Habilidad Q del Killer: HELPLESS ──
+// ── Habilidad Q del Survivor: SLATE SKIN ──
+const SS_CD = 30;           // cooldown en segundos
+const SS_DUR = 6;           // duración del efecto principal
+const SS_OVERHEAL = 30;     // HP extra de overheal mientras dura
+const SS_DRINK_DUR = 0.6;   // duración de la animación de beber (40% lentitud, sin sprint)
+const SS_SPEED_BONUS_II = 1.30; // Speed II si dura hasta expirar (+30%)
+const SS_SPEED_I = 1.15;        // Speed I si se cancela manualmente (+15%)
+const SS_SPEED_DUR = 2;         // duración del bonus de velocidad post-efecto
+// ── Habilidad Q del Killer: BEHEAD ──
 const Q_CD = 18;           // cooldown en segundos
-const Q_DASH_DUR = 0.2;    // duración del dash
-const Q_DASH_MULT = 2.0;   // multiplicador de velocidad (Velocidad II aprox.)
-const Q_DMG = 20;          // daño del golpe
-const Q_HB_SIZE = HB_W;    // hitbox cuadrada — mismo largo que ancho del M1
-const Q_HELPLESS_DUR = 4;  // duración del efecto helpless en segundos
+const Q_CD_ENRAGED = 18;   // [ENRAGED] stub — sin cambio aún
+const Q_DASH_DUR = 0.2;
+const Q_DASH_MULT = 2.0;
+const Q_DMG = 20;
+const Q_DMG_ENRAGED = 20;  // [ENRAGED] stub
+const Q_HB_SIZE = HB_W;
+const Q_HELPLESS_DUR = 4;
+
+// ── Habilidad M1 del Killer: TAJO ──
+const M1_CD_ENRAGED = M1_CD * 0.8; // [ENRAGED] stub — CD reducido 20%
+const M1_DMG_ENRAGED = M1_DMG;     // [ENRAGED] stub
+
+// ── Habilidad E del Killer: COMBO (2 tajos + motosierra) ──
+const COMBO_CD = 32;          // cooldown normal
+const COMBO_CD_ENRAGED = 24;  // [ENRAGED]
+const COMBO_TOTAL_DMG = 50;   // daño total normal
+const COMBO_TOTAL_DMG_ENRAGED = 70; // [ENRAGED]
+// 5 hits: 2 machete slashes + 3 chainsaw hits. Each = 1/5 del total
+const COMBO_HITS = 5;
+const COMBO_HIT_DELAYS = [0, 0.18, 0.38, 0.52, 0.66]; // tiempos de cada golpe (s)
+const COMBO_HB_W = HB_W * 1.1;
+const COMBO_HB_H = HB_H * 1.0;
 const GAME_DUR = 210;        // 3:30
 const KILL_TIME_BONUS = 30;  // seconds added per kill
 const ROUND_END_DELAY = 8;
@@ -1095,6 +1166,7 @@ const UI={
   showLobby(){
     S.inLobbyWorld=true;
     Stats.startSession();
+    GameAudio.playLobby();
     const badge=document.getElementById('lobbyCodeBadge');
     if(badge) badge.textContent=S.isHost?'HOST':'SALA';
     document.getElementById('lobbyCDBig').textContent='';
@@ -1185,11 +1257,24 @@ const UI={
     if(S.isDeadSpec)return;
     const me=W.players[S.myId];if(!me)return;
 
-    // HP
-    const pctHp=Math.max(0,me.hp/me.maxHp);
+    // HP — shows overheal as grey segment when Slate Skin is active
+    const realMax=me.maxHp;
+    const totalMax=me.ssActive?(realMax+SS_OVERHEAL):realMax;
+    const pctHp=Math.max(0,Math.min(me.hp,realMax)/realMax);
     const hpCol=me.role==='killer'?'#e74c3c':pctHp>.5?'#2ecc71':pctHp>.25?'#f39c12':'#e74c3c';
-    document.getElementById('hpBarFill').style.cssText=`width:${pctHp*100}%;background:${hpCol}`;
-    document.getElementById('hpNum').textContent=`${Math.ceil(me.hp)}/${me.maxHp}`;
+    const hpFill=document.getElementById('hpBarFill');
+    hpFill.style.cssText=`width:${Math.min(pctHp,1)*100}%;background:${hpCol}`;
+    // Overheal indicator — grey extension
+    const hpBg=hpFill.parentElement;
+    let ovEl=document.getElementById('overhealFill');
+    if(me.ssActive&&me.hp>realMax){
+      const ovPct=(me.hp-realMax)/SS_OVERHEAL;
+      if(!ovEl){ovEl=document.createElement('div');ovEl.id='overhealFill';ovEl.style.cssText='position:absolute;top:0;left:0;height:100%;border-radius:7px;pointer-events:none;transition:width .1s,background .15s;';if(hpBg.style.position!=='relative')hpBg.style.position='relative';hpBg.appendChild(ovEl);}
+      ovEl.style.width=`${Math.min(pctHp+ovPct*(SS_OVERHEAL/realMax),1)*100}%`;
+      ovEl.style.background='rgba(180,180,220,0.55)';
+      ovEl.style.display='block';
+    } else if(ovEl){ovEl.style.display='none';}
+    document.getElementById('hpNum').textContent=me.ssActive&&me.hp>realMax?`${Math.ceil(me.hp)}/${realMax}+${Math.ceil(me.hp-realMax)}`:`${Math.ceil(me.hp)}/${realMax}`;
     document.getElementById('bleedWrap').style.display=me.bleedTicks>0?'flex':'none';
 
     // Stamina — bar = % of max, number = actual/max
@@ -1204,18 +1289,19 @@ const UI={
     // M1 ability
     const m1Slot=document.getElementById('abilityM1Slot');
     const beheadSlot=document.getElementById('abilityBeheadSlot');
-    const bloxySlot=document.getElementById('abilityBloxySlot');
     if(me.role==='killer'){
       m1Slot.style.display='flex';
       beheadSlot.style.display='flex';
-      bloxySlot.style.display='none';
+      const comboSlot=document.getElementById('abilityComboSlot');if(comboSlot)comboSlot.style.display='flex';
+      const ssSlotK=document.getElementById('abilitySSSlot');if(ssSlotK)ssSlotK.style.display='none';
+      const bSlotK=document.getElementById('abilityBloxySlot');if(bSlotK)bSlotK.style.display='none';
       const cdPct=me.m1Cd>0?me.m1Cd/M1_CD:0;
       document.getElementById('abilityM1Overlay').style.transform=`scaleY(${cdPct})`;
       document.getElementById('abilityM1Wrap').className='ability-icon-wrap'+(cdPct>0?' on-cd':' ready');
       const numEl=document.getElementById('abilityM1Num');
       numEl.style.display=cdPct>0?'flex':'none';
       if(cdPct>0)numEl.textContent=me.m1Cd.toFixed(1);
-      // Behead (Q) cooldown
+      // Behead (Q)
       const bqCd=me.qCd||0;
       const bqPct=bqCd>0?bqCd/Q_CD:0;
       const isDashing=me.beheadDashing||false;
@@ -1227,10 +1313,27 @@ const UI={
       if(isDashing)bqNum.textContent='⚡';
       else if(isSlow)bqNum.textContent='🐢';
       else if(bqPct>0)bqNum.textContent=bqCd.toFixed(1);
+      // Combo (E)
+      const enraged=me.enraged||false;
+      const comboCdMax=enraged?COMBO_CD_ENRAGED:COMBO_CD;
+      const comboCdCur=me.comboCd||0;
+      const comboPct=comboCdCur>0?comboCdCur/comboCdMax:0;
+      const isComboActive=me.comboActive||false;
+      document.getElementById('abilityComboOverlay').style.transform=`scaleY(${comboPct})`;
+      document.getElementById('abilityComboWrap').className='ability-icon-wrap'+(isComboActive?'ready':comboPct>0?' on-cd':' ready');
+      const comboNum=document.getElementById('abilityComboNum');
+      comboNum.style.display=(comboPct>0||isComboActive)?'flex':'none';
+      if(isComboActive)comboNum.textContent='⚔';
+      else if(comboPct>0)comboNum.textContent=Math.ceil(comboCdCur)+'s';
+      const comboLabel=document.getElementById('comboName');
+      if(comboLabel)comboLabel.textContent=enraged?'🔥 COMBO':'COMBO';
     } else {
       m1Slot.style.display='none';
       beheadSlot.style.display='none';
-      bloxySlot.style.display='flex';
+      const comboSlotS=document.getElementById('abilityComboSlot');if(comboSlotS)comboSlotS.style.display='none';
+      // ── Bloxy Cola (Q) ──
+      const bloxySlot=document.getElementById('abilityBloxySlot');
+      if(bloxySlot)bloxySlot.style.display='flex';
       const bCdPct=me.bloxyCd>0?me.bloxyCd/BLOXY_CD:0;
       document.getElementById('abilityBloxyOverlay').style.transform=`scaleY(${bCdPct})`;
       const isDrinking=me.bloxyDrinking||false;
@@ -1238,8 +1341,23 @@ const UI={
       const bNum=document.getElementById('abilityBloxyNum');
       bNum.style.display=(bCdPct>0&&!me.bloxyActive&&!isDrinking)?'flex':'none';
       if(bCdPct>0&&!me.bloxyActive&&!isDrinking)bNum.textContent=Math.ceil(me.bloxyCd)+'s';
-      // Name shows state
       document.getElementById('bloxyName').textContent=isDrinking?'🥤 BEBIENDO...':(me.bloxyActive?(S.lms?'VEL. I ACTIVA':'VEL. II ACTIVA'):'BLOXY COLA');
+      // ── Slate Skin (E) ──
+      const ssSlot=document.getElementById('abilitySSSlot');
+      if(ssSlot)ssSlot.style.display='flex';
+      const ssCdPct=me.ssCd>0?me.ssCd/SS_CD:0;
+      const isSSDrinking=me.ssDrinking||false;
+      const isSSActive=me.ssActive||false;
+      const isSSSpeed=me.ssSpeedActive||false;
+      document.getElementById('abilitySSOverlay').style.transform=`scaleY(${ssCdPct})`;
+      document.getElementById('abilitySSWrap').className='ability-icon-wrap'+(isSSActive?'ready':isSSDrinking?'ready':ssCdPct>0?' on-cd':' ready');
+      const ssNum=document.getElementById('abilitySSNum');
+      ssNum.style.display=(ssCdPct>0||isSSDrinking||isSSActive)?'flex':'none';
+      if(isSSDrinking)ssNum.textContent='🧪';
+      else if(isSSActive)ssNum.textContent=me.ssTimer?me.ssTimer.toFixed(1):'';
+      else if(ssCdPct>0)ssNum.textContent=Math.ceil(me.ssCd)+'s';
+      const ssLabel=document.getElementById('ssName');
+      if(ssLabel)ssLabel.textContent=isSSDrinking?'🧪 BEBIENDO...':(isSSActive?'SLATESKIN II':(isSSSpeed?'⚡ VEL. ACTIVA':'SLATE SKIN'));
     }
     // Bloxy buff bar
     const bbBar=document.getElementById('bloxyBuffBar');
@@ -1705,441 +1823,428 @@ const LobbyWorld={
 };
 
 // ══════════════════════════════════════════
+//  SISTEMA MULTIJUGADOR — basado en TwentyOne
+//  · Partida Rápida: sala con ID fijo (primer jugador = host, segundo = guest)
+//  · Partida Privada: código aleatorio compartido
 // ══════════════════════════════════════════
-//  SISTEMA DE SALAS FIJAS — v3
-//  Técnica: intentar registrar el ID fijo de la sala.
-//  · Si abre → nadie tiene esa sala (la sala está libre).
-//    Destruimos inmediatamente ese peer de prueba y la marcamos libre.
-//  · Si da unavailable-id → alguien YA es host → sala activa.
-//  Esto es O(1) y 100% fiable porque usa el mismo mecanismo
-//  que PeerJS usa internamente para detectar IDs ocupados.
-// ══════════════════════════════════════════
-const MP_ROOM_COUNT=5;
-const MP_ROOM_CAP=9;
-// Prefijo único — cámbialo si hay colisiones con otras instancias del juego
-const MP_ROOM_BASE='fsk26room';
 
-// Config de ICE — STUN primero, TURN como fallback
-const MP_PEER_CFG={
-  debug:0,
-  config:{iceServers:[
-    {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'},
-  ],iceCandidatePoolSize:4},
+const QM_COUNT  = 7;                      // número de salas rápidas
+const QM_PREFIX = 'fsk26-rapida-';        // prefijo único para salas rápidas
+const MP_CAP    = 9;                       // máx jugadores por sala
+
+// ── Peer config ────────────────────────────────────────────────────────────────
+function fskPeerOpts(){
+  return {
+    host:'0.peerjs.com', port:443, path:'/', secure:true, debug:0,
+    config:{iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'},
+      {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+      {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+    ]},
+  };
+}
+
+// ── Runtime state del peer ─────────────────────────────────────────────────────
+const PeerRT = {
+  peer: null,
+  peerKind: 'client',      // 'room' | 'client'
+  peerOpening: null,
+  roomConn: null,          // única conexión activa (host↔guest)
+  hbInterval: null,
+  reconnTimer: null,
+  reconnAttempts: 0,
+  joiningRapida: 0,
+  peerStatus: 'idle',      // idle | connecting | open | error | disconnected
+  peerError: '',
+  peerId: '',
+  connStatus: 'offline',   // offline | hosting | joining | connected | reconnecting | rejected | disconnected
+  roomMeta: null,          // { roomId, roomCode, hostName, guestNames:[], players, status, isRapida }
+  syncWarn: '',
 };
 
-// Estado de cada sala:
-//   null  = no sondeada aún
-//   false = libre (sin host)
-//  {count:N} = activa, N jugadores
-let mpRoomStatus=Array(MP_ROOM_COUNT).fill(null);
-let mpProbeInFlight=Array(MP_ROOM_COUNT).fill(false);
-let mpMainPeer=null;      // peer activo (host o cliente)
-let mpRefreshTimer=null;
-
-// ── Prueba una sala intentando registrar su ID ──────────────────────
-// · open    → ID libre → sala vacía → lo destruimos
-// · unavailable-id → sala ocupada → marcamos activa
-// Si ya hay un probe en vuelo para esa sala, lo saltamos.
-// Tras sondear, si la sala pasó de libre→activa o viceversa, re-render.
-function mpProbeRoom(i){
-  if(mpProbeInFlight[i])return;
-  mpProbeInFlight[i]=true;
-  const roomPeerId=MP_ROOM_BASE+'-'+(i+1);
-  let p;
-  try{p=new Peer(roomPeerId,MP_PEER_CFG);}
-  catch(e){mpProbeInFlight[i]=false;return;}
-
-  let resolved=false;
-  const resolve=(status)=>{
-    if(resolved)return; resolved=true;
-    mpProbeInFlight[i]=false;
-    const prev=mpRoomStatus[i];
-    mpRoomStatus[i]=status;
-    // Solo re-renderizar si cambió algo
-    const changed=(
-      (prev===null)||
-      (prev===false&&status!==false)||
-      (prev&&prev.count!=null&&(status===false||(status&&status.count!==prev.count)))
-    );
-    if(changed) MP.renderRooms();
-    try{if(!p.destroyed)p.destroy();}catch(e){}
-  };
-
-  const to=setTimeout(()=>resolve(mpRoomStatus[i]??false),6000); // timeout global
-
-  p.on('open',()=>{
-    // Conseguimos el ID → sala estaba libre
-    clearTimeout(to);
-    resolve(false); // libre
-  });
-  p.on('error',err=>{
-    clearTimeout(to);
-    if(err.type==='unavailable-id'){
-      // ID tomado → hay un host → intentamos conectar para obtener el count
-      mpGetCount(i,roomPeerId,(count)=>{
-        resolve(count!=null?{count}:mpRoomStatus[i]??{count:1});
-      });
-    } else {
-      // Error de red, etc. → no cambiar estado conocido
-      resolve(mpRoomStatus[i]??false);
-    }
-  });
+function fskRandomCode(prefix){
+  const ab='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let o=prefix?`${prefix}-`:'';
+  for(let i=0;i<6;i++) o+=ab[Math.floor(Math.random()*ab.length)];
+  return o;
 }
 
-// Obtiene el número de jugadores conectándose brevemente al host
-function mpGetCount(i,roomPeerId,cb){
-  let p2;
-  try{p2=new Peer(MP_PEER_CFG);}catch(e){cb(null);return;}
-  let done=false;
-  const fin=(v)=>{if(done)return;done=true;try{p2.destroy();}catch(e){}cb(v);};
-  const gto=setTimeout(()=>fin(null),5000);
-  p2.on('open',()=>{
-    const conn=p2.connect(roomPeerId,{reliable:false,serialization:'json'});
-    const cto=setTimeout(()=>{clearTimeout(gto);fin(null);},3000);
-    conn.on('open',()=>{
-      conn.send({t:'probe'});
-      const dto=setTimeout(()=>{clearTimeout(cto);clearTimeout(gto);fin(null);},2000);
-      conn.on('data',raw=>{
-        clearTimeout(dto);clearTimeout(cto);clearTimeout(gto);
-        try{
-          const d=typeof raw==='string'?JSON.parse(raw):raw;
-          fin(d.t==='probeReply'?d.count:null);
-        }catch(e){fin(null);}
-      });
-      conn.on('error',()=>{clearTimeout(dto);clearTimeout(cto);clearTimeout(gto);fin(null);});
-      conn.on('close',()=>{clearTimeout(dto);clearTimeout(cto);clearTimeout(gto);fin(null);});
+// ── ensurePeer — crea/reutiliza peer ──────────────────────────────────────────
+async function fskEnsurePeer(kind, roomId){
+  if(!window.Peer) throw new Error('PeerJS no cargó.');
+  const expPfx = kind==='room' ? 'fsk26-' : 'client-';
+  if(PeerRT.peer && PeerRT.peerStatus==='open' && PeerRT.peerId.startsWith(expPfx)) return PeerRT.peer;
+  if(PeerRT.peerOpening) return PeerRT.peerOpening;
+  fskCleanup(false);
+  PeerRT.peerStatus='connecting'; PeerRT.peerError='';
+  PeerRT.peerOpening = new Promise((resolve, reject)=>{
+    const pid = kind==='room' ? roomId : fskRandomCode('client');
+    const peer = new window.Peer(pid, fskPeerOpts());
+    PeerRT.peer=peer; PeerRT.peerKind=kind;
+    peer.on('open', id=>{
+      PeerRT.peerOpening=null; PeerRT.peerStatus='open'; PeerRT.peerId=id;
+      fskWirePeer(peer); resolve(peer);
     });
-    conn.on('error',()=>{clearTimeout(cto);clearTimeout(gto);fin(null);});
+    peer.on('error', err=>{
+      PeerRT.peerOpening=null; PeerRT.peerStatus='error';
+      PeerRT.peerError=String(err&&err.message?err.message:err); reject(err);
+    });
   });
-  p2.on('error',()=>{clearTimeout(gto);fin(null);});
+  return PeerRT.peerOpening;
 }
 
-function mpProbeAll(){
-  for(let i=0;i<MP_ROOM_COUNT;i++) mpProbeRoom(i);
+function fskWirePeer(peer){
+  peer.on('connection', conn=>fskWireConn(conn));
+  peer.on('disconnected', ()=>{ PeerRT.peerStatus='disconnected'; });
+  peer.on('close', ()=>{ PeerRT.peerStatus='closed'; });
 }
 
-// Limpia estado de red compartido con el juego
+function fskWireConn(conn){
+  conn.on('data',  msg=>fskHandleMsg(msg, conn));
+  conn.on('close', ()=>fskHandleClose(conn));
+  conn.on('error', ()=>fskHandleClose(conn));
+}
+
+function fskHandleClose(conn){
+  if(!PeerRT.roomConn || conn.peer!==PeerRT.roomConn.peer) return;
+  fskStopHB(); PeerRT.connStatus='disconnected';
+  // Guest intenta reconectar automáticamente
+  if(S.isHost===false && (S.running||S.inLobbyWorld)) fskAttemptReconnect();
+  else if(!S.isHost) {
+    const msg=document.createElement('div');
+    msg.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;font-family:Share Tech Mono,monospace;font-size:.8rem;letter-spacing:.2em;text-align:center;padding:14px;';
+    msg.textContent='⚠ DESCONECTADO DEL HOST — volviendo al menú...';
+    document.body.appendChild(msg);
+    setTimeout(()=>MP.leaveRoom(), 2200);
+  }
+}
+
+function fskAttemptReconnect(){
+  if(!PeerRT.roomMeta) return;
+  clearTimeout(PeerRT.reconnTimer); PeerRT.reconnAttempts++;
+  PeerRT.reconnTimer=setTimeout(async ()=>{
+    try{
+      await fskEnsurePeer('client');
+      await fskJoinRoom(PeerRT.roomMeta.roomId, true);
+      PeerRT.syncWarn='Reconexión completada.';
+    }catch(e){ PeerRT.syncWarn='No se pudo reconectar.'; }
+  }, Math.min(1000*PeerRT.reconnAttempts, 5000));
+}
+
+function fskStopHB(){ clearInterval(PeerRT.hbInterval); PeerRT.hbInterval=null; }
+function fskStartHB(){ fskStopHB(); PeerRT.hbInterval=setInterval(()=>fskSend({t:'hb'}), 5000); }
+
+function fskSend(msg){
+  if(!PeerRT.roomConn||!PeerRT.roomConn.open) return;
+  try{ PeerRT.roomConn.send(msg); }catch(e){}
+}
+
+// ── HOST: manejar mensajes entrantes ──────────────────────────────────────────
+function fskHandleMsg(msg, conn){
+  if(!msg||typeof msg!=='object') return;
+
+  // Heartbeat
+  if(msg.t==='hb'){ try{conn.send({t:'hb-ack'});}catch(e){} return; }
+  if(msg.t==='hb-ack'){ PeerRT.connStatus='connected'; return; }
+
+  // JOIN REQUEST (host recibe)
+  if(msg.t==='join'){
+    if(!S.isHost){ conn.send({t:'rejected',reason:'No soy host.'}); return; }
+    if(S.running){
+      // Partida en curso — enviar estado para espectador
+      conn.send({t:'spectate', gs:Game.serial(), players:S.players});
+      return;
+    }
+    if(S.players.length>=MP_CAP){ conn.send({t:'rejected',reason:'Sala llena.'}); setTimeout(()=>{try{conn.close();}catch(e){}},300); return; }
+    if(!S.conns.find(c=>c===conn)) S.conns.push(conn);
+    if(!S.players.find(p=>p.id===msg.id)){
+      S.players.push({
+        id:msg.id, name:msg.name||'JUGADOR', username:msg.username||msg.name||'?',
+        host:false, connId:conn.peer,
+        color:PCOLORS[S.players.length%PCOLORS.length],
+        malicia:msg.malicia||0,
+      });
+    }
+    PeerRT.roomConn=conn;
+    conn.send({t:'lobby', players:S.players, code:PeerRT.roomMeta?PeerRT.roomMeta.roomCode:''});
+    Net.broadcast({t:'list', players:S.players, code:''});
+    UI.renderLobbyPlayers(); Net.checkCd();
+    conn.on('close', ()=>Net.onDisc(conn));
+    conn.on('error', ()=>Net.onDisc(conn));
+    return;
+  }
+
+  // probe — para listar salas rápidas
+  if(msg.t==='probe'){
+    conn.send({t:'probeReply', count:S.players.length, status:S.running?'playing':'lobby'});
+    setTimeout(()=>{try{conn.close();}catch(e){}}, 400);
+    return;
+  }
+
+  // Game messages
+  if(S.isHost) Net.onHost(conn, msg);
+  else Net.onClient(msg);
+}
+
+// ── PARTIDA RÁPIDA ────────────────────────────────────────────────────────────
+async function fskJoinRapida(num){
+  const peerId = `${QM_PREFIX}${num}`;
+  MP.setStatus(`Conectando a sala ${num}...`, '#a0c0ff');
+  fskCleanup(false);
+  mpCleanState();
+
+  // Intentar registrar el ID fijo → si OK = host; si unavailable-id = guest
+  const becameHost = await new Promise(resolve=>{
+    const peer = new window.Peer(peerId, fskPeerOpts());
+    PeerRT.peer=peer; PeerRT.peerKind='room';
+    peer.on('open', id=>{
+      PeerRT.peerStatus='open'; PeerRT.peerId=id;
+      fskWirePeer(peer); resolve(true);
+    });
+    peer.on('error', ()=>{
+      try{peer.destroy();}catch(e){} PeerRT.peer=null;
+      PeerRT.peerStatus='idle'; resolve(false);
+    });
+  });
+
+  if(becameHost){
+    S.isHost=true; S.myId=Net.uid();
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0}];
+    PeerRT.connStatus='hosting';
+    PeerRT.roomMeta={ roomId:peerId, roomCode:`RÁPIDA-${num}`, isRapida:true, players:1 };
+    MP.setStatus(`✓ Sala ${num} — esperando jugadores...`, '#2ecc71');
+    UI.showLobby();
+    PeerRT.peer.on('connection', conn=>{
+      fskWireConn(conn);
+      // Esperar el join request
+    });
+  } else {
+    // Guest
+    await new Promise((resolve, reject)=>{
+      const peer = new window.Peer(fskRandomCode('client'), fskPeerOpts());
+      PeerRT.peer=peer; PeerRT.peerKind='client';
+      peer.on('open', id=>{ PeerRT.peerStatus='open'; PeerRT.peerId=id; fskWirePeer(peer); resolve(); });
+      peer.on('error', err=>reject(err));
+    });
+    S.isHost=false; S.myId=Net.uid();
+    PeerRT.connStatus='joining';
+    const conn = PeerRT.peer.connect(peerId, {reliable:true, serialization:'json'});
+    S.conns=[conn]; PeerRT.roomConn=conn;
+    fskWireConn(conn);
+    await new Promise((resolve, reject)=>{
+      let done=false;
+      conn.on('open', ()=>{
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0});
+      });
+      conn.on('data', msg=>{
+        if(done) return;
+        if(msg.t==='lobby'){
+          done=true; S.players=msg.players; S.code='';
+          PeerRT.connStatus='connected';
+          PeerRT.roomMeta={ roomId:peerId, roomCode:`RÁPIDA-${num}`, isRapida:true };
+          Net._startHeartbeat(); UI.showLobby(); resolve();
+        } else if(msg.t==='rejected'){
+          done=true; MP.setStatus('Sala llena o no disponible.','#e74c3c'); reject(new Error('rejected'));
+        } else { Net.onClient(msg); }
+      });
+      conn.on('close', ()=>{ if(!done){done=true; MP.setStatus('Sala no responde.','#f39c12'); reject(new Error('close'));} });
+      setTimeout(()=>{ if(!done){done=true; MP.setStatus('Tiempo de espera agotado.','#f39c12'); reject(new Error('timeout'));} }, 12000);
+    });
+    conn.on('close', ()=>fskHandleClose(conn));
+    conn.on('error', ()=>fskHandleClose(conn));
+  }
+}
+
+// ── PARTIDA PRIVADA — crear ────────────────────────────────────────────────────
+async function fskCreatePrivate(){
+  const code = fskRandomCode('');
+  const roomId = `fsk26-room-${code}`;
+  MP.setStatus(`Creando sala privada...`, '#a0c0ff');
+  fskCleanup(false); mpCleanState();
+  try{
+    await fskEnsurePeer('room', roomId);
+    S.isHost=true; S.myId=Net.uid();
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0}];
+    PeerRT.connStatus='hosting';
+    PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
+    // Mostrar código en la pantalla de lobby
+    const badge=document.getElementById('lobbyCodeBadge');
+    if(badge) badge.textContent=code;
+    PeerRT.peer.on('connection', conn=>fskWireConn(conn));
+    MP.setStatus('', '');
+    UI.showLobby();
+  }catch(e){
+    MP.setStatus('Error al crear sala: '+String(e.message||e),'#e74c3c');
+  }
+}
+
+// ── PARTIDA PRIVADA — unirse ───────────────────────────────────────────────────
+async function fskJoinRoom(rawId, isReconnect){
+  const code = String(rawId||'').trim().toUpperCase().replace(/^FSK26-ROOM-/,'').replace(/^ROOM-/,'');
+  if(!code){ MP.setStatus('Ingresa un código válido.','#e74c3c'); return; }
+  const roomId = `fsk26-room-${code}`;
+  if(!isReconnect){ fskCleanup(false); mpCleanState(); }
+  MP.setStatus(isReconnect?'Reconectando...':'Conectando...','#a0c0ff');
+  try{
+    await fskEnsurePeer('client');
+    S.isHost=false; S.myId=Net.uid();
+    PeerRT.connStatus=isReconnect?'reconnecting':'joining';
+    const conn = PeerRT.peer.connect(roomId, {reliable:true, serialization:'json'});
+    S.conns=[conn]; PeerRT.roomConn=conn;
+    fskWireConn(conn);
+    await new Promise((resolve,reject)=>{
+      let done=false;
+      conn.on('open',()=>{
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, reconnect:!!isReconnect});
+      });
+      conn.on('data', msg=>{
+        if(done) return;
+        if(msg.t==='lobby'){
+          done=true; S.players=msg.players; S.code=msg.code||code;
+          PeerRT.connStatus='connected';
+          PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false };
+          PeerRT.reconnAttempts=0;
+          Net._startHeartbeat(); UI.showLobby();
+          // Mostrar código en badge
+          const badge=document.getElementById('lobbyCodeBadge');
+          if(badge) badge.textContent=code;
+          resolve();
+        } else if(msg.t==='rejected'){
+          done=true; MP.setStatus(msg.reason||'Sala llena.','#e74c3c'); reject(new Error('rejected'));
+        } else { Net.onClient(msg); }
+      });
+      conn.on('close',()=>{if(!done){done=true;MP.setStatus('Sala no responde.','#f39c12');reject(new Error('close'));}});
+      setTimeout(()=>{if(!done){done=true;MP.setStatus('Tiempo de espera agotado.','#f39c12');reject(new Error('timeout'));}},12000);
+    });
+    conn.on('close', ()=>fskHandleClose(conn));
+    conn.on('error', ()=>fskHandleClose(conn));
+    MP.setStatus('','');
+  }catch(e){
+    if(String(e.message)!=='rejected') MP.setStatus('Error: '+String(e.message||e),'#e74c3c');
+  }
+}
+
+// ── Sondear salas rápidas para mostrar su estado ───────────────────────────────
+function fskProbeRapida(num, cb){
+  const peerId=`${QM_PREFIX}${num}`;
+  let p;
+  try{ p=new Peer(fskPeerOpts()); }catch(e){ cb(null); return; }
+  let done=false;
+  const fin=v=>{if(done)return;done=true;try{p.destroy();}catch(e){}cb(v);};
+  setTimeout(()=>fin(null),5000);
+  p.on('open',()=>{
+    const conn=p.connect(peerId,{reliable:false,serialization:'json'});
+    conn.on('open',()=>conn.send({t:'probe'}));
+    conn.on('data',msg=>fin(msg.t==='probeReply'?msg:null));
+    conn.on('error',()=>fin(null));
+    conn.on('close',()=>fin(null));
+  });
+  p.on('error',()=>fin(null));
+}
+
+function fskCleanup(skipDestroy){
+  fskStopHB();
+  clearTimeout(PeerRT.reconnTimer); PeerRT.reconnTimer=null;
+  if(PeerRT.roomConn){try{PeerRT.roomConn.close();}catch(e){} PeerRT.roomConn=null;}
+  if(!skipDestroy&&PeerRT.peer){try{PeerRT.peer.destroy();}catch(e){} PeerRT.peer=null; PeerRT.peerStatus='idle'; PeerRT.peerId='';}
+}
+
 function mpCleanState(){
   if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
   if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
   if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
   if(Net._hbInt){clearInterval(Net._hbInt);Net._hbInt=null;}
-  S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
+  S.running=false; S.isDeadSpec=false; S.inLobbyWorld=false;
   LobbyWorld.stop();
-  S.conns=[];S.players=[];Inp.clear();
+  S.conns=[]; S.players=[]; Inp.clear();
 }
 
+// ── Objeto MP — interfaz pública ───────────────────────────────────────────────
 const MP={
   openLobby(){
-    if(mpRefreshTimer){clearInterval(mpRefreshTimer);mpRefreshTimer=null;}
-    // Resetear estado solo de salas que no están siendo sondeadas
-    mpRoomStatus=Array(MP_ROOM_COUNT).fill(null);
-    mpProbeInFlight=Array(MP_ROOM_COUNT).fill(false);
     UI.show('s-rooms');
-    MP.renderRooms();
-    mpProbeAll();
-    // Refresh cada 5s mientras la pantalla esté activa
-    mpRefreshTimer=setInterval(()=>{
-      if(document.getElementById('s-rooms').classList.contains('active')){
-        mpProbeAll();
-      } else {
-        clearInterval(mpRefreshTimer);mpRefreshTimer=null;
-      }
-    },5000);
   },
 
-  renderRooms(){
-    const list=document.getElementById('mpRoomList');
-    if(!list)return;
+  openRapidas(){
+    UI.show('s-rapidas');
+    MP.renderRapidas();
+  },
+
+  openPrivada(){
+    UI.show('s-privada');
+    document.getElementById('privStatus').textContent='';
+    document.getElementById('privCodeInput').value='';
+  },
+
+  renderRapidas(){
+    const list=document.getElementById('rapidasList');
+    if(!list) return;
     list.innerHTML='';
-    for(let i=0;i<MP_ROOM_COUNT;i++){
-      const st=mpRoomStatus[i];
-      const inflight=mpProbeInFlight[i];
-      const cnt=(st&&st.count!=null)?st.count:0;
-      const full=cnt>=MP_ROOM_CAP;
-      const active=st&&st!==false&&cnt>0;
-      const libre=st===false;
-
-      let statusTxt,statusCol;
-      if(st===null&&inflight){statusTxt='🔍 Verificando...';statusCol='#44445a';}
-      else if(full){statusTxt=`🔴 LLENA (${cnt}/${MP_ROOM_CAP})`;statusCol='#e74c3c';}
-      else if(active){statusTxt=`🟡 ${cnt}/${MP_ROOM_CAP} jugadores`;statusCol='#f39c12';}
-      else{statusTxt='🟢 Disponible';statusCol='#2ecc71';}
-
-      // Siempre mostramos CREAR si no es activa
-      // Siempre mostramos UNIRSE si es activa y no llena
-      const showCreate=!active;
-      const showJoin=active&&!full;
-
-      const div=document.createElement('div');
-      div.style.cssText='background:rgba(5,5,15,.9);border:1px solid #1a1a2a;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;';
-      div.innerHTML=`
-        <div style="display:flex;align-items:center;gap:14px;">
-          <span style="color:#bbbac8;font-family:'Oswald',sans-serif;font-size:.95rem;letter-spacing:.2em;">SALA ${i+1}</span>
-          <span style="color:${statusCol};font-family:'Share Tech Mono',monospace;font-size:.63rem;letter-spacing:.1em;">${statusTxt}</span>
-        </div>
-        <div style="display:flex;gap:7px;align-items:center;">
-          ${showCreate?`<button onclick="MP.createRoom(${i})"
-            style="background:transparent;border:1.5px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.1em;padding:5px 14px;cursor:pointer;text-transform:uppercase;"
-            onmouseover="this.style.background='var(--blood)';this.style.color='#000'"
-            onmouseout="this.style.background='transparent';this.style.color='var(--blood)'">CREAR</button>`:''}
-          ${showJoin?`<button onclick="MP.joinRoom(${i})"
-            style="background:transparent;border:1.5px solid #2ecc71;color:#2ecc71;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.1em;padding:5px 14px;cursor:pointer;text-transform:uppercase;"
-            onmouseover="this.style.background='#2ecc71';this.style.color='#000'"
-            onmouseout="this.style.background='transparent';this.style.color='#2ecc71'">UNIRSE</button>`:''}
-          ${full?`<span style="color:#e74c3c;font-family:'Share Tech Mono',monospace;font-size:.62rem;">LLENA</span>`:''}
-        </div>`;
-      list.appendChild(div);
+    for(let i=1;i<=QM_COUNT;i++){
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;justify-content:space-between;background:rgba(5,5,15,.9);border:1px solid #1a1a2a;padding:11px 16px;';
+      row.innerHTML=`
+        <span style="font-family:'Oswald',sans-serif;font-size:.9rem;letter-spacing:.2em;color:#bbbac8;">SALA ${i}</span>
+        <span id="rapida-status-${i}" style="font-size:.62rem;letter-spacing:.1em;color:var(--dim);">🔍 verificando...</span>
+        <button onclick="MP.joinRapida(${i})" style="background:transparent;border:1.5px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.1em;padding:5px 14px;cursor:pointer;text-transform:uppercase;" onmouseover="this.style.background='var(--blood)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--blood)'">ENTRAR</button>`;
+      list.appendChild(row);
+      // Sondear estado
+      fskProbeRapida(i, info=>{
+        const el=document.getElementById(`rapida-status-${i}`);
+        if(!el) return;
+        if(!info) el.innerHTML='<span style="color:#2ecc71">🟢 Disponible</span>';
+        else if(info.status==='playing') el.innerHTML=`<span style="color:#e74c3c">🔴 En partida</span>`;
+        else el.innerHTML=`<span style="color:#f39c12">🟡 ${info.count||1}/9 en lobby</span>`;
+      });
     }
   },
 
-  setStatus(msg,col){
-    const el=document.getElementById('mpStatusMsg');
-    if(el){el.textContent=msg;el.style.color=col||'var(--dim)';}
+  async joinRapida(num){
+    document.getElementById('rapidasStatus').textContent=`Conectando a sala ${num}...`;
+    try{
+      await fskJoinRapida(num);
+      document.getElementById('rapidasStatus').textContent='';
+    }catch(e){
+      document.getElementById('rapidasStatus').textContent='Error: '+String(e.message||e);
+    }
   },
 
-  // ── HOST: Crear sala ──────────────────────────────────────────────
-  createRoom(roomIndex){
-    const roomPeerId=MP_ROOM_BASE+'-'+(roomIndex+1);
-    MP.setStatus('Creando sala '+(roomIndex+1)+'...','#a0c0ff');
-    if(mpMainPeer){try{mpMainPeer.destroy();}catch(e){}}mpMainPeer=null;
-    if(S.peer){try{S.peer.destroy();}catch(e){}}S.peer=null;
-    mpCleanState();
-
-    const peer=new Peer(roomPeerId,MP_PEER_CFG);
-    mpMainPeer=peer;S.peer=peer;
-
-    const openTO=setTimeout(()=>{
-      if(!peer.open){
-        MP.setStatus('Sin respuesta del servidor. Reintenta.','#e74c3c');
-        try{peer.destroy();}catch(e){}mpMainPeer=null;S.peer=null;
-      }
-    },14000);
-
-    peer.on('open',()=>{
-      clearTimeout(openTO);
-      S.isHost=true;
-      S.myId=Net.uid();
-      S.code='';
-      S.players=[{id:S.myId,name:Stats.username||'HOST',username:Stats.username||'HOST',host:true,color:PCOLORS[0],malicia:Stats.malicia||0}];
-      // Marcar sala como activa localmente de inmediato
-      mpRoomStatus[roomIndex]={count:1};
-      MP.setStatus('✓ Sala '+(roomIndex+1)+' lista. Esperando jugadores...','#2ecc71');
-      UI.showLobby();
-      peer.on('connection',conn=>MP.handleIncoming(conn));
-      peer.on('disconnected',()=>{if(!peer.destroyed)try{peer.reconnect();}catch(e){}});
-      peer.on('error',e=>{if(e.type!=='peer-unavailable')console.warn('host:',e.type);});
-    });
-
-    peer.on('error',err=>{
-      clearTimeout(openTO);
-      if(err.type==='unavailable-id'){
-        // Ya hay host → mostrar botón UNIRSE para esta sala
-        mpRoomStatus[roomIndex]={count:1};
-        MP.renderRooms();
-        MP.setStatus('Sala '+(roomIndex+1)+' ya tiene host. Pulsa UNIRSE.','#f39c12');
-        try{peer.destroy();}catch(e){}mpMainPeer=null;S.peer=null;
-      } else if(err.type==='network'||err.type==='server-error'){
-        MP.setStatus('Error de red. Verifica tu conexión.','#e74c3c');
-        try{peer.destroy();}catch(e){}mpMainPeer=null;S.peer=null;
-      } else {
-        MP.setStatus('Error al crear: '+err.type,'#e74c3c');
-        try{peer.destroy();}catch(e){}mpMainPeer=null;S.peer=null;
-      }
-    });
+  async createPrivate(){
+    document.getElementById('privStatus').textContent='Creando sala...';
+    await fskCreatePrivate();
   },
 
-  // ── CLIENTE: Unirse a sala ────────────────────────────────────────
-  joinRoom(roomIndex){
-    const roomPeerId=MP_ROOM_BASE+'-'+(roomIndex+1);
-    MP.setStatus('Conectando a sala '+(roomIndex+1)+'...','#a0c0ff');
-    if(mpMainPeer){try{mpMainPeer.destroy();}catch(e){}}mpMainPeer=null;
-    if(S.peer){try{S.peer.destroy();}catch(e){}}S.peer=null;
-    mpCleanState();
-    S.isHost=false;
-    S.myId=Net.uid();
-
-    const peer=new Peer(MP_PEER_CFG);
-    mpMainPeer=peer;S.peer=peer;
-
-    const openTO=setTimeout(()=>{
-      if(!peer.open){
-        MP.setStatus('No se pudo conectar al servidor. Reintenta.','#e74c3c');
-        try{peer.destroy();}catch(e){}mpMainPeer=null;S.peer=null;
-      }
-    },12000);
-
-    peer.on('open',()=>{
-      clearTimeout(openTO);
-      const conn=peer.connect(roomPeerId,{reliable:true,serialization:'json'});
-      S.conns=[conn];
-
-      const connTO=setTimeout(()=>{
-        // Si no abrió en 12s, la sala no existe o el host se fue
-        MP.setStatus('La sala no responde. Actualiza la lista.','#f39c12');
-        mpRoomStatus[roomIndex]=false;
-        MP.renderRooms();
-      },12000);
-
-      conn.on('open',()=>{
-        clearTimeout(connTO);
-        MP.setStatus('Conectado. Entrando al lobby...','#a0c0ff');
-        conn.send({t:'join',id:S.myId,name:Stats.username||'JUGADOR',username:Stats.username||'?',malicia:Stats.malicia||0});
-      });
-
-      conn.on('data',raw=>{
-        try{
-          const d=typeof raw==='string'?JSON.parse(raw):raw;
-          if(d.t==='lobby'){
-            S.players=d.players;S.code='';
-            Net._startHeartbeat();
-            UI.showLobby();
-          } else if(d.t==='rejected'){
-            MP.setStatus('Sala llena. Elige otra.','#e74c3c');
-            try{peer.destroy();}catch(e){}mpMainPeer=null;S.peer=null;
-          } else {
-            Net.onClient(d);
-          }
-        }catch(e){}
-      });
-
-      conn.on('close',()=>{
-        clearTimeout(connTO);
-        if(S.running||S.inLobbyWorld){
-          // Use a non-blocking notification instead of alert
-          const msg=document.createElement('div');
-          msg.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;font-family:Share Tech Mono,monospace;font-size:.8rem;letter-spacing:.2em;text-align:center;padding:14px;';
-          msg.textContent='⚠ DESCONECTADO DEL HOST — volviendo al menú...';
-          document.body.appendChild(msg);
-          setTimeout(()=>MP.leaveRoom(),2200);
-        }
-      });
-      conn.on('error',()=>{
-        clearTimeout(connTO);
-        MP.setStatus('Error de conexión con la sala.','#e74c3c');
-      });
-    });
-
-    peer.on('error',e=>{
-      clearTimeout(openTO);
-      if(e.type==='peer-unavailable'){
-        // No existe el host — marcar sala libre
-        mpRoomStatus[roomIndex]=false;
-        MP.renderRooms();
-        MP.setStatus('Sala no encontrada. Actualiza la lista.','#f39c12');
-      } else {
-        MP.setStatus('Error: '+e.type,'#e74c3c');
-      }
-      try{peer.destroy();}catch(ex){}mpMainPeer=null;S.peer=null;
-    });
+  async joinPrivate(){
+    const code=(document.getElementById('privCodeInput')||{}).value||'';
+    if(!code||code.length<4){ document.getElementById('privStatus').textContent='Código inválido.'; return; }
+    document.getElementById('privStatus').textContent='Conectando...';
+    await fskJoinRoom(code, false);
+    document.getElementById('privStatus').textContent='';
   },
 
-  // ── HOST: maneja conexión entrante ───────────────────────────────
-  handleIncoming(conn){
-    conn.on('open',()=>{
-      const idleTO=setTimeout(()=>{try{conn.close();}catch(e){}},4000);
-      conn._idleTO=idleTO;
+  setStatus(msg, col){
+    ['mpStatusMsg','rapidasStatus','privStatus'].forEach(id=>{
+      const el=document.getElementById(id); if(el){ el.textContent=msg; el.style.color=col||'var(--dim)'; }
     });
-    conn.on('data',raw=>{
-      clearTimeout(conn._idleTO);
-      try{
-        const d=typeof raw==='string'?JSON.parse(raw):raw;
-        if(d.t==='probe'){
-          conn.send({t:'probeReply',count:S.players.length});
-          setTimeout(()=>{try{conn.close();}catch(e){}},400);
-          return;
-        }
-        if(d.t==='join'){
-          if(S.running){
-            conn.send({t:'spectate',gs:Game.serial(),players:S.players});
-            return;
-          }
-          if(S.players.length>=MP_ROOM_CAP){
-            conn.send({t:'rejected',reason:'full'});
-            setTimeout(()=>{try{conn.close();}catch(e){}},300);
-            return;
-          }
-          if(!S.conns.find(c=>c===conn)) S.conns.push(conn);
-          if(!S.players.find(p=>p.id===d.id)){
-            S.players.push({
-              id:d.id,name:d.name||'JUGADOR',
-              username:d.username||d.name||'?',
-              host:false,connId:conn.peer,
-              color:PCOLORS[S.players.length%PCOLORS.length],
-              malicia:d.malicia||0,
-            });
-          }
-          Net.broadcast({t:'list',players:S.players,code:''});
-          conn.send({t:'lobby',players:S.players,code:''});
-          UI.renderLobbyPlayers();
-          Net.checkCd();
-          conn.on('close',()=>Net.onDisc(conn));
-          conn.on('error',()=>Net.onDisc(conn));
-          return;
-        }
-        // Mensaje de juego en curso
-        Net.onHost(conn,d);
-      }catch(e){}
-    });
-    conn.on('error',()=>clearTimeout(conn._idleTO));
   },
 
   leaveRoom(){
-    if(mpRefreshTimer){clearInterval(mpRefreshTimer);mpRefreshTimer=null;}
-    Net.cleanup();
-    if(mpMainPeer){try{mpMainPeer.destroy();}catch(e){}}mpMainPeer=null;
-    S.peer=null;
+    fskSend({t:'leave'});
+    fskCleanup(false);
+    mpCleanState();
+    if(S.peer){try{S.peer.destroy();}catch(e){}} S.peer=null;
     UI.show('s-menu');
   },
 };
 
-// ── Compatibilidad: Net sigue siendo el objeto de lógica de juego ──
+
 const Net={
-  // ── Prefijo versión — cámbialo si ves conflictos de ID ──────────────────────
-  _PFX:'FSK26_',
-
-  // ── Genera código de sala de 6 chars sin chars ambiguos ─────────────────────
-  gc(){
-    const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    return Array.from({length:6},()=>a[Math.random()*a.length|0]).join('');
-  },
-
-  // ── Peer ID del host = prefijo + código ──────────────────────────────────────
-  pid(code){return this._PFX+code;},
-
-  // ── Config PeerJS con STUN + TURN (para NAT estricto / móvil) ───────────────
-  _peerCfg(){
-    return {
-      debug:0,
-      config:{
-        iceServers:[
-          // STUN de Google — rápidos y gratuitos
-          {urls:'stun:stun.l.google.com:19302'},
-          {urls:'stun:stun1.l.google.com:19302'},
-          {urls:'stun:stun2.l.google.com:19302'},
-          // TURN gratuito — necesario cuando STUN falla (NAT simétrico)
-          {urls:'turn:openrelay.metered.ca:80',
-           username:'openrelayproject',credential:'openrelayproject'},
-          {urls:'turn:openrelay.metered.ca:443',
-           username:'openrelayproject',credential:'openrelayproject'},
-          {urls:'turn:openrelay.metered.ca:443?transport=tcp',
-           username:'openrelayproject',credential:'openrelayproject'},
-        ],
-        iceCandidatePoolSize:10,
-      },
-    };
-  },
-
   // ── ID local único por sesión ────────────────────────────────────────────────
   uid(){return 'u'+Math.random().toString(36).slice(2,10);},
 
   // ── Heartbeat vars ───────────────────────────────────────────────────────────
   _hbInt:null,
-  _createAttempts:0,
 
   // ── Limpia todo estado de red ────────────────────────────────────────────────
   cleanup(){
@@ -2149,7 +2254,8 @@ const Net={
     if(this._hbInt){clearInterval(this._hbInt);this._hbInt=null;}
     S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
     LobbyWorld.stop();
-    if(S.peer){try{S.peer.destroy();}catch(e){}S.peer=null;}
+    fskCleanup(false);
+    S.peer=null;
     S.conns=[];S.players=[];Inp.clear();
   },
 
@@ -2401,7 +2507,7 @@ const Game={
     mb.classList.remove('show');void mb.offsetWidth;
     mb.classList.add('show');
     // Show killer reveal then start game
-    Game.showKillerReveal(()=>Game.mainLoop());
+    Game.showKillerReveal(()=>{GameAudio.playRound();Game.mainLoop();});
   },
 
   showKillerReveal(callback){
@@ -2556,7 +2662,43 @@ const Game={
             p.bloxyTimer=Math.max(0,p.bloxyTimer-dt);
             if(p.bloxyTimer<=0){p.bloxyActive=false;p.speedBuff=1;}
           }
+
+          // ── Slate Skin ticks ──
+          if(p.ssCd>0)p.ssCd=Math.max(0,p.ssCd-dt);
+          if(p.ssDrinking){
+            p.ssDrinkTimer=Math.max(0,(p.ssDrinkTimer||0)-dt);
+            if(p.ssDrinkTimer<=0){
+              p.ssDrinking=false;
+              // Apply overheal and activate
+              p.hp=Math.min(p.maxHp+SS_OVERHEAL,p.hp+SS_OVERHEAL);
+              p.ssActive=true;
+              p.ssTimer=SS_DUR;
+            }
+          }
+          if(p.ssActive){
+            p.ssTimer=Math.max(0,p.ssTimer-dt);
+            // End naturally → grant Speed II
+            if(p.ssTimer<=0){
+              p.ssActive=false;
+              p.hp=Math.min(p.maxHp,p.hp); // strip overheal
+              p.speedBuff=SS_SPEED_BONUS_II;
+              p.ssSpeedActive=true;
+              p.ssSpeedTimer=SS_SPEED_DUR;
+            }
+            // Overheal depleted by damage → end prematurely (no speed bonus)
+            if(p.hp<=p.maxHp-0.1&&p.ssActive){
+              // HP dropped below base max → overheal is gone
+              p.ssActive=false;
+              p.ssTimer=0;
+            }
+          }
+          if(p.ssSpeedActive){
+            p.ssSpeedTimer=Math.max(0,(p.ssSpeedTimer||0)-dt);
+            if(p.ssSpeedTimer<=0){p.ssSpeedActive=false;p.speedBuff=1;}
+          }
+
           if(p.role==='killer'&&p.qCd>0)p.qCd=Math.max(0,p.qCd-dt);
+          if(p.role==='killer'&&p.comboCd>0)p.comboCd=Math.max(0,p.comboCd-dt);
 
           // ── Behead phases ──
           if(p.role==='killer'&&p.beheadDashing){
@@ -2682,7 +2824,7 @@ const Game={
     if(inp['d']||inp['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     const moving=dx!==0||dy!==0;
-    const canSprint=p.stamina>0&&!p.bloxyDrinking;
+    const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
     if(isSprint){
@@ -2697,11 +2839,11 @@ const Game={
     }
     if(moving)p.facing=Math.atan2(dy,dx);
     const bw=p.role==='killer'?KW:SW,rw=p.role==='killer'?KR:SR;
-    const buff=p.speedBuff||1;
+    const buff=(p.ssDrinking?0.6:1)*(p.speedBuff||1); // 40% slow while drinking slate skin
     // During behead dash phase: force Speed III (×2.0 of run) in locked direction
     let spd,r=TILE*.28;
     if(p.beheadDashing){
-      spd=rw*2.0*dt; // Speed III
+      spd=rw*1.5*dt; // Speed II during behead dash
       // Override dx/dy to locked dash direction
       const ang=p.beheadDashAng||p.facing;
       const ndx=Math.cos(ang),ndy=Math.sin(ang);
@@ -2749,15 +2891,91 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='survivor')return;
     if(p.bloxyCd>0)return;
-    if(p.bloxyDrinking)return; // already drinking
-    // 0.5s "drinking" delay: player can only walk, then effect kicks in
+    if(p.bloxyDrinking)return;
     p.bloxyDrinking=true;
     p.bloxyDrinkTimer=0.5;
     p.bloxyCd=BLOXY_CD;
   },
 
+  doSlateSkin(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||p.role!=='survivor')return;
+    // If already active → cancel early → grant Speed I for SS_SPEED_DUR
+    if(p.ssActive){
+      p.ssActive=false;
+      p.ssTimer=0;
+      p.hp=Math.min(p.maxHp,p.hp);  // remove overheal
+      p.speedBuff=SS_SPEED_I;
+      p.ssSpeedActive=true;
+      p.ssSpeedTimer=SS_SPEED_DUR;
+      return;
+    }
+    if(p.ssCd>0||p.ssDrinking)return;
+    // Start drinking animation
+    p.ssDrinking=true;
+    p.ssDrinkTimer=SS_DRINK_DUR;
+    p.ssCd=SS_CD;
+  },
+
+  doCombo(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||p.role!=='killer')return;
+    if(p.comboCd>0||p.comboActive)return;
+    const enraged=p.enraged||false; // stub — ENRAGED futuro
+    const cd=enraged?COMBO_CD_ENRAGED:COMBO_CD;
+    const totalDmg=enraged?COMBO_TOTAL_DMG_ENRAGED:COMBO_TOTAL_DMG;
+    const hitDmg=totalDmg/COMBO_HITS; // cada golpe = 1/5 del total
+    p.comboCd=cd;
+    p.comboActive=true;
+    p.comboAng=p.facing; // dirección bloqueada al activar
+    // Lanzar los 5 hits con sus delays
+    COMBO_HIT_DELAYS.forEach((delay,i)=>{
+      setTimeout(()=>{
+        if(!S.running)return;
+        const pk=W.players[pid];
+        if(!pk||!pk.alive){pk&&(pk.comboActive=false);return;}
+        const isMachete=i<2; // hits 0,1 → machete; 2,3,4 → motosierra
+        const ang=pk.comboAng;
+        const cx=pk.x+Math.cos(ang)*(HB_OFFSET+COMBO_HB_H/2);
+        const cy=pk.y+Math.sin(ang)*(HB_OFFSET+COMBO_HB_H/2);
+        // FX visual — machete=rojo, motosierra=naranja
+        slashFX.push({
+          x:cx,y:cy,ang,
+          hw:COMBO_HB_W/2,hh:COMBO_HB_H/2,
+          life:isMachete?.15:.22,maxLife:isMachete?.15:.22,
+          idx:i,combo:true,chainsaw:!isMachete,
+        });
+        // Golpe — hit per-target solo una vez por combo completo
+        if(!pk.comboHitSet)pk.comboHitSet=new Set();
+        Object.values(W.players).forEach(s=>{
+          if(s.role!=='survivor'||!s.alive)return;
+          if(pk.comboHitSet.has(s.id))return;
+          if(pointInRotRect(s.x,s.y,cx,cy,COMBO_HB_W/2,COMBO_HB_H/2,ang)){
+            // Daño acumulativo — cada hit aplica su parte
+            s.hp=Math.max(0,s.hp-hitDmg);
+            if(s.hp<=0){
+              s.hp=0;s.alive=false;s.bleedTicks=0;
+              W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+              pk.comboHitSet.add(s.id); // no seguir golpeando si muere
+            } else {
+              s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+              // No añadimos a hitSet → puede recibir todos los hits del combo
+            }
+            Game.checkWin();
+          }
+        });
+        // Último hit → limpiar
+        if(i===COMBO_HITS-1){pk.comboActive=false;pk.comboHitSet=null;}
+      },delay*1000);
+    });
+  },
+
   doActionE(pid){
     const p=W.players[pid];if(!p||!p.alive)return;
+    if(p.role==='killer'){
+      Game.doCombo(pid);
+      return;
+    }
     if(p.role==='survivor'){
       const ec={x:W.exit.x*TILE+TILE/2,y:W.exit.y*TILE+TILE/2};
       if(W.exit.open&&dst(p,ec)<TILE*1.8){p.alive=false;p.escaped=true;if(S.isHost)Game.checkWin();return;}
@@ -2766,6 +2984,8 @@ const Game={
         if(g.on)continue;
         if(dst(p,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6){p.interacting=true;p.interactTarget=g.id;return;}
       }
+      // No gen/exit available — try Slate Skin
+      Game.doSlateSkin(pid);
     }
   },
 
@@ -2921,10 +3141,15 @@ const Game={
         m1Cd:p.m1Cd,bleedTicks:p.bleedTicks,bleedTimer:p.bleedTimer,
         bloxyCd:p.bloxyCd||0,bloxyActive:p.bloxyActive||false,bloxyTimer:p.bloxyTimer||0,speedBuff:p.speedBuff||1,
         bloxyDrinking:p.bloxyDrinking||false,bloxyDrinkTimer:p.bloxyDrinkTimer||0,
+        ssCd:p.ssCd||0,ssDrinking:p.ssDrinking||false,ssDrinkTimer:p.ssDrinkTimer||0,
+        ssActive:p.ssActive||false,ssTimer:p.ssTimer||0,
+        ssSpeedActive:p.ssSpeedActive||false,ssSpeedTimer:p.ssSpeedTimer||0,
         qCd:p.qCd||0,
         beheadDashing:p.beheadDashing||false,beheadDashTimer:p.beheadDashTimer||0,beheadDashAng:p.beheadDashAng||0,
         beheadHitTimer:p.beheadHitTimer||0,beheadHit:p.beheadHit||false,
         beheadSlow:p.beheadSlow||false,beheadSlowTimer:p.beheadSlowTimer||0,
+        comboCd:p.comboCd||0,comboActive:p.comboActive||false,
+        enraged:p.enraged||false, // stub ENRAGED — se implementará en el futuro
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
       exit:{open:W.exit.open},time:W.time,
@@ -2958,12 +3183,18 @@ const Game={
       if(d.maxStamina)p.maxStamina=d.maxStamina;
       if(id!==S.myId)p.facing=d.facing;
       p.m1Cd=d.m1Cd;p.bleedTicks=d.bleedTicks;p.bleedTimer=d.bleedTimer;
-      if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;p.bloxyDrinking=d.bloxyDrinking||false;p.bloxyDrinkTimer=d.bloxyDrinkTimer||0;}
+      if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;p.bloxyDrinking=d.bloxyDrinking||false;p.bloxyDrinkTimer=d.bloxyDrinkTimer||0;
+        p.ssCd=d.ssCd||0;p.ssDrinking=d.ssDrinking||false;p.ssDrinkTimer=d.ssDrinkTimer||0;
+        p.ssActive=d.ssActive||false;p.ssTimer=d.ssTimer||0;
+        p.ssSpeedActive=d.ssSpeedActive||false;p.ssSpeedTimer=d.ssSpeedTimer||0;
+      }
       if(d.qCd!==undefined){
         p.qCd=d.qCd;
         p.beheadDashing=d.beheadDashing||false;p.beheadDashTimer=d.beheadDashTimer||0;p.beheadDashAng=d.beheadDashAng||0;
         p.beheadHitTimer=d.beheadHitTimer||0;p.beheadHit=d.beheadHit||false;
         p.beheadSlow=d.beheadSlow||false;p.beheadSlowTimer=d.beheadSlowTimer||0;
+        p.comboCd=d.comboCd||0;p.comboActive=d.comboActive||false;
+        p.enraged=d.enraged||false;
       }
 
       // Show death overlay for local player
@@ -3428,29 +3659,30 @@ const Game={
     if(!me||!me.alive){
       ctx.fillStyle='rgba(0,0,0,.48)';ctx.fillRect(0,0,canvas.width,canvas.height);return;
     }
+    const cx2=canvas.width/2,cy2=canvas.height/2;
     if(me.role==='killer'){
-      const gv=ctx.createRadialGradient(canvas.width/2,canvas.height/2,canvas.width*.28,canvas.width/2,canvas.height/2,canvas.width*.72);
+      // Killer: wide, blood-tinted vignette — nearly full visibility
+      const gv=ctx.createRadialGradient(cx2,cy2,canvas.width*.28,cx2,cy2,canvas.width*.72);
       gv.addColorStop(0,'rgba(0,0,0,0)');gv.addColorStop(1,'rgba(60,0,0,.20)');
       ctx.fillStyle=gv;ctx.fillRect(0,0,canvas.width,canvas.height);return;
     }
+    // Survivor: oppressive blindness — black pressing in from all edges,
+    // only a small circular window of visibility around the player
     const sc3=CAM._effScale||SCALE;
     const sx=(me.x-CAM.x)*sc3,sy=(me.y-CAM.y)*sc3;
-    const fog=document.createElement('canvas');fog.width=canvas.width;fog.height=canvas.height;
-    const fc=fog.getContext('2d');
-    fc.fillStyle='rgba(0,0,0,1)';fc.fillRect(0,0,fog.width,fog.height);
-    fc.globalCompositeOperation='destination-out';
-    const outerR=VP_TILES_W*TILE*sc3*0.42;
-    const lantern=fc.createRadialGradient(sx,sy,0,sx,sy,outerR);
-    lantern.addColorStop(0,'rgba(0,0,0,1)');lantern.addColorStop(.28,'rgba(0,0,0,1)');
-    lantern.addColorStop(.55,'rgba(0,0,0,0.72)');lantern.addColorStop(.78,'rgba(0,0,0,0.28)');
-    lantern.addColorStop(1,'rgba(0,0,0,0)');
-    fc.beginPath();fc.arc(sx,sy,outerR,0,Math.PI*2);fc.fillStyle=lantern;fc.fill();
-    fc.globalCompositeOperation='source-over';
-    ctx.drawImage(fog,0,0);
-    const innerR=VP_TILES_W*TILE*sc3*0.14;
-    const wg=ctx.createRadialGradient(sx,sy,0,sx,sy,innerR*2.4);
-    wg.addColorStop(0,'rgba(255,200,80,0.10)');wg.addColorStop(.5,'rgba(255,160,40,0.04)');wg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=wg;ctx.beginPath();ctx.arc(sx,sy,innerR*2.4,0,Math.PI*2);ctx.fill();
+    const viewR=canvas.width*0.26; // radius of visible area
+    const fog=ctx.createRadialGradient(sx,sy,viewR*0.45,sx,sy,viewR);
+    fog.addColorStop(0,'rgba(0,0,0,0)');
+    fog.addColorStop(0.55,'rgba(0,0,0,0.55)');
+    fog.addColorStop(0.80,'rgba(0,0,0,0.84)');
+    fog.addColorStop(1,'rgba(0,0,0,0.97)');
+    // Fill entire screen black, then punch out the visible circle
+    ctx.fillStyle='rgba(0,0,0,0.97)';ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle=fog;ctx.beginPath();ctx.arc(sx,sy,viewR,0,Math.PI*2);ctx.fill();
+    // Slight warm lantern tint at center
+    const warm=ctx.createRadialGradient(sx,sy,0,sx,sy,viewR*0.5);
+    warm.addColorStop(0,'rgba(255,180,60,0.06)');warm.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=warm;ctx.beginPath();ctx.arc(sx,sy,viewR*0.5,0,Math.PI*2);ctx.fill();
   },
 
   _drawTrackers(me){
@@ -3686,23 +3918,18 @@ const KillerReveal={
 // ══════════════════════════════════════════
 const GameAudio={
   _cur:null,
-  _pickLMSTrack(){
-    // Future: check player names for special matchups
-    // const names = Object.values(W.players||{}).map(p=>(p.username||p.name||'').toLowerCase());
-    // if(names.includes('1x1x1x1')&&names.includes('shedletsky')) return 'creation.mp4';
-    // if(names.includes('007n7')&&names.includes('coolkid')) return 'plead.mp4';
-    return 'soul.mp4'; // default for noob vs slasher (no special requirement)
-  },
-  playLMS(){
+  _play(src,loop=true,vol=0.55){
     this.stopAll();
-    const track=this._pickLMSTrack();
     try{
-      const a=new Audio(track);
-      a.loop=true;a.volume=0.55;
+      const a=new Audio(src);
+      a.loop=loop;a.volume=vol;
       a.play().catch(()=>{});
       this._cur=a;
     }catch(e){}
   },
+  playLobby(){this._play('lobby.mp3',true,0.45);},
+  playRound(){this._play('ronda.mp3',true,0.55);},
+  playLMS(){this._play('soul.mp3',true,0.60);},
   stopAll(){
     if(this._cur){
       try{this._cur.pause();this._cur.currentTime=0;}catch(e){}
@@ -3824,12 +4051,8 @@ Auth.loadRemember(); // async — handles auto-login if remembered
 
 // ── Desconexión limpia al cerrar la pestaña/recargar ──
 window.addEventListener('beforeunload',()=>{
-  if(S.peer&&!S.peer.destroyed){
-    try{S.peer.destroy();}catch(e){}
-  }
-  if(mpMainPeer&&!mpMainPeer.destroyed){
-    try{mpMainPeer.destroy();}catch(e){}
-  }
+  if(PeerRT.peer){try{PeerRT.peer.destroy();}catch(e){}}
+  if(S.peer&&S.peer!==PeerRT.peer){try{S.peer.destroy();}catch(e){}}
 });
 
 // Click outside profile modal to close
