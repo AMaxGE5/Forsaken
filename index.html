@@ -3806,31 +3806,21 @@ const Game={
     if(!me||!me.alive){
       ctx.fillStyle='rgba(0,0,0,.48)';ctx.fillRect(0,0,canvas.width,canvas.height);return;
     }
-    const cx2=canvas.width/2,cy2=canvas.height/2;
+    const cw=canvas.width,ch=canvas.height;
+    const cx2=cw/2,cy2=ch/2;
     if(me.role==='killer'){
-      // Killer: wide, blood-tinted vignette — nearly full visibility
-      const gv=ctx.createRadialGradient(cx2,cy2,canvas.width*.28,cx2,cy2,canvas.width*.72);
+      // Killer: subtle blood vignette only
+      const gv=ctx.createRadialGradient(cx2,cy2,cw*.28,cx2,cy2,cw*.72);
       gv.addColorStop(0,'rgba(0,0,0,0)');gv.addColorStop(1,'rgba(60,0,0,.20)');
-      ctx.fillStyle=gv;ctx.fillRect(0,0,canvas.width,canvas.height);return;
+      ctx.fillStyle=gv;ctx.fillRect(0,0,cw,ch);return;
     }
-    // Survivor: fog pressing in from edges — circular view centered on player
-    const sc3=CAM._effScale||SCALE;
-    const sx=(me.x-CAM.x)*sc3,sy=(me.y-CAM.y)*sc3;
-    // View radius: ~40% of screen width — enough to play but still oppressive
-    const viewR=Math.min(canvas.width,canvas.height)*0.42;
-    const innerClear=viewR*0.55; // fully clear in center
-    const fog=ctx.createRadialGradient(sx,sy,innerClear,sx,sy,viewR);
-    fog.addColorStop(0,'rgba(0,0,0,0)');
-    fog.addColorStop(0.4,'rgba(0,0,0,0.18)');
-    fog.addColorStop(0.72,'rgba(0,0,0,0.72)');
-    fog.addColorStop(1,'rgba(0,0,0,0.97)');
-    // Punch out the visible area, fill rest black
-    ctx.fillStyle='rgba(0,0,0,0.97)';ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle=fog;ctx.beginPath();ctx.arc(sx,sy,viewR,0,Math.PI*2);ctx.fill();
-    // Warm lantern tint at very center
-    const warm=ctx.createRadialGradient(sx,sy,0,sx,sy,viewR*0.45);
-    warm.addColorStop(0,'rgba(255,180,60,0.07)');warm.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=warm;ctx.beginPath();ctx.arc(sx,sy,viewR*0.45,0,Math.PI*2);ctx.fill();
+    // Survivor: same vignette technique as killer — just slightly stronger edges
+    // Player is always at screen center due to camera tracking
+    const gv=ctx.createRadialGradient(cx2,cy2,Math.min(cw,ch)*.22,cx2,cy2,Math.min(cw,ch)*.62);
+    gv.addColorStop(0,'rgba(0,0,0,0)');
+    gv.addColorStop(0.6,'rgba(0,0,0,0.25)');
+    gv.addColorStop(1,'rgba(0,0,0,0.82)');
+    ctx.fillStyle=gv;ctx.fillRect(0,0,cw,ch);
   },
 
   _drawTrackers(me){
