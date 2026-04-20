@@ -515,6 +515,12 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
   <div class="panel" style="gap:16px;width:min(380px,90vw);padding:28px 32px;">
     <div class="panel-title">CREAR SALA</div>
     <button class="btn" onclick="MP.createPrivate()"><span>+ CREAR Y ESPERAR</span></button>
+    <!-- Code display shown after creating -->
+    <div id="privCreatedBox" style="display:none;flex-direction:column;align-items:center;gap:8px;background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.3);padding:14px 20px;border-radius:4px;">
+      <div style="font-size:.55rem;letter-spacing:.4em;color:var(--dim);">COMPARTE ESTE CÓDIGO</div>
+      <div id="privCreatedCode" style="font-family:'Oswald',sans-serif;font-size:2rem;letter-spacing:.6em;color:#fff;text-shadow:0 0 20px var(--blood);"></div>
+      <button onclick="MP.copyPrivCode()" style="background:transparent;border:1px solid rgba(192,57,43,.5);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:.2em;padding:5px 16px;cursor:pointer;text-transform:uppercase;" onmouseover="this.style.background='rgba(192,57,43,.15)'" onmouseout="this.style.background='transparent'">📋 COPIAR CÓDIGO</button>
+    </div>
     <div style="border-top:1px solid var(--border);margin:6px 0;width:100%;"></div>
     <div class="panel-title">UNIRSE CON CÓDIGO</div>
     <input id="privCodeInput" class="code-input" maxlength="6" placeholder="CÓDIGO" style="font-size:1.4rem;letter-spacing:.5em;"
@@ -531,7 +537,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
   <div id="lobbyHUD">
     <div id="lobbyTopBar">
       <div id="lobbyTitle" class="logo" style="font-size:1.4rem">FORSAKEN</div>
-      <div id="lobbyCodeBadge">——————</div>
+      <div id="lobbyCodeBadge" onclick="LobbyWorld.copyCode()" title="Click para copiar" style="cursor:pointer;">——————</div>
     </div>
     <div id="lobbyStatsPanel"></div>
     <div id="lobbyCDBox">
@@ -2068,14 +2074,13 @@ async function fskCreatePrivate(){
     S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
-    // Mostrar código en la pantalla de lobby
-    const badge=document.getElementById('lobbyCodeBadge');
-    if(badge) badge.textContent=code;
     PeerRT.peer.on('connection', conn=>fskWireConn(conn));
     MP.setStatus('', '');
-    UI.showLobby();
+    // Returns code — MP.createPrivate() will show it and offer "Entrar al lobby"
+    return code;
   }catch(e){
     MP.setStatus('Error al crear sala: '+String(e.message||e),'#e74c3c');
+    return null;
   }
 }
 
@@ -2175,6 +2180,8 @@ const MP={
     UI.show('s-privada');
     document.getElementById('privStatus').textContent='';
     document.getElementById('privCodeInput').value='';
+    const box=document.getElementById('privCreatedBox');
+    if(box) box.style.display='none';
   },
 
   renderRapidas(){
@@ -2211,8 +2218,33 @@ const MP={
   },
 
   async createPrivate(){
+    const box=document.getElementById('privCreatedBox');
+    const codeEl=document.getElementById('privCreatedCode');
+    if(box) box.style.display='none';
     document.getElementById('privStatus').textContent='Creando sala...';
-    await fskCreatePrivate();
+    const code = await fskCreatePrivate();
+    document.getElementById('privStatus').textContent='';
+    if(code){
+      if(codeEl) codeEl.textContent=code;
+      if(box){
+        box.style.display='flex';
+        // Add "Enter Lobby" button if not already there
+        if(!box.querySelector('#privEnterLobbyBtn')){
+          const btn=document.createElement('button');
+          btn.id='privEnterLobbyBtn';
+          btn.textContent='🚪 ENTRAR AL LOBBY';
+          btn.style.cssText='background:var(--blood);border:none;color:#fff;font-family:"Share Tech Mono",monospace;font-size:.65rem;letter-spacing:.2em;padding:9px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;';
+          btn.onclick=()=>{
+            const badge=document.getElementById('lobbyCodeBadge');
+            if(badge) badge.textContent=code;
+            UI.showLobby();
+          };
+          box.appendChild(btn);
+        }
+      }
+      const badge=document.getElementById('lobbyCodeBadge');
+      if(badge) badge.textContent=code;
+    }
   },
 
   async joinPrivate(){
@@ -2221,6 +2253,16 @@ const MP={
     document.getElementById('privStatus').textContent='Conectando...';
     await fskJoinRoom(code, false);
     document.getElementById('privStatus').textContent='';
+  },
+
+  copyPrivCode(){
+    const code=PeerRT.roomMeta?.roomCode||'';
+    if(!code) return;
+    navigator.clipboard.writeText(code).then(()=>{
+      const btn=event.target; const orig=btn.textContent;
+      btn.textContent='✅ ¡COPIADO!';
+      setTimeout(()=>{ btn.textContent=orig; }, 1600);
+    }).catch(()=>{ prompt('Copia este código:', code); });
   },
 
   setStatus(msg, col){
@@ -2699,6 +2741,24 @@ const Game={
 
           if(p.role==='killer'&&p.qCd>0)p.qCd=Math.max(0,p.qCd-dt);
           if(p.role==='killer'&&p.comboCd>0)p.comboCd=Math.max(0,p.comboCd-dt);
+          // Killer combo lock (can't move during combo)
+          if(p.role==='killer'&&p.comboLocked){
+            p.comboLockedTimer=Math.max(0,(p.comboLockedTimer||0)-dt);
+            if(p.comboLockedTimer<=0)p.comboLocked=false;
+          }
+          // Survivor combo stun + knockback
+          if(p.role==='survivor'&&p.comboStunned){
+            p.comboStunTimer=Math.max(0,(p.comboStunTimer||0)-dt);
+            if(p.comboStunTimer<=0){p.comboStunned=false;}
+          }
+          if(p.role==='survivor'&&p.comboKbTimer>0){
+            p.comboKbTimer=Math.max(0,p.comboKbTimer-dt);
+            const frac=p.comboKbTimer/0.18;
+            const nx=p.x+(p.comboKbVx||0)*dt*frac;
+            const ny=p.y+(p.comboKbVy||0)*dt*frac;
+            if(!wallAt(nx,p.y,TILE*.28))p.x=nx;
+            if(!wallAt(p.x,ny,TILE*.28))p.y=ny;
+          }
 
           // ── Behead phases ──
           if(p.role==='killer'&&p.beheadDashing){
@@ -2817,6 +2877,8 @@ const Game={
   },
 
   moveP(p,dt,inp,sprinting){
+    // Block all movement during combo stun (survivor) or killer combo lock
+    if(p.comboStunned||p.comboLocked)return;
     let dx=0,dy=0;
     if(inp['w']||inp['arrowup'])dy=-1;
     if(inp['s']||inp['arrowdown'])dy=1;
@@ -2921,50 +2983,59 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.comboCd>0||p.comboActive)return;
-    const enraged=p.enraged||false; // stub — ENRAGED futuro
+    const enraged=p.enraged||false;
     const cd=enraged?COMBO_CD_ENRAGED:COMBO_CD;
     const totalDmg=enraged?COMBO_TOTAL_DMG_ENRAGED:COMBO_TOTAL_DMG;
-    const hitDmg=totalDmg/COMBO_HITS; // cada golpe = 1/5 del total
+    const hitDmg=totalDmg/COMBO_HITS;
+    const comboDur=COMBO_HIT_DELAYS[COMBO_HITS-1]+0.15; // total duration
     p.comboCd=cd;
     p.comboActive=true;
-    p.comboAng=p.facing; // dirección bloqueada al activar
-    // Lanzar los 5 hits con sus delays
+    p.comboAng=p.facing;
+    p.comboLocked=true;       // killer can't move/act during combo
+    p.comboLockedTimer=comboDur+0.20; // released 0.2s after last hit
+
     COMBO_HIT_DELAYS.forEach((delay,i)=>{
       setTimeout(()=>{
         if(!S.running)return;
         const pk=W.players[pid];
-        if(!pk||!pk.alive){pk&&(pk.comboActive=false);return;}
-        const isMachete=i<2; // hits 0,1 → machete; 2,3,4 → motosierra
+        if(!pk||!pk.alive){if(pk){pk.comboActive=false;pk.comboLocked=false;}return;}
+        const isMachete=i<2;
         const ang=pk.comboAng;
         const cx=pk.x+Math.cos(ang)*(HB_OFFSET+COMBO_HB_H/2);
         const cy=pk.y+Math.sin(ang)*(HB_OFFSET+COMBO_HB_H/2);
-        // FX visual — machete=rojo, motosierra=naranja
         slashFX.push({
           x:cx,y:cy,ang,
           hw:COMBO_HB_W/2,hh:COMBO_HB_H/2,
-          life:isMachete?.15:.22,maxLife:isMachete?.15:.22,
+          life:isMachete?.18:.26,maxLife:isMachete?.18:.26,
           idx:i,combo:true,chainsaw:!isMachete,
         });
-        // Golpe — hit per-target solo una vez por combo completo
         if(!pk.comboHitSet)pk.comboHitSet=new Set();
         Object.values(W.players).forEach(s=>{
           if(s.role!=='survivor'||!s.alive)return;
           if(pk.comboHitSet.has(s.id))return;
           if(pointInRotRect(s.x,s.y,cx,cy,COMBO_HB_W/2,COMBO_HB_H/2,ang)){
-            // Daño acumulativo — cada hit aplica su parte
+            // Stun survivor during combo
+            s.comboStunned=true;
+            s.comboStunTimer=comboDur-delay+0.10; // recovers 0.1s after last hit
             s.hp=Math.max(0,s.hp-hitDmg);
             if(s.hp<=0){
               s.hp=0;s.alive=false;s.bleedTicks=0;
+              s.comboStunned=false;
               W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-              pk.comboHitSet.add(s.id); // no seguir golpeando si muere
+              pk.comboHitSet.add(s.id);
             } else {
               s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
-              // No añadimos a hitSet → puede recibir todos los hits del combo
+              // Last hit → knockback push
+              if(i===COMBO_HITS-1){
+                const kbDist=TILE*2.2;
+                s.comboKbVx=Math.cos(ang)*kbDist;
+                s.comboKbVy=Math.sin(ang)*kbDist;
+                s.comboKbTimer=0.18;
+              }
             }
             Game.checkWin();
           }
         });
-        // Último hit → limpiar
         if(i===COMBO_HITS-1){pk.comboActive=false;pk.comboHitSet=null;}
       },delay*1000);
     });
@@ -3149,6 +3220,9 @@ const Game={
         beheadHitTimer:p.beheadHitTimer||0,beheadHit:p.beheadHit||false,
         beheadSlow:p.beheadSlow||false,beheadSlowTimer:p.beheadSlowTimer||0,
         comboCd:p.comboCd||0,comboActive:p.comboActive||false,
+        comboLocked:p.comboLocked||false,comboLockedTimer:p.comboLockedTimer||0,
+        comboStunned:p.comboStunned||false,comboStunTimer:p.comboStunTimer||0,
+        comboKbVx:p.comboKbVx||0,comboKbVy:p.comboKbVy||0,comboKbTimer:p.comboKbTimer||0,
         enraged:p.enraged||false, // stub ENRAGED — se implementará en el futuro
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
@@ -3194,6 +3268,9 @@ const Game={
         p.beheadHitTimer=d.beheadHitTimer||0;p.beheadHit=d.beheadHit||false;
         p.beheadSlow=d.beheadSlow||false;p.beheadSlowTimer=d.beheadSlowTimer||0;
         p.comboCd=d.comboCd||0;p.comboActive=d.comboActive||false;
+        p.comboLocked=d.comboLocked||false;p.comboLockedTimer=d.comboLockedTimer||0;
+        p.comboStunned=d.comboStunned||false;p.comboStunTimer=d.comboStunTimer||0;
+        p.comboKbVx=d.comboKbVx||0;p.comboKbVy=d.comboKbVy||0;p.comboKbTimer=d.comboKbTimer||0;
         p.enraged=d.enraged||false;
       }
 
@@ -3470,22 +3547,50 @@ const Game={
     }
     ctx.shadowBlur=0;
 
-    // Slash FX — 3 red cubes (visible when hitbox ON, invisible when OFF)
+    // Slash FX — hitbox debug + combo animation always visible
     slashFX.forEach(sf=>{
       const alpha=sf.life/sf.maxLife;
       ctx.save();ctx.translate(sf.x,sf.y);ctx.rotate(sf.ang);
-      if(S.showHitbox){
-        // Filled red cube with glow
+
+      if(sf.combo){
+        // Combo FX — always visible regardless of hitbox toggle
+        if(sf.chainsaw){
+          // Motosierra — orange electric sparks, wider arc
+          ctx.globalAlpha=alpha;
+          ctx.shadowColor='#ff8800';ctx.shadowBlur=22;
+          ctx.strokeStyle=`rgba(255,160,0,${alpha*0.95})`;ctx.lineWidth=4;
+          ctx.beginPath();ctx.moveTo(-sf.hh*0.9,-sf.hw*0.6);ctx.lineTo(sf.hh*0.9,-sf.hw*0.6);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(-sf.hh*0.9,sf.hw*0.6);ctx.lineTo(sf.hh*0.9,sf.hw*0.6);ctx.stroke();
+          ctx.strokeStyle=`rgba(255,220,80,${alpha*0.7})`;ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(-sf.hh,-sf.hw);ctx.lineTo(sf.hh,sf.hw);ctx.stroke();
+          // Spark particles
+          ctx.fillStyle=`rgba(255,200,0,${alpha*0.9})`;
+          for(let k=0;k<5;k++){
+            const sx2=(((sf.idx*37+k*71)*sf.life)%sf.hh)*2-sf.hh;
+            const sy2=(((sf.idx*13+k*53)*sf.life)%sf.hw)*2-sf.hw;
+            ctx.beginPath();ctx.arc(sx2,sy2,2+alpha*2,0,Math.PI*2);ctx.fill();
+          }
+          ctx.shadowBlur=0;
+        } else {
+          // Machete — bright red slash arc
+          ctx.globalAlpha=alpha;
+          ctx.shadowColor='#ff2200';ctx.shadowBlur=16;
+          ctx.strokeStyle=`rgba(255,60,30,${alpha*0.95})`;ctx.lineWidth=5;
+          ctx.beginPath();ctx.moveTo(-sf.hh*0.85,0);ctx.lineTo(sf.hh*0.85,0);ctx.stroke();
+          ctx.strokeStyle=`rgba(255,180,160,${alpha*0.6})`;ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(-sf.hh*0.7,-sf.hw*0.4);ctx.lineTo(sf.hh*0.7,sf.hw*0.4);ctx.stroke();
+          ctx.shadowBlur=0;
+        }
+      } else if(S.showHitbox){
+        // Normal M1/Q hitbox debug — only visible when hitbox ON
         ctx.fillStyle=`rgba(220,30,30,${alpha*0.55})`;
         ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
         ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
         ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        // Inner lines
         ctx.strokeStyle=`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
       }
-      // always invisible when hitbox OFF — no draw
-      ctx.restore();
+      ctx.globalAlpha=1;ctx.restore();
     });
 
     // Players
@@ -3511,72 +3616,114 @@ const Game={
         ctx.font=`${TILE*.38}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillStyle='#303040';ctx.fillText('💀',0,0);
       } else if(p.role==='killer'){
-        // ── RED SLASHER ──
-        ctx.shadowColor='#ff1100';ctx.shadowBlur=12;
-        // Legs — dark crimson
-        ctx.fillStyle='#5a0000';
-        ctx.fillRect(-s*.38,s*.28,s*.33,s*.58);
-        ctx.fillRect(s*.05,s*.28,s*.33,s*.58);
-        // Boot toes
-        ctx.fillStyle='#3a0000';
-        ctx.fillRect(-s*.42,s*.76,s*.36,s*.12);
-        ctx.fillRect(s*.06,s*.76,s*.36,s*.12);
-        // Torso
-        ctx.fillStyle='#8B0000';
-        ctx.fillRect(-s*.5,-s*.38,s,s*.72);
-        // Chest plate shine
-        ctx.fillStyle='rgba(255,80,80,.12)';
-        ctx.fillRect(-s*.36,-s*.3,s*.38,s*.5);
-        // Arms
-        ctx.fillStyle='#6b0000';
-        ctx.fillRect(-s*.83,-s*.3,s*.3,s*.62);
-        ctx.fillRect(s*.53,-s*.3,s*.3,s*.62);
-        // Clenched fists
-        ctx.fillStyle='#550000';
-        ctx.fillRect(-s*.86,s*.22,s*.32,s*.2);
-        ctx.fillRect(s*.54,s*.22,s*.32,s*.2);
-        // Neck
-        ctx.fillStyle='#aa1100';
-        ctx.fillRect(-s*.14,-s*.44,s*.28,s*.12);
-        // Head / skull mask
-        ctx.fillStyle='#cc2200';
-        ctx.fillRect(-s*.42,-s*1.08,s*.84,s*.7);
+        // ── SLASHER — hooded figure with cloak and machete ──
+        const t2=Date.now()/1000;
+        ctx.shadowColor='rgba(200,0,0,0.5)';ctx.shadowBlur=14;
+
+        // ── CLOAK / body silhouette — wide flowing shape ──
+        ctx.fillStyle='#1a0505';
+        ctx.beginPath();
+        ctx.moveTo(-s*.55,s*.9);
+        ctx.bezierCurveTo(-s*.7,s*.4,-s*.62,-s*.1,-s*.38,-s*.42);
+        ctx.lineTo(s*.38,-s*.42);
+        ctx.bezierCurveTo(s*.62,-s*.1,s*.7,s*.4,s*.55,s*.9);
+        ctx.closePath();ctx.fill();
+
+        // Cloak highlight edge (left)
+        ctx.strokeStyle='rgba(80,10,10,0.8)';ctx.lineWidth=s*.06;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(-s*.5,s*.85);ctx.bezierCurveTo(-s*.65,s*.3,-s*.55,-s*.08,-s*.32,-s*.38);ctx.stroke();
+
+        // ── HOOD — rounded top, deeper shadow inside ──
+        ctx.fillStyle='#130303';
+        ctx.beginPath();
+        ctx.ellipse(0,-s*.58,s*.46,s*.42,0,0,Math.PI*2);
+        ctx.fill();
+        // Hood rim shadow
+        ctx.fillStyle='#0a0101';
+        ctx.beginPath();
+        ctx.ellipse(0,-s*.52,s*.36,s*.28,0,0,Math.PI*2);
+        ctx.fill();
+
+        // ── SKULL FACE — partially hidden in shadow ──
+        // Face base
+        ctx.fillStyle='#c8bfb0';
+        ctx.beginPath();
+        ctx.ellipse(0,-s*.52,s*.24,s*.28,0,0,Math.PI*2);
+        ctx.fill();
+        // Dark eye sockets
+        ctx.fillStyle='#000';
+        ctx.beginPath();ctx.ellipse(-s*.1,-s*.56,s*.08,s*.07,0,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(s*.1,-s*.56,s*.08,s*.07,0,0,Math.PI*2);ctx.fill();
+        // LEFT eye — glowing red (alive/active)
+        const pulse=0.75+Math.sin(t2*3.2)*0.25;
+        ctx.fillStyle=`rgba(255,${30+pulse*20|0},0,${0.8+pulse*0.2})`;
+        ctx.shadowColor='#ff2200';ctx.shadowBlur=10*pulse;
+        ctx.beginPath();ctx.ellipse(-s*.1,-s*.56,s*.055,s*.05,0,0,Math.PI*2);ctx.fill();
         ctx.shadowBlur=0;
-        // Skull eye sockets
-        ctx.fillStyle='#000';
-        ctx.fillRect(-s*.3,-s*.9,s*.22,s*.2);
-        ctx.fillRect(s*.08,-s*.9,s*.22,s*.2);
-        // Eye glow (red pupils)
-        ctx.fillStyle='rgba(255,0,0,.7)';
-        ctx.fillRect(-s*.25,-s*.88,s*.12,s*.14);
-        ctx.fillRect(s*.13,-s*.88,s*.12,s*.14);
-        // Nose cavity
-        ctx.fillStyle='#000';
-        ctx.fillRect(-s*.06,-s*.72,s*.12,s*.11);
-        // Teeth
-        ctx.fillStyle='rgba(0,0,0,.55)';
-        ctx.fillRect(-s*.3,-s*.59,s*.6,s*.07);
-        ctx.fillStyle='rgba(220,200,180,.55)';
-        for(let i=0;i<5;i++) ctx.fillRect(-s*.28+i*s*.11,-s*.59,s*.08,s*.1);
-        // ── Machete / sword ──
-        // Handle
-        ctx.fillStyle='#5c3317';
-        ctx.fillRect(-s*.07,-s*1.12,s*.14,s*.25);
+        // RIGHT eye — dark hollow
+        ctx.fillStyle='rgba(0,0,0,0.9)';
+        ctx.beginPath();ctx.ellipse(s*.1,-s*.56,s*.05,s*.045,0,0,Math.PI*2);ctx.fill();
+        // Nasal cavity
+        ctx.fillStyle='rgba(0,0,0,0.6)';
+        ctx.beginPath();ctx.moveTo(-s*.04,-s*.46);ctx.lineTo(0,-s*.42);ctx.lineTo(s*.04,-s*.46);ctx.fill();
+        // Stitched smile
+        ctx.strokeStyle='rgba(0,0,0,0.7)';ctx.lineWidth=s*.025;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(-s*.14,-s*.36);ctx.bezierCurveTo(-s*.06,-s*.3,s*.06,-s*.3,s*.14,-s*.36);ctx.stroke();
+        for(let st=0;st<4;st++){
+          const sx2=-s*.1+st*s*.065;
+          ctx.beginPath();ctx.moveTo(sx2,-s*.36);ctx.lineTo(sx2,-s*.3);ctx.stroke();
+        }
+        ctx.shadowBlur=0;
+
+        // ── ARM — left side holding machete ──
+        ctx.fillStyle='#1f0808';
+        ctx.beginPath();
+        ctx.moveTo(-s*.35,s*.05);
+        ctx.bezierCurveTo(-s*.55,s*.1,-s*.7,s*.3,-s*.68,s*.65);
+        ctx.lineTo(-s*.52,s*.65);
+        ctx.bezierCurveTo(-s*.5,s*.32,-s*.38,s*.14,-s*.22,s*.1);
+        ctx.closePath();ctx.fill();
+
+        // ── MACHETE — held down-left, tilted ──
+        ctx.save();
+        ctx.translate(-s*.62,s*.5);ctx.rotate(0.35);
+        // Handle wrap
+        ctx.fillStyle='#3a1a08';
+        ctx.fillRect(-s*.055,-s*.05,s*.11,s*.28);
+        ctx.strokeStyle='#5a2a10';ctx.lineWidth=s*.018;
+        for(let w=0;w<3;w++){ctx.beginPath();ctx.moveTo(-s*.055,-s*.05+w*s*.09);ctx.lineTo(s*.055,-s*.05+w*s*.09);ctx.stroke();}
         // Guard
-        ctx.fillStyle='#888';
-        ctx.fillRect(-s*.2,-s*1.12,s*.4,s*.07);
+        ctx.fillStyle='#666';
+        ctx.fillRect(-s*.18,s*.22,s*.36,s*.05);
+        ctx.strokeStyle='#888';ctx.lineWidth=s*.01;ctx.strokeRect(-s*.18,s*.22,s*.36,s*.05);
         // Blade
-        ctx.fillStyle='#c8c8c8';
-        ctx.fillRect(-s*.07,-s*2.0,s*.14,s*.92);
-        // Blade bevel
-        ctx.fillStyle='#e8e8e8';
-        ctx.fillRect(-s*.04,-s*1.98,s*.06,s*.88);
-        // Blood on blade
-        ctx.fillStyle='rgba(180,0,0,.8)';
-        ctx.fillRect(-s*.06,-s*1.65,s*.1,s*.25);
-        ctx.beginPath();ctx.arc(s*.02,-s*1.66,s*.06,0,Math.PI*2);ctx.fill();
-        // "ME" outline
-        if(isMe){ctx.shadowColor='#fff';ctx.shadowBlur=8;ctx.strokeStyle='rgba(255,255,255,.4)';ctx.lineWidth=1.5;ctx.strokeRect(-s*.52,-s*1.1,s*1.04,s*2.02);}
+        const bladeGrad=ctx.createLinearGradient(-s*.06,s*.27,s*.06,s*.27);
+        bladeGrad.addColorStop(0,'#a0a0a0');bladeGrad.addColorStop(0.4,'#ddd');bladeGrad.addColorStop(1,'#888');
+        ctx.fillStyle=bladeGrad;
+        ctx.beginPath();
+        ctx.moveTo(-s*.07,s*.27);ctx.lineTo(s*.05,s*.27);
+        ctx.lineTo(s*.025,s*.27+s*1.05);ctx.lineTo(-s*.055,s*.27+s*1.05);
+        ctx.closePath();ctx.fill();
+        // Blade bevel shine
+        ctx.fillStyle='rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(-s*.03,s*.28);ctx.lineTo(s*.015,s*.28);
+        ctx.lineTo(-s*.005,s*.27+s*1.0);ctx.lineTo(-s*.04,s*.27+s*1.0);
+        ctx.closePath();ctx.fill();
+        // Blood
+        ctx.fillStyle='rgba(180,0,0,0.85)';
+        ctx.fillRect(-s*.06,s*.65,s*.09,s*.3);
+        ctx.beginPath();ctx.ellipse(0,s*.97,s*.07,s*.04,0,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+
+        // ── "ME" indicator ──
+        if(isMe){
+          ctx.shadowColor='rgba(255,255,255,0.5)';ctx.shadowBlur=8;
+          ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1.5;
+          ctx.strokeRect(-s*.62,-s*.82,s*1.24,s*1.9);
+          ctx.shadowBlur=0;
+        }
+        ctx.shadowBlur=0;
 
       } else {
         // ── NOOB SURVIVOR ──
@@ -3666,23 +3813,24 @@ const Game={
       gv.addColorStop(0,'rgba(0,0,0,0)');gv.addColorStop(1,'rgba(60,0,0,.20)');
       ctx.fillStyle=gv;ctx.fillRect(0,0,canvas.width,canvas.height);return;
     }
-    // Survivor: oppressive blindness — black pressing in from all edges,
-    // only a small circular window of visibility around the player
+    // Survivor: fog pressing in from edges — circular view centered on player
     const sc3=CAM._effScale||SCALE;
     const sx=(me.x-CAM.x)*sc3,sy=(me.y-CAM.y)*sc3;
-    const viewR=canvas.width*0.26; // radius of visible area
-    const fog=ctx.createRadialGradient(sx,sy,viewR*0.45,sx,sy,viewR);
+    // View radius: ~40% of screen width — enough to play but still oppressive
+    const viewR=Math.min(canvas.width,canvas.height)*0.42;
+    const innerClear=viewR*0.55; // fully clear in center
+    const fog=ctx.createRadialGradient(sx,sy,innerClear,sx,sy,viewR);
     fog.addColorStop(0,'rgba(0,0,0,0)');
-    fog.addColorStop(0.55,'rgba(0,0,0,0.55)');
-    fog.addColorStop(0.80,'rgba(0,0,0,0.84)');
+    fog.addColorStop(0.4,'rgba(0,0,0,0.18)');
+    fog.addColorStop(0.72,'rgba(0,0,0,0.72)');
     fog.addColorStop(1,'rgba(0,0,0,0.97)');
-    // Fill entire screen black, then punch out the visible circle
+    // Punch out the visible area, fill rest black
     ctx.fillStyle='rgba(0,0,0,0.97)';ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle=fog;ctx.beginPath();ctx.arc(sx,sy,viewR,0,Math.PI*2);ctx.fill();
-    // Slight warm lantern tint at center
-    const warm=ctx.createRadialGradient(sx,sy,0,sx,sy,viewR*0.5);
-    warm.addColorStop(0,'rgba(255,180,60,0.06)');warm.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=warm;ctx.beginPath();ctx.arc(sx,sy,viewR*0.5,0,Math.PI*2);ctx.fill();
+    // Warm lantern tint at very center
+    const warm=ctx.createRadialGradient(sx,sy,0,sx,sy,viewR*0.45);
+    warm.addColorStop(0,'rgba(255,180,60,0.07)');warm.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=warm;ctx.beginPath();ctx.arc(sx,sy,viewR*0.45,0,Math.PI*2);ctx.fill();
   },
 
   _drawTrackers(me){
