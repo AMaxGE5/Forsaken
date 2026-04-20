@@ -970,7 +970,7 @@ const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_D
 const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
 const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
-const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8, HB_H = TILE*2.0;
+const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8*0.75, HB_H = TILE*2.0*0.75;  // M1 hitbox −25%
 const INTERACT_SEC = 4;
 const GEN_TIME_BONUS = 14;
 const LMS_TIME = 74, LMS_TRACKER_DUR = 5;
@@ -990,7 +990,7 @@ const Q_DASH_DUR = 0.2;
 const Q_DASH_MULT = 2.0;
 const Q_DMG = 20;
 const Q_DMG_ENRAGED = 20;  // [ENRAGED] stub
-const Q_HB_SIZE = HB_W;
+const Q_HB_SIZE = HB_W*0.85/0.75;  // Behead hitbox −15% from original (HB_W already has ×0.75 applied)
 const Q_HELPLESS_DUR = 4;
 
 // ── Habilidad M1 del Killer: TAJO ──
@@ -2776,7 +2776,7 @@ const Game={
               let hitSomeone=false;
               Object.values(W.players).forEach(s=>{
                 if(s.role!=='survivor'||!s.alive)return;
-                if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.2){
+                if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.02){
                   hitSomeone=true;
                   s.hp=Math.max(0,s.hp-Q_DMG);
                   s.helpless=true;s.helplessTimer=Q_HELPLESS_DUR;
