@@ -1008,46 +1008,120 @@ const COMBO_HIT_DELAYS = [0, 0.18, 0.38, 0.52, 0.66]; // tiempos de cada golpe (
 const COMBO_HB_W = HB_W * 1.1;
 const COMBO_HB_H = HB_H * 1.0;
 const GAME_DUR = 210;        // 3:30
-const KILL_TIME_BONUS = 30;  // seconds added per kill
+const KILL_TIME_BONUS = 40;  // seconds added per kill
 const ROUND_END_DELAY = 8;
 const LOBBY_CD_DUR = 30;   // lobby countdown before next round
 const PCOLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
 const LOBBY_SPEED = 160; // px/s movement in lobby world
 
 // ── MAP ──
+// Tile values: 0=floor, 1=normal wall, 2=generator, 3=exit, 4=killer-only wall (red)
 function buildMap(){
   const m=Array.from({length:MAP_H},()=>Array(MAP_W).fill(0));
+  // Border
   for(let x=0;x<MAP_W;x++){m[0][x]=1;m[MAP_H-1][x]=1;}
   for(let y=0;y<MAP_H;y++){m[y][0]=1;m[y][MAP_W-1]=1;}
+
+  // ── HORIZONTAL WALLS (redesigned — shorter segments, more gaps) ──
   const hWalls=[
-    {y:10,x1:1,x2:26,gaps:[8,9,18,19]},{y:10,x1:38,x2:64,gaps:[45,46,56,57]},
-    {y:22,x1:1,x2:20,gaps:[7,8,14,15]},{y:22,x1:22,x2:42,gaps:[29,30]},
-    {y:22,x1:44,x2:64,gaps:[50,51,58,59]},{y:34,x1:1,x2:28,gaps:[10,11,20,21]},
-    {y:34,x1:36,x2:64,gaps:[44,45,54,55]},
+    // Top zone dividers — broken into shorter segments
+    {y:9, x1:1,  x2:13, gaps:[6,7]},
+    {y:9, x1:15, x2:25, gaps:[20,21]},
+    {y:9, x1:39, x2:49, gaps:[43,44]},
+    {y:9, x1:51, x2:63, gaps:[57,58]},
+    // Mid-top
+    {y:16,x1:1,  x2:18, gaps:[9,10,14,15]},
+    {y:16,x1:20, x2:44, gaps:[29,30,36,37]},
+    {y:16,x1:46, x2:63, gaps:[50,51,56,57]},
+    // Center
+    {y:22,x1:1,  x2:15, gaps:[7,8]},
+    {y:22,x1:17, x2:31, gaps:[24,25]},
+    {y:22,x1:33, x2:47, gaps:[39,40]},
+    {y:22,x1:49, x2:63, gaps:[55,56]},
+    // Mid-bottom
+    {y:28,x1:1,  x2:18, gaps:[9,10,14,15]},
+    {y:28,x1:20, x2:44, gaps:[29,30,36,37]},
+    {y:28,x1:46, x2:63, gaps:[50,51,56,57]},
+    // Bottom zone
+    {y:35,x1:1,  x2:13, gaps:[6,7]},
+    {y:35,x1:15, x2:25, gaps:[20,21]},
+    {y:35,x1:39, x2:49, gaps:[43,44]},
+    {y:35,x1:51, x2:63, gaps:[57,58]},
   ];
   hWalls.forEach(({y,x1,x2,gaps})=>{for(let x=x1;x<=x2;x++) if(!gaps.includes(x)) m[y][x]=1;});
+
+  // ── VERTICAL WALLS ──
   const vWalls=[
-    {x:14,y1:1,y2:10,gaps:[4,5]},{x:32,y1:1,y2:21,gaps:[7,8,16,17]},
-    {x:50,y1:1,y2:10,gaps:[4,5]},{x:14,y1:11,y2:22,gaps:[16,17]},
-    {x:50,y1:11,y2:22,gaps:[16,17]},{x:22,y1:22,y2:34,gaps:[27,28]},
-    {x:42,y1:22,y2:34,gaps:[27,28]},{x:14,y1:34,y2:44,gaps:[38,39]},
-    {x:32,y1:23,y2:44,gaps:[36,37]},{x:50,y1:34,y2:44,gaps:[38,39]},
+    {x:13,y1:1, y2:9,  gaps:[4,5]},
+    {x:51,y1:1, y2:9,  gaps:[4,5]},
+    {x:13,y1:9, y2:16, gaps:[12,13]},
+    {x:51,y1:9, y2:16, gaps:[12,13]},
+    {x:19,y1:1, y2:16, gaps:[6,7,13,14]},
+    {x:45,y1:1, y2:16, gaps:[6,7,13,14]},
+    {x:32,y1:1, y2:16, gaps:[8,9]},
+    {x:32,y1:28,y2:44, gaps:[36,37]},
+    {x:13,y1:28,y2:44, gaps:[38,39]},
+    {x:51,y1:28,y2:44, gaps:[38,39]},
+    {x:19,y1:28,y2:44, gaps:[31,32,38,39]},
+    {x:45,y1:28,y2:44, gaps:[31,32,38,39]},
+    // Center vertical dividers (short — anti-loop)
+    {x:25,y1:16,y2:22, gaps:[19]},
+    {x:39,y1:16,y2:22, gaps:[19]},
+    {x:25,y1:22,y2:28, gaps:[25]},
+    {x:39,y1:22,y2:28, gaps:[25]},
   ];
   vWalls.forEach(({x,y1,y2,gaps})=>{for(let y=y1;y<=y2;y++) if(!gaps.includes(y)) m[y][x]=1;});
+
+  // ── INTERIOR OBSTACLE BOXES (break long corridors, force route variety) ──
   const boxes=[
-    {x:3,y:2,w:4,h:4},{x:57,y:2,w:4,h:4},{x:3,y:38,w:4,h:4},{x:57,y:38,w:4,h:4},
-    {x:28,y:3,w:5,h:3},{x:34,y:3,w:5,h:3},{x:17,y:13,w:4,h:4},{x:43,y:13,w:4,h:4},
-    {x:17,y:26,w:4,h:4},{x:43,y:26,w:4,h:4},{x:28,y:37,w:5,h:3},{x:34,y:37,w:5,h:3},
-    {x:6,y:17,w:3,h:4},{x:54,y:17,w:3,h:4},{x:6,y:26,w:3,h:4},{x:54,y:26,w:3,h:4},
+    // Corner rooms
+    {x:2, y:2, w:5,h:4},{x:58,y:2, w:5,h:4},
+    {x:2, y:38,w:5,h:4},{x:58,y:38,w:5,h:4},
+    // Top corridors — asymmetric blockers
+    {x:22,y:2, w:4,h:3},{x:38,y:2, w:4,h:3},
+    {x:7, y:11,w:3,h:3},{x:55,y:11,w:3,h:3},
+    // Mid corridors
+    {x:7, y:19,w:3,h:3},{x:55,y:19,w:3,h:3},
+    {x:7, y:24,w:3,h:3},{x:55,y:24,w:3,h:3},
+    // Center room obstacles (4 pillars — create interesting routing)
+    {x:27,y:19,w:2,h:2},{x:35,y:19,w:2,h:2},
+    {x:27,y:24,w:2,h:2},{x:35,y:24,w:2,h:2},
+    // Bottom corridors
+    {x:7, y:30,w:3,h:3},{x:55,y:30,w:3,h:3},
+    {x:22,y:39,w:4,h:3},{x:38,y:39,w:4,h:3},
   ];
   boxes.forEach(({x,y,w,h})=>{
     for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++){
       if(y+dy>0&&y+dy<MAP_H-1&&x+dx>0&&x+dx<MAP_W-1) m[y+dy][x+dx]=1;
     }
   });
-  const genSpots=[[2,4],[61,4],[2,39],[61,39],[32,10]];  // 5 generadores
+
+  // ── KILLER-ONLY WALLS (tile=4, red) — cuts survivor loop paths ──
+  // These create "shortcuts" only the killer can use, ending the long loops
+  const redWalls=[
+    // Left side mid — survivor can't use vertical shortcut
+    {x:16,y1:17,y2:21},{x:16,y1:23,y2:27},
+    // Right side mid
+    {x:48,y1:17,y2:21},{x:48,y1:23,y2:27},
+    // Center top/bottom shortcuts
+    {y:12,x1:20,x2:24},{y:12,x1:40,x2:44},
+    {y:32,x1:20,x2:24},{y:32,x1:40,x2:44},
+  ];
+  redWalls.forEach(w=>{
+    if(w.x!==undefined){
+      for(let y=w.y1;y<=w.y2;y++) if(m[y][w.x]===0) m[y][w.x]=4;
+    } else {
+      for(let x=w.x1;x<=w.x2;x++) if(m[w.y][x]===0) m[w.y][x]=4;
+    }
+  });
+
+  // ── GENERATORS (5) ──
+  const genSpots=[[2,4],[62,4],[2,39],[62,39],[32,8]];
   genSpots.forEach(([gx,gy])=>{ if(m[gy][gx]===0) m[gy][gx]=2; });
+
+  // ── EXIT (center) ──
   m[22][32]=3;
+
   return m;
 }
 const BASE_MAP=buildMap();
@@ -1150,10 +1224,15 @@ const Inp={
 //  HELPERS
 // ══════════════════════════════════════════
 function dst(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
-function wallAt(x,y,r){
+// role: 'killer' | 'survivor' | undefined (both blocked)
+function wallAt(x,y,r,role){
   return[[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]].some(([px,py])=>{
     const tx=px/TILE|0,ty=py/TILE|0;
-    return tx<0||ty<0||tx>=MAP_W||ty>=MAP_H||BASE_MAP[ty][tx]===1;
+    if(tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) return true;
+    const t=BASE_MAP[ty][tx];
+    if(t===1) return true;                        // normal wall — blocks all
+    if(t===4&&role!=='killer') return true;       // red wall — only killer passes
+    return false;
   });
 }
 function pointInRotRect(px,py,cx,cy,hw,hh,ang){
@@ -2910,14 +2989,14 @@ const Game={
       const ang=p.beheadDashAng||p.facing;
       const ndx=Math.cos(ang),ndy=Math.sin(ang);
       const nx=p.x+ndx*spd,ny=p.y+ndy*spd;
-      if(!wallAt(nx,p.y,r))p.x=nx;
-      if(!wallAt(p.x,ny,r))p.y=ny;
+      if(!wallAt(nx,p.y,r,'killer'))p.x=nx;
+      if(!wallAt(p.x,ny,r,'killer'))p.y=ny;
       return;
     }
     spd=(isSprint?rw:bw)*dt*buff;
     const nx=p.x+dx*spd,ny=p.y+dy*spd;
-    if(!wallAt(nx,p.y,r))p.x=nx;
-    if(!wallAt(p.x,ny,r))p.y=ny;
+    if(!wallAt(nx,p.y,r,p.role))p.x=nx;
+    if(!wallAt(p.x,ny,r,p.role))p.y=ny;
   },
 
   tryM1(pid){
@@ -3308,53 +3387,84 @@ const Game={
         const seed=(tx*7+ty*13)%17;
         const seed2=(tx*3+ty*19)%11;
         if(t===1){
-          // Wall — thick asylum concrete, clearly distinguishable from floor
+          // Normal wall — thick asylum concrete
           const wallBase=seed<6?'#2e2e3e':seed<11?'#323248':'#28283a';
           ctx.fillStyle=wallBase;ctx.fillRect(px,py,TILE,TILE);
-          // Strong top-left highlight to give 3D "raised block" feel
-          ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(px,py,TILE,3); // top edge bright
-          ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,3,TILE); // left edge
-          // Strong bottom-right shadow
-          ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px,py+TILE-3,TILE,3); // bottom dark
-          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+TILE-3,py,3,TILE); // right dark
-          // Inner face (slightly different shade)
+          ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(px,py,TILE,3);
+          ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,3,TILE);
+          ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px,py+TILE-3,TILE,3);
+          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+TILE-3,py,3,TILE);
           ctx.fillStyle=seed2<4?'#222235':seed2<8?'#26263c':'#1e1e30';
           ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
-          // Concrete texture — horizontal grout line
           ctx.strokeStyle='rgba(0,0,0,.45)';ctx.lineWidth=1;
           ctx.beginPath();ctx.moveTo(px+3,py+TILE/2);ctx.lineTo(px+TILE-3,py+TILE/2);ctx.stroke();
-          // Crack detail on some walls
-          if(seed<4){
-            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;
-            ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();
-          }
-          // Mossy stain on some
+          if(seed<4){ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();}
           if(seed===3){ctx.fillStyle='rgba(30,60,25,.4)';ctx.fillRect(px+4,py+3,TILE-8,4);}
-          // Clear outer border — makes wall shape very readable
           ctx.strokeStyle='rgba(0,0,0,.95)';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
-          // Inner border accent
           ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=.8;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
+
+        } else if(t===4){
+          // ── KILLER-ONLY WALL (red) ──
+          const rPulse=(Math.sin(Date.now()*0.002+tx*0.5+ty*0.7)*0.12)+0.88;
+          ctx.fillStyle='#2a0505';ctx.fillRect(px,py,TILE,TILE);
+          // Red glow face
+          ctx.fillStyle=`rgba(140,10,10,${rPulse*0.85})`;ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+          // Inner darker center
+          ctx.fillStyle='rgba(80,0,0,0.7)';ctx.fillRect(px+5,py+5,TILE-10,TILE-10);
+          // Top highlight
+          ctx.fillStyle='rgba(255,80,80,.18)';ctx.fillRect(px,py,TILE,3);
+          ctx.fillStyle='rgba(255,60,60,.08)';ctx.fillRect(px,py,3,TILE);
+          // Skull symbol on some tiles
+          if((tx+ty)%5===0){
+            ctx.globalAlpha=0.35*rPulse;ctx.font=`${TILE*.55}px monospace`;
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.fillStyle='#ff2200';ctx.fillText('☠',px+TILE/2,py+TILE/2);
+            ctx.globalAlpha=1;
+          }
+          // Red border glow
+          ctx.strokeStyle=`rgba(200,20,20,${rPulse*0.9})`;ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          ctx.strokeStyle='rgba(255,80,80,.35)';ctx.lineWidth=1;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
+          // "KILLER ONLY" warning stripe on first tile of each segment
+          if(seed===0||seed===7){
+            ctx.globalAlpha=0.2;
+            ctx.fillStyle='#ff0000';
+            ctx.fillRect(px,py,TILE,4);ctx.fillRect(px,py+TILE-4,TILE,4);
+            ctx.globalAlpha=1;
+          }
+
         } else {
-          // Floor — lighter hospital tiles so contrast with walls is clear
+          // ── FLOOR — asylum tiles with varied ambiance ──
           const floorBase=seed<4?'#181828':seed<9?'#1a1a2c':'#161624';
           ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
-          // Tile grout lines — more visible
-          ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;
-          ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
-          // Subtle tile gloss
+          // Tile grout
+          ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+          // Subtle gloss
           if(seed2<4){ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
-          // Small inner highlight corner
           ctx.fillStyle='rgba(255,255,255,.018)';ctx.fillRect(px+2,py+2,TILE*.4,2);
-          // Blood stain on floor (rare)
+          // Blood stains (more varied)
           if(seed===5&&seed2===2){
-            ctx.save();ctx.globalAlpha=.22;
-            ctx.fillStyle='#8a0a0a';
-            ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,0.3,0,Math.PI*2);ctx.fill();
+            ctx.save();ctx.globalAlpha=.22;ctx.fillStyle='#8a0a0a';
+            ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,.3,0,Math.PI*2);ctx.fill();
             ctx.beginPath();ctx.ellipse(px+TILE*.6,py+TILE*.55,TILE*.12,TILE*.08,-.5,0,Math.PI*2);ctx.fill();
             ctx.restore();
           }
-          // Grime/dust spots
-          if(seed===8){ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(px+TILE*.6,py+TILE*.6,TILE*.3,TILE*.3);}
+          if(seed===11&&seed2===4){
+            ctx.save();ctx.globalAlpha=.14;ctx.fillStyle='#6a0505';
+            ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.35,TILE*.2,0,0,Math.PI*2);ctx.fill();
+            ctx.restore();
+          }
+          // Cracked tile lines (structural damage feel)
+          if(seed===8){
+            ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=.8;
+            ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.6,py+TILE*.5);ctx.lineTo(px+TILE*.8,py+TILE*.9);ctx.stroke();
+          }
+          // Grime/dust
+          if(seed2===7){ctx.fillStyle='rgba(0,0,0,.16)';ctx.fillRect(px+TILE*.55,py+TILE*.55,TILE*.38,TILE*.38);}
+          // Occasional drain mark
+          if((tx*3+ty*7)%31===0){
+            ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1;
+            ctx.strokeRect(px+TILE*.35,py+TILE*.35,TILE*.3,TILE*.3);
+          }
         }
       }
     }
