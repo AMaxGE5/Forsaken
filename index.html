@@ -1130,17 +1130,12 @@ function buildMap(){
   const genSpots=[[2,4],[62,4],[2,39],[62,39],[32,8]];
   genSpots.forEach(([gx,gy])=>{ if(m[gy][gx]===0) m[gy][gx]=2; });
 
-  // ── EXIT — left border wall, center height ──
-  m[22][1]=3;   // exit is in the left border wall
-
   return m;
 }
 const BASE_MAP=buildMap();
 const GEN_SPAWNS=[],SPAWN_SPOTS=[];
-let EXIT_POS={x:1,y:22};
 for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
   if(BASE_MAP[y][x]===2) GEN_SPAWNS.push({x,y});
-  else if(BASE_MAP[y][x]===3) EXIT_POS={x,y};
 }
 const SPAWN_DEFS=[
   {x:8,y:5},{x:56,y:5},{x:8,y:40},{x:56,y:40},
@@ -1516,8 +1511,6 @@ const UI={
     if(me.role==='killer'){
       // no prompt needed for killer
     } else {
-      const ec={x:W.exit.x*TILE+TILE/2,y:W.exit.y*TILE+TILE/2};
-      if(W.exit.open&&dst(me,ec)<TILE*1.8){document.getElementById('pEsc').style.display='block';return;}
       if(!me.interacting&&W.gens.some(g=>!g.on&&dst(me,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6))
         document.getElementById('pDo').style.display='block';
     }
@@ -2609,10 +2602,21 @@ const Net={
 // ══════════════════════════════════════════
 //  M1 SLASH
 // ══════════════════════════════════════════
+// Cancela ENRAGED al usar un ataque — aura queda en linger
+function breakEnrage(p){
+  if(!p||!p.enraged)return;
+  p.enraged=false;
+  p.enrageTimer=0;
+  p.maxStamina=KSMAX;
+  p.enrageAuraLinger=ENRAGE_AURA_LINGER;
+  p.enrageStamCapTimer=0;
+}
+
 function fireM1(killerPid){
   const k=W.players[killerPid];
   if(!k||!k.alive||k.role!=='killer'||k.m1Cd>0)return;
   const enraged=k.enraged||false;
+  breakEnrage(k); // ENRAGED termina al atacar
   k.m1Cd=enraged?M1_CD_ENRAGED:M1_CD;
   // ENRAGED lunge: push killer forward before slashes
   if(enraged){
@@ -2735,7 +2739,6 @@ const Game={
     W={
       map:BASE_MAP.map(r=>[...r]),
       gens:GEN_SPAWNS.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0})),
-      exit:{...EXIT_POS,open:false},
       players:{},
       time:GAME_DUR,
     };
@@ -2761,7 +2764,7 @@ const Game={
   },
 
   initFromSerial(gs){
-    W={map:BASE_MAP.map(r=>[...r]),gens:GEN_SPAWNS.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0})),exit:{...EXIT_POS,open:false},players:{},time:gs.time||300};
+    W={map:BASE_MAP.map(r=>[...r]),gens:GEN_SPAWNS.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0})),players:{},time:gs.time||300};
     S.players.forEach((p,i)=>{
       W.players[p.id]={id:p.id,name:p.name,role:'survivor',alive:true,escaped:false,x:0,y:0,hp:SHP,maxHp:SHP,stamina:SMAX,maxStamina:SMAX,sprinting:false,staminaCd:0,interacting:false,interactTarget:null,inp:{},shift:false,ePrev:false,facing:0,m1Cd:0,m1Prev:false,m1HitSet:null,bleedTicks:0,bleedTimer:0,color:p.color||PCOLORS[i%PCOLORS.length]};
     });
@@ -2820,7 +2823,7 @@ const Game={
 
       // Move players
       Object.values(W.players).forEach(p=>{
-        if(!p.alive||p.escaped)return;
+        if(!p.alive)return;
         // HOST moves ALL players (authoritative)
         // Clients do NOT move locally — server state is applied via applyState
         if(!S.isHost)return;
@@ -3003,7 +3006,7 @@ const Game={
           if(g.prog>=100){
             g.prog=100;g.on=true;p.interacting=false;p.interactTarget=null;
             if(!S.lms)W.time=Math.max(1,W.time-GEN_TIME_BONUS);
-            if(W.gens.every(g=>g.on))W.exit.open=true;
+            if(W.gens.every(g=>g.on)){/* all gens done — sin salida */}
             // +1 malicia al superviviente que completó el generador
             Net.broadcast({t:'maliciaGen',pid:p.id});
             if(p.id===S.myId)Stats.addMalicia(1);
@@ -3011,7 +3014,7 @@ const Game={
         });
 
         if(!S.lms){
-          const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive&&!p.escaped);
+          const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurv.length===1){
             const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
             if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;W.time=Math.min(W.time,LMS_TIME);S.lmsTrackerT=LMS_TRACKER_DUR;
@@ -3025,7 +3028,7 @@ const Game={
 
         W.time-=dt;
         if(W.time<=0){
-          const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive&&!p.escaped);
+          const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurv.length===0){
             Game.handleRoundEnd('killer','⏱ El tiempo terminó — todos los supervivientes fueron eliminados');
           } else {
@@ -3144,6 +3147,7 @@ const Game={
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.qCd>0)return;
     const enraged=p.enraged||false;
+    breakEnrage(p); // ENRAGED termina al atacar
     p.qCd=enraged?Q_CD_ENRAGED:Q_CD;
     // Phase 1 — Speed III (×2.0) for 0.2s, locked facing direction
     p.beheadDashing=true;
@@ -3211,6 +3215,7 @@ const Game={
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.comboCd>0||p.comboActive)return;
     const enraged=p.enraged||false;
+    breakEnrage(p); // ENRAGED termina al atacar
     const cd=enraged?COMBO_CD_ENRAGED:COMBO_CD;
     const totalDmg=enraged?COMBO_TOTAL_DMG_ENRAGED:COMBO_TOTAL_DMG;
     const hitDmg=totalDmg/COMBO_HITS;
@@ -3275,8 +3280,6 @@ const Game={
       return;
     }
     if(p.role==='survivor'){
-      const ec={x:W.exit.x*TILE+TILE/2,y:W.exit.y*TILE+TILE/2};
-      if(W.exit.open&&dst(p,ec)<TILE*1.8){p.alive=false;p.escaped=true;if(S.isHost)Game.checkWin();return;}
       if(p.interacting){p.interacting=false;p.interactTarget=null;return;}
       for(const g of W.gens){
         if(g.on)continue;
@@ -3291,8 +3294,7 @@ const Game={
     if(!S.isHost||!S.running)return;
     const surv=Object.values(W.players).filter(p=>p.role==='survivor');
     if(!surv.length)return;
-    if(surv.every(p=>!p.alive&&!p.escaped))Game.handleRoundEnd('killer','☠ Todos los supervivientes fueron eliminados');
-    else if(surv.every(p=>p.escaped))Game.handleRoundEnd('survivors','🚪 ¡Todos los supervivientes escaparon!');
+    if(surv.every(p=>!p.alive))Game.handleRoundEnd('killer','☠ Todos los supervivientes fueron eliminados');
   },
 
   // ── ROUND END: show overlay then return to lobby ──
@@ -3455,7 +3457,7 @@ const Game={
         enrageStamCapTimer:p.enrageStamCapTimer||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
-      exit:{open:W.exit.open},time:W.time,
+      time:W.time,
       slashFX:slashFX.map(s=>({...s})),
       lms:S.lms,lmsTrackerT:S.lmsTrackerT,
     };
@@ -3520,7 +3522,7 @@ const Game={
       }
     });
     gs.gens.forEach(gd=>{const g=W.gens.find(x=>x.id===gd.id);if(g){g.on=gd.on;g.prog=gd.prog;}});
-    W.exit.open=gs.exit.open;W.time=gs.time;
+    W.time=gs.time;
     if(gs.slashFX)slashFX=gs.slashFX.filter(s=>s.life>0);
     if(gs.lms!==undefined){S.lms=gs.lms;S.lmsTrackerT=gs.lmsTrackerT||0;}
   },
@@ -3810,22 +3812,6 @@ const Game={
       }
     });
 
-    // Exit — only visible/rendered when open (no locked icon on map)
-    const ex=W.exit,epx=ex.x*TILE,epy=ex.y*TILE;
-    if(ex.open){
-      ctx.shadowColor='#00ff44';ctx.shadowBlur=22;
-      ctx.fillStyle='#001a06';ctx.fillRect(epx+1,epy+1,TILE-2,TILE-2);
-      ctx.strokeStyle='#00ff44';ctx.lineWidth=2.5;ctx.strokeRect(epx+1,epy+1,TILE-2,TILE-2);
-      ctx.font=`${TILE*.52}px monospace`;ctx.fillStyle='#00ff44';
-      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🚪',epx+TILE/2,epy+TILE/2);
-      ctx.font=`7px 'Share Tech Mono',monospace`;ctx.fillStyle='rgba(0,255,68,.85)';
-      ctx.fillText('SALIDA',epx+TILE/2,epy+TILE-3);
-      ctx.shadowBlur=0;
-      // Pulsing ring
-      const pulse=0.6+Math.sin(Date.now()*0.004)*0.4;
-      ctx.strokeStyle=`rgba(0,255,68,${pulse*0.4})`;ctx.lineWidth=3;
-      ctx.beginPath();ctx.arc(epx+TILE/2,epy+TILE/2,TILE*0.7,0,Math.PI*2);ctx.stroke();
-    }
     ctx.shadowBlur=0;
 
     // Slash FX — hitbox debug + combo animation always visible
@@ -3876,7 +3862,7 @@ const Game={
 
     // Players
     Object.values(W.players).forEach(p=>{
-      if(p.escaped)return;
+      if(!p.alive)return;
       const r=TILE*.32,isMe=p.id===S.myId,dead=!p.alive;
       // Sprint aura
       if(p.sprinting&&p.alive){
@@ -4187,7 +4173,7 @@ const Game={
         const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
         if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
       } else if(me.role==='killer'){
-        Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive&&!p.escaped).forEach(s=>{
+        Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
           const {sx,sy}=toScreen(s.x,s.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(s.x,s.y,'rgba(52,152,219,0.9)','🏃');else drawEdgeArrow(s.x,s.y,'rgba(52,152,219,0.9)','🏃');ctx.restore();
         });
       }
@@ -4199,7 +4185,7 @@ const Game={
       const hasAura=(killer.enraged||killer.enrageAuraLinger>0)&&auraTarget;
       if(hasAura){
         const tgt=W.players[auraTarget];
-        if(tgt&&tgt.alive&&!tgt.escaped){
+        if(tgt&&tgt.alive){
           const {sx,sy}=toScreen(tgt.x,tgt.y);
           const pulse=0.6+Math.sin(Date.now()/130)*0.4;
           const linger=!killer.enraged&&killer.enrageAuraLinger>0;
@@ -4238,7 +4224,7 @@ const Game={
     const target=S.specTarget?W.players[S.specTarget]:null;
     ctx.save();Game._beginCam();Game._drawWorld(target);Game._endCam();
     ctx.fillStyle='rgba(0,0,0,.12)';ctx.fillRect(0,0,canvas.width,canvas.height);
-    if(target&&!target.escaped){
+    if(target&&target.alive){
       const sc=CAM._effScale||SCALE;
       const sx=(target.x-CAM.x)*sc,sy=(target.y-CAM.y)*sc;
       ctx.beginPath();ctx.arc(sx,sy,TILE*sc*.55,0,Math.PI*2);
