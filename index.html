@@ -1008,51 +1008,155 @@ const COMBO_HIT_DELAYS = [0, 0.18, 0.38, 0.52, 0.66]; // tiempos de cada golpe (
 const COMBO_HB_W = HB_W * 1.1;
 const COMBO_HB_H = HB_H * 1.0;
 const GAME_DUR = 210;        // 3:30
-const KILL_TIME_BONUS = 30;  // seconds added per kill
+const KILL_TIME_BONUS = 40;  // seconds added per kill
 const ROUND_END_DELAY = 8;
 const LOBBY_CD_DUR = 30;   // lobby countdown before next round
 const PCOLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'];
 const LOBBY_SPEED = 160; // px/s movement in lobby world
 
 // ── MAP ──
+// Tile values: 0=floor, 1=normal wall, 2=generator, 3=exit, 4=killer-only wall (red)
 function buildMap(){
   const m=Array.from({length:MAP_H},()=>Array(MAP_W).fill(0));
+  // Border
   for(let x=0;x<MAP_W;x++){m[0][x]=1;m[MAP_H-1][x]=1;}
   for(let y=0;y<MAP_H;y++){m[y][0]=1;m[y][MAP_W-1]=1;}
+
+  // ── HORIZONTAL WALLS (redesigned — shorter segments, more gaps) ──
   const hWalls=[
-    {y:10,x1:1,x2:26,gaps:[8,9,18,19]},{y:10,x1:38,x2:64,gaps:[45,46,56,57]},
-    {y:22,x1:1,x2:20,gaps:[7,8,14,15]},{y:22,x1:22,x2:42,gaps:[29,30]},
-    {y:22,x1:44,x2:64,gaps:[50,51,58,59]},{y:34,x1:1,x2:28,gaps:[10,11,20,21]},
-    {y:34,x1:36,x2:64,gaps:[44,45,54,55]},
+    // Top zone dividers — broken into shorter segments
+    {y:9, x1:1,  x2:13, gaps:[6,7]},
+    {y:9, x1:15, x2:25, gaps:[20,21]},
+    {y:9, x1:39, x2:49, gaps:[43,44]},
+    {y:9, x1:51, x2:63, gaps:[57,58]},
+    // Mid-top
+    {y:16,x1:1,  x2:18, gaps:[9,10,14,15]},
+    {y:16,x1:20, x2:44, gaps:[29,30,36,37]},
+    {y:16,x1:46, x2:63, gaps:[50,51,56,57]},
+    // Center
+    {y:22,x1:1,  x2:15, gaps:[7,8]},
+    {y:22,x1:17, x2:31, gaps:[24,25]},
+    {y:22,x1:33, x2:47, gaps:[39,40]},
+    {y:22,x1:49, x2:63, gaps:[55,56]},
+    // Mid-bottom
+    {y:28,x1:1,  x2:18, gaps:[9,10,14,15]},
+    {y:28,x1:20, x2:44, gaps:[29,30,36,37]},
+    {y:28,x1:46, x2:63, gaps:[50,51,56,57]},
+    // Bottom zone
+    {y:35,x1:1,  x2:13, gaps:[6,7]},
+    {y:35,x1:15, x2:25, gaps:[20,21]},
+    {y:35,x1:39, x2:49, gaps:[43,44]},
+    {y:35,x1:51, x2:63, gaps:[57,58]},
   ];
   hWalls.forEach(({y,x1,x2,gaps})=>{for(let x=x1;x<=x2;x++) if(!gaps.includes(x)) m[y][x]=1;});
+
+  // ── VERTICAL WALLS ──
   const vWalls=[
-    {x:14,y1:1,y2:10,gaps:[4,5]},{x:32,y1:1,y2:21,gaps:[7,8,16,17]},
-    {x:50,y1:1,y2:10,gaps:[4,5]},{x:14,y1:11,y2:22,gaps:[16,17]},
-    {x:50,y1:11,y2:22,gaps:[16,17]},{x:22,y1:22,y2:34,gaps:[27,28]},
-    {x:42,y1:22,y2:34,gaps:[27,28]},{x:14,y1:34,y2:44,gaps:[38,39]},
-    {x:32,y1:23,y2:44,gaps:[36,37]},{x:50,y1:34,y2:44,gaps:[38,39]},
+    {x:13,y1:1, y2:9,  gaps:[4,5]},
+    {x:51,y1:1, y2:9,  gaps:[4,5]},
+    {x:13,y1:9, y2:16, gaps:[12,13]},
+    {x:51,y1:9, y2:16, gaps:[12,13]},
+    {x:19,y1:1, y2:16, gaps:[6,7,13,14]},
+    {x:45,y1:1, y2:16, gaps:[6,7,13,14]},
+    {x:32,y1:1, y2:16, gaps:[8,9]},
+    {x:32,y1:28,y2:44, gaps:[36,37]},
+    {x:13,y1:28,y2:44, gaps:[38,39]},
+    {x:51,y1:28,y2:44, gaps:[38,39]},
+    {x:19,y1:28,y2:44, gaps:[31,32,38,39]},
+    {x:45,y1:28,y2:44, gaps:[31,32,38,39]},
+    // Center vertical dividers (short — anti-loop)
+    {x:25,y1:16,y2:22, gaps:[19]},
+    {x:39,y1:16,y2:22, gaps:[19]},
+    {x:25,y1:22,y2:28, gaps:[25]},
+    {x:39,y1:22,y2:28, gaps:[25]},
   ];
   vWalls.forEach(({x,y1,y2,gaps})=>{for(let y=y1;y<=y2;y++) if(!gaps.includes(y)) m[y][x]=1;});
+
+  // ── INTERIOR OBSTACLE BOXES (break long corridors, force route variety) ──
   const boxes=[
-    {x:3,y:2,w:4,h:4},{x:57,y:2,w:4,h:4},{x:3,y:38,w:4,h:4},{x:57,y:38,w:4,h:4},
-    {x:28,y:3,w:5,h:3},{x:34,y:3,w:5,h:3},{x:17,y:13,w:4,h:4},{x:43,y:13,w:4,h:4},
-    {x:17,y:26,w:4,h:4},{x:43,y:26,w:4,h:4},{x:28,y:37,w:5,h:3},{x:34,y:37,w:5,h:3},
-    {x:6,y:17,w:3,h:4},{x:54,y:17,w:3,h:4},{x:6,y:26,w:3,h:4},{x:54,y:26,w:3,h:4},
+    // Corner rooms
+    {x:2, y:2, w:5,h:4},{x:58,y:2, w:5,h:4},
+    {x:2, y:38,w:5,h:4},{x:58,y:38,w:5,h:4},
+    // Top corridors — asymmetric blockers
+    {x:22,y:2, w:4,h:3},{x:38,y:2, w:4,h:3},
+    {x:7, y:11,w:3,h:3},{x:55,y:11,w:3,h:3},
+    // Mid corridors
+    {x:7, y:19,w:3,h:3},{x:55,y:19,w:3,h:3},
+    {x:7, y:24,w:3,h:3},{x:55,y:24,w:3,h:3},
+    // Center room obstacles (4 pillars — create interesting routing)
+    {x:27,y:19,w:2,h:2},{x:35,y:19,w:2,h:2},
+    {x:27,y:24,w:2,h:2},{x:35,y:24,w:2,h:2},
+    // Bottom corridors
+    {x:7, y:30,w:3,h:3},{x:55,y:30,w:3,h:3},
+    {x:22,y:39,w:4,h:3},{x:38,y:39,w:4,h:3},
   ];
   boxes.forEach(({x,y,w,h})=>{
     for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++){
       if(y+dy>0&&y+dy<MAP_H-1&&x+dx>0&&x+dx<MAP_W-1) m[y+dy][x+dx]=1;
     }
   });
-  const genSpots=[[2,4],[61,4],[2,39],[61,39],[32,10]];  // 5 generadores
+
+  // ── KILLER-ONLY WALLS (tile=4, red) — alternating pattern in long segments ──
+  // Pattern: ...,,... where , = red, . = normal. Every ~5 tiles: 3 normal, 2 red
+  // Left side mid vertical shortcuts
+  const redVSegs=[
+    {x:16,y1:17,y2:21},{x:16,y1:23,y2:27},
+    {x:48,y1:17,y2:21},{x:48,y1:23,y2:27},
+  ];
+  redVSegs.forEach(({x,y1,y2})=>{
+    for(let y=y1;y<=y2;y++) if(m[y][x]===0) m[y][x]=4;
+  });
+
+  // Alternating red tiles inside the long horizontal walls — break loop corridors
+  // For each long hwall row, embed red tiles every 5: positions +3,+4 of each group
+  const alternatRedH=[
+    // Top zone long corridors
+    {y:9, segments:[{x1:1,x2:13},{x1:51,x2:63}]},
+    {y:35,segments:[{x1:1,x2:13},{x1:51,x2:63}]},
+    // Mid corridors
+    {y:16,segments:[{x1:1,x2:18},{x1:46,x2:63}]},
+    {y:28,segments:[{x1:1,x2:18},{x1:46,x2:63}]},
+  ];
+  alternatRedH.forEach(({y,segments})=>{
+    segments.forEach(({x1,x2})=>{
+      let count=0;
+      for(let x=x1;x<=x2;x++){
+        count++;
+        // Pattern: 3 normal (wall=1), then 2 red (wall=4) per group of 5
+        const pos=count%5;
+        if((pos===4||pos===0)&&m[y][x]===1) m[y][x]=4;
+      }
+    });
+  });
+
+  // Alternating red in vertical walls
+  const alternatRedV=[
+    {x:13,segments:[{y1:9,y2:16}]},{x:51,segments:[{y1:9,y2:16}]},
+    {x:13,segments:[{y1:28,y2:35}]},{x:51,segments:[{y1:28,y2:35}]},
+  ];
+  alternatRedV.forEach(({x,segments})=>{
+    segments.forEach(({y1,y2})=>{
+      let count=0;
+      for(let y=y1;y<=y2;y++){
+        count++;
+        const pos=count%5;
+        if((pos===4||pos===0)&&m[y][x]===1) m[y][x]=4;
+      }
+    });
+  });
+
+  // ── GENERATORS (5) ──
+  const genSpots=[[2,4],[62,4],[2,39],[62,39],[32,8]];
   genSpots.forEach(([gx,gy])=>{ if(m[gy][gx]===0) m[gy][gx]=2; });
-  m[22][32]=3;
+
+  // ── EXIT — left border wall, center height ──
+  m[22][1]=3;   // exit is in the left border wall
+
   return m;
 }
 const BASE_MAP=buildMap();
 const GEN_SPAWNS=[],SPAWN_SPOTS=[];
-let EXIT_POS={x:32,y:22};
+let EXIT_POS={x:1,y:22};
 for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
   if(BASE_MAP[y][x]===2) GEN_SPAWNS.push({x,y});
   else if(BASE_MAP[y][x]===3) EXIT_POS={x,y};
@@ -1150,10 +1254,15 @@ const Inp={
 //  HELPERS
 // ══════════════════════════════════════════
 function dst(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
-function wallAt(x,y,r){
+// role: 'killer' | 'survivor' | undefined (both blocked)
+function wallAt(x,y,r,role){
   return[[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]].some(([px,py])=>{
     const tx=px/TILE|0,ty=py/TILE|0;
-    return tx<0||ty<0||tx>=MAP_W||ty>=MAP_H||BASE_MAP[ty][tx]===1;
+    if(tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) return true;
+    const t=BASE_MAP[ty][tx];
+    if(t===1) return true;                        // normal wall — blocks all
+    if(t===4&&role!=='killer') return true;       // red wall — only killer passes
+    return false;
   });
 }
 function pointInRotRect(px,py,cx,cy,hw,hh,ang){
@@ -1263,24 +1372,26 @@ const UI={
     if(S.isDeadSpec)return;
     const me=W.players[S.myId];if(!me)return;
 
-    // HP — shows overheal as grey segment when Slate Skin is active
+    // HP — grey during Slate Skin overheal, normal color when at/below base HP
     const realMax=me.maxHp;
     const totalMax=me.ssActive?(realMax+SS_OVERHEAL):realMax;
     const pctHp=Math.max(0,Math.min(me.hp,realMax)/realMax);
-    const hpCol=me.role==='killer'?'#e74c3c':pctHp>.5?'#2ecc71':pctHp>.25?'#f39c12':'#e74c3c';
+    const hasOverheal=me.ssActive&&me.hp>realMax;
+    // While overheal is active: bar is grey. Once overheal gone: normal green/yellow/red
+    const hpCol=me.role==='killer'?'#e74c3c':hasOverheal?'#8a8aaa':(pctHp>.5?'#2ecc71':pctHp>.25?'#f39c12':'#e74c3c');
     const hpFill=document.getElementById('hpBarFill');
     hpFill.style.cssText=`width:${Math.min(pctHp,1)*100}%;background:${hpCol}`;
-    // Overheal indicator — grey extension
+    // Overheal extension — slightly brighter grey on top
     const hpBg=hpFill.parentElement;
     let ovEl=document.getElementById('overhealFill');
-    if(me.ssActive&&me.hp>realMax){
+    if(hasOverheal){
       const ovPct=(me.hp-realMax)/SS_OVERHEAL;
       if(!ovEl){ovEl=document.createElement('div');ovEl.id='overhealFill';ovEl.style.cssText='position:absolute;top:0;left:0;height:100%;border-radius:7px;pointer-events:none;transition:width .1s,background .15s;';if(hpBg.style.position!=='relative')hpBg.style.position='relative';hpBg.appendChild(ovEl);}
       ovEl.style.width=`${Math.min(pctHp+ovPct*(SS_OVERHEAL/realMax),1)*100}%`;
-      ovEl.style.background='rgba(180,180,220,0.55)';
+      ovEl.style.background='rgba(160,160,200,0.6)';
       ovEl.style.display='block';
     } else if(ovEl){ovEl.style.display='none';}
-    document.getElementById('hpNum').textContent=me.ssActive&&me.hp>realMax?`${Math.ceil(me.hp)}/${realMax}+${Math.ceil(me.hp-realMax)}`:`${Math.ceil(me.hp)}/${realMax}`;
+    document.getElementById('hpNum').textContent=hasOverheal?`${Math.ceil(me.hp)}/${realMax}+${Math.ceil(me.hp-realMax)}`:`${Math.ceil(me.hp)}/${realMax}`;
     document.getElementById('bleedWrap').style.display=me.bleedTicks>0?'flex':'none';
 
     // Stamina — bar = % of max, number = actual/max
@@ -2414,10 +2525,12 @@ const Net={
       };
 
     } else if(d.t==='spectate'){
-      S.isDeadSpec=true;S.players=d.players;
+      S.isDeadSpec=true;S.players=d.players;S.lateJoin=true; // joined mid-game — no stats
       Game.initFromSerial(d.gs);
       Game.setupCanvas();
-      S.specTarget=Object.keys(W.players)[0]||null;
+      // Auto-pick spectate target — prefer alive survivors, then killer
+      const alive=Object.values(W.players).filter(p=>p.alive);
+      S.specTarget=(alive[0]||Object.values(W.players)[0]||{}).id||null;
       UI.show('s-game');
       document.getElementById('specOverlay').classList.add('active');
       document.getElementById('hudBottomBar').style.display='none';
@@ -2910,14 +3023,14 @@ const Game={
       const ang=p.beheadDashAng||p.facing;
       const ndx=Math.cos(ang),ndy=Math.sin(ang);
       const nx=p.x+ndx*spd,ny=p.y+ndy*spd;
-      if(!wallAt(nx,p.y,r))p.x=nx;
-      if(!wallAt(p.x,ny,r))p.y=ny;
+      if(!wallAt(nx,p.y,r,'killer'))p.x=nx;
+      if(!wallAt(p.x,ny,r,'killer'))p.y=ny;
       return;
     }
     spd=(isSprint?rw:bw)*dt*buff;
     const nx=p.x+dx*spd,ny=p.y+dy*spd;
-    if(!wallAt(nx,p.y,r))p.x=nx;
-    if(!wallAt(p.x,ny,r))p.y=ny;
+    if(!wallAt(nx,p.y,r,p.role))p.x=nx;
+    if(!wallAt(p.x,ny,r,p.role))p.y=ny;
   },
 
   tryM1(pid){
@@ -3076,6 +3189,7 @@ const Game={
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
     GameAudio.stopAll();
     const myRole=S.myRole;
+    if(!S.lateJoin){ // don't count stats for mid-game spectators
     if((winner==='killer'&&myRole==='killer')||(winner==='survivors'&&myRole==='survivor')){
       Stats.addWin(myRole);
     }
@@ -3083,15 +3197,13 @@ const Game={
     // ── Malicia ──
     const lmsLastId=lmsLastSurvivorId||(S.isHost?S.lmsLastSurvivorId||null:null);
     if(myRole==='killer'){
-      // El killer siempre queda con malicia 1 al terminar su ronda
       Stats.malicia=1;Stats.save();
       const sp=S.players.find(p=>p.id===S.myId);if(sp)sp.malicia=1;
     } else {
-      // Todos los supervivientes +1 al terminar la ronda (hayan ganado o no)
       Stats.addMalicia(1);
-      // +1 extra si eras el último superviviente en LMS y ganaste
       if(lmsLastId&&lmsLastId===S.myId&&winner==='survivors')Stats.addMalicia(1);
     }
+    } // end !lateJoin
 
     if(S.isHost)Net.broadcast({t:'over',winner,reason,lmsLastSurvivorId:S.lmsLastSurvivorId||null});
 
@@ -3140,7 +3252,7 @@ const Game={
     document.getElementById('killerWinOv').classList.remove('show');
     document.getElementById('killerWinOv').classList.remove('fading');
     KillerWin._stop();
-    S.lms=false;S.lmsTrackerT=0;S.lmsLastSurvivorId=null;
+    S.lms=false;S.lmsTrackerT=0;S.lmsLastSurvivorId=null;S.lateJoin=false;
     slashFX=[];
 
     // Reset lobby countdown
@@ -3274,10 +3386,17 @@ const Game={
         p.enraged=d.enraged||false;
       }
 
-      // Show death overlay for local player
+      // Auto-enter spectate after short death pause
       if(id===S.myId&&wasAlive&&!d.alive&&!d.escaped){
         const dov=document.getElementById('deathOv');
         dov.classList.add('show');
+        // Auto-spectate after 1.5s
+        setTimeout(()=>{
+          if(S.running&&!S.isDeadSpec){
+            dov.classList.remove('show');
+            Game.enterSpectate();
+          }
+        },1500);
       }
     });
     gs.gens.forEach(gd=>{const g=W.gens.find(x=>x.id===gd.id);if(g){g.on=gd.on;g.prog=gd.prog;}});
@@ -3308,53 +3427,84 @@ const Game={
         const seed=(tx*7+ty*13)%17;
         const seed2=(tx*3+ty*19)%11;
         if(t===1){
-          // Wall — thick asylum concrete, clearly distinguishable from floor
+          // Normal wall — thick asylum concrete
           const wallBase=seed<6?'#2e2e3e':seed<11?'#323248':'#28283a';
           ctx.fillStyle=wallBase;ctx.fillRect(px,py,TILE,TILE);
-          // Strong top-left highlight to give 3D "raised block" feel
-          ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(px,py,TILE,3); // top edge bright
-          ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,3,TILE); // left edge
-          // Strong bottom-right shadow
-          ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px,py+TILE-3,TILE,3); // bottom dark
-          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+TILE-3,py,3,TILE); // right dark
-          // Inner face (slightly different shade)
+          ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(px,py,TILE,3);
+          ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,3,TILE);
+          ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px,py+TILE-3,TILE,3);
+          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+TILE-3,py,3,TILE);
           ctx.fillStyle=seed2<4?'#222235':seed2<8?'#26263c':'#1e1e30';
           ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
-          // Concrete texture — horizontal grout line
           ctx.strokeStyle='rgba(0,0,0,.45)';ctx.lineWidth=1;
           ctx.beginPath();ctx.moveTo(px+3,py+TILE/2);ctx.lineTo(px+TILE-3,py+TILE/2);ctx.stroke();
-          // Crack detail on some walls
-          if(seed<4){
-            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;
-            ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();
-          }
-          // Mossy stain on some
+          if(seed<4){ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();}
           if(seed===3){ctx.fillStyle='rgba(30,60,25,.4)';ctx.fillRect(px+4,py+3,TILE-8,4);}
-          // Clear outer border — makes wall shape very readable
           ctx.strokeStyle='rgba(0,0,0,.95)';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
-          // Inner border accent
           ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=.8;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
+
+        } else if(t===4){
+          // ── KILLER-ONLY WALL (red) ──
+          const rPulse=(Math.sin(Date.now()*0.002+tx*0.5+ty*0.7)*0.12)+0.88;
+          ctx.fillStyle='#2a0505';ctx.fillRect(px,py,TILE,TILE);
+          // Red glow face
+          ctx.fillStyle=`rgba(140,10,10,${rPulse*0.85})`;ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+          // Inner darker center
+          ctx.fillStyle='rgba(80,0,0,0.7)';ctx.fillRect(px+5,py+5,TILE-10,TILE-10);
+          // Top highlight
+          ctx.fillStyle='rgba(255,80,80,.18)';ctx.fillRect(px,py,TILE,3);
+          ctx.fillStyle='rgba(255,60,60,.08)';ctx.fillRect(px,py,3,TILE);
+          // Skull symbol on some tiles
+          if((tx+ty)%5===0){
+            ctx.globalAlpha=0.35*rPulse;ctx.font=`${TILE*.55}px monospace`;
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.fillStyle='#ff2200';ctx.fillText('☠',px+TILE/2,py+TILE/2);
+            ctx.globalAlpha=1;
+          }
+          // Red border glow
+          ctx.strokeStyle=`rgba(200,20,20,${rPulse*0.9})`;ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          ctx.strokeStyle='rgba(255,80,80,.35)';ctx.lineWidth=1;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
+          // "KILLER ONLY" warning stripe on first tile of each segment
+          if(seed===0||seed===7){
+            ctx.globalAlpha=0.2;
+            ctx.fillStyle='#ff0000';
+            ctx.fillRect(px,py,TILE,4);ctx.fillRect(px,py+TILE-4,TILE,4);
+            ctx.globalAlpha=1;
+          }
+
         } else {
-          // Floor — lighter hospital tiles so contrast with walls is clear
+          // ── FLOOR — asylum tiles with varied ambiance ──
           const floorBase=seed<4?'#181828':seed<9?'#1a1a2c':'#161624';
           ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
-          // Tile grout lines — more visible
-          ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;
-          ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
-          // Subtle tile gloss
+          // Tile grout
+          ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+          // Subtle gloss
           if(seed2<4){ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
-          // Small inner highlight corner
           ctx.fillStyle='rgba(255,255,255,.018)';ctx.fillRect(px+2,py+2,TILE*.4,2);
-          // Blood stain on floor (rare)
+          // Blood stains (more varied)
           if(seed===5&&seed2===2){
-            ctx.save();ctx.globalAlpha=.22;
-            ctx.fillStyle='#8a0a0a';
-            ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,0.3,0,Math.PI*2);ctx.fill();
+            ctx.save();ctx.globalAlpha=.22;ctx.fillStyle='#8a0a0a';
+            ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,.3,0,Math.PI*2);ctx.fill();
             ctx.beginPath();ctx.ellipse(px+TILE*.6,py+TILE*.55,TILE*.12,TILE*.08,-.5,0,Math.PI*2);ctx.fill();
             ctx.restore();
           }
-          // Grime/dust spots
-          if(seed===8){ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(px+TILE*.6,py+TILE*.6,TILE*.3,TILE*.3);}
+          if(seed===11&&seed2===4){
+            ctx.save();ctx.globalAlpha=.14;ctx.fillStyle='#6a0505';
+            ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.35,TILE*.2,0,0,Math.PI*2);ctx.fill();
+            ctx.restore();
+          }
+          // Cracked tile lines (structural damage feel)
+          if(seed===8){
+            ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=.8;
+            ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.6,py+TILE*.5);ctx.lineTo(px+TILE*.8,py+TILE*.9);ctx.stroke();
+          }
+          // Grime/dust
+          if(seed2===7){ctx.fillStyle='rgba(0,0,0,.16)';ctx.fillRect(px+TILE*.55,py+TILE*.55,TILE*.38,TILE*.38);}
+          // Occasional drain mark
+          if((tx*3+ty*7)%31===0){
+            ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1;
+            ctx.strokeRect(px+TILE*.35,py+TILE*.35,TILE*.3,TILE*.3);
+          }
         }
       }
     }
@@ -3532,18 +3682,21 @@ const Game={
       }
     });
 
-    // Exit — puerta sellada del manicomio
+    // Exit — only visible/rendered when open (no locked icon on map)
     const ex=W.exit,epx=ex.x*TILE,epy=ex.y*TILE;
-    ctx.fillStyle=ex.open?'#001a06':'#1a0500';ctx.fillRect(epx+3,epy+3,TILE-6,TILE-6);
-    ctx.strokeStyle=ex.open?'#00ff44':'#550000';ctx.lineWidth=2.5;ctx.strokeRect(epx+3,epy+3,TILE-6,TILE-6);
-    // Door frame detail
-    ctx.strokeStyle=ex.open?'rgba(0,255,68,.25)':'rgba(85,0,0,.4)';ctx.lineWidth=1;ctx.strokeRect(epx+5,epy+5,TILE-10,TILE-10);
-    if(ex.open){ctx.shadowColor='#00ff44';ctx.shadowBlur=18;}
-    ctx.fillStyle=ex.open?'#00ff44':'#880000';ctx.font=`${TILE*.48}px monospace`;
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(ex.open?'🚪':'🔒',epx+TILE/2,epy+TILE/2);
     if(ex.open){
-      ctx.font=`7px 'Share Tech Mono',monospace`;ctx.fillStyle='rgba(0,255,68,.7)';
-      ctx.fillText('SALIDA',epx+TILE/2,epy+TILE-4);
+      ctx.shadowColor='#00ff44';ctx.shadowBlur=22;
+      ctx.fillStyle='#001a06';ctx.fillRect(epx+1,epy+1,TILE-2,TILE-2);
+      ctx.strokeStyle='#00ff44';ctx.lineWidth=2.5;ctx.strokeRect(epx+1,epy+1,TILE-2,TILE-2);
+      ctx.font=`${TILE*.52}px monospace`;ctx.fillStyle='#00ff44';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🚪',epx+TILE/2,epy+TILE/2);
+      ctx.font=`7px 'Share Tech Mono',monospace`;ctx.fillStyle='rgba(0,255,68,.85)';
+      ctx.fillText('SALIDA',epx+TILE/2,epy+TILE-3);
+      ctx.shadowBlur=0;
+      // Pulsing ring
+      const pulse=0.6+Math.sin(Date.now()*0.004)*0.4;
+      ctx.strokeStyle=`rgba(0,255,68,${pulse*0.4})`;ctx.lineWidth=3;
+      ctx.beginPath();ctx.arc(epx+TILE/2,epy+TILE/2,TILE*0.7,0,Math.PI*2);ctx.stroke();
     }
     ctx.shadowBlur=0;
 
@@ -3785,13 +3938,22 @@ const Game={
         ctx.fillText(isMe?'▶ TÚ':(p.username||p.name||'?').slice(0,12),p.x,p.y-r-14);
         ctx.restore();
       }
-      // HP bar
+      // HP bar above player head
       if(!dead&&p.maxHp>0){
         const bw=TILE*.9,bh=5,bx=p.x-bw/2,by=p.y-r-10;
-        const pct=p.hp/p.maxHp;
+        const baseHp=Math.min(p.hp,p.maxHp);
+        const pct=baseHp/p.maxHp;
+        const hasOv=p.ssActive&&p.hp>p.maxHp;
         ctx.fillStyle='#10101e';ctx.fillRect(bx,by,bw,bh);
-        ctx.fillStyle=p.role==='killer'?'#c0392b':pct>.5?'#2ecc71':pct>.25?'#f39c12':'#e74c3c';
-        ctx.fillRect(bx,by,bw*pct,bh);
+        // Base HP bar — grey if overheal active, normal color otherwise
+        const barCol=p.role==='killer'?'#c0392b':hasOv?'#8a8aaa':(pct>.5?'#2ecc71':pct>.25?'#f39c12':'#e74c3c');
+        ctx.fillStyle=barCol;ctx.fillRect(bx,by,bw*pct,bh);
+        // Overheal extension (lighter grey)
+        if(hasOv){
+          const ovPct=Math.min((p.hp-p.maxHp)/SS_OVERHEAL,1);
+          ctx.fillStyle='rgba(160,160,200,0.65)';
+          ctx.fillRect(bx+bw*pct,by,bw*ovPct*(p.maxHp/p.maxHp)*0.3,bh); // small extension cap
+        }
         ctx.strokeStyle='#22223a';ctx.lineWidth=.5;ctx.strokeRect(bx,by,bw,bh);
         if(p.bleedTicks>0&&p.role==='survivor'){
           ctx.fillStyle='rgba(192,57,43,.4)';ctx.fillRect(bx,by,bw,bh);
