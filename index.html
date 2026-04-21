@@ -1096,53 +1096,16 @@ function buildMap(){
     }
   });
 
-  // ── KILLER-ONLY WALLS (tile=4, red) — alternating pattern in long segments ──
-  // Pattern: ...,,... where , = red, . = normal. Every ~5 tiles: 3 normal, 2 red
-  // Left side mid vertical shortcuts
-  const redVSegs=[
-    {x:16,y1:17,y2:21},{x:16,y1:23,y2:27},
-    {x:48,y1:17,y2:21},{x:48,y1:23,y2:27},
+  // ── KILLER-ONLY WALLS (tile=4, red) — strategic shortcuts only ──
+  // Only 2 pairs of vertical shortcuts on left and right flanks — minimal but impactful
+  const redSegs=[
+    {x:16,y1:18,y2:20},  // left flank top shortcut (3 tiles)
+    {x:16,y1:24,y2:26},  // left flank bottom shortcut
+    {x:48,y1:18,y2:20},  // right flank top shortcut
+    {x:48,y1:24,y2:26},  // right flank bottom shortcut
   ];
-  redVSegs.forEach(({x,y1,y2})=>{
+  redSegs.forEach(({x,y1,y2})=>{
     for(let y=y1;y<=y2;y++) if(m[y][x]===0) m[y][x]=4;
-  });
-
-  // Alternating red tiles inside the long horizontal walls — break loop corridors
-  // For each long hwall row, embed red tiles every 5: positions +3,+4 of each group
-  const alternatRedH=[
-    // Top zone long corridors
-    {y:9, segments:[{x1:1,x2:13},{x1:51,x2:63}]},
-    {y:35,segments:[{x1:1,x2:13},{x1:51,x2:63}]},
-    // Mid corridors
-    {y:16,segments:[{x1:1,x2:18},{x1:46,x2:63}]},
-    {y:28,segments:[{x1:1,x2:18},{x1:46,x2:63}]},
-  ];
-  alternatRedH.forEach(({y,segments})=>{
-    segments.forEach(({x1,x2})=>{
-      let count=0;
-      for(let x=x1;x<=x2;x++){
-        count++;
-        // Pattern: 3 normal (wall=1), then 2 red (wall=4) per group of 5
-        const pos=count%5;
-        if((pos===4||pos===0)&&m[y][x]===1) m[y][x]=4;
-      }
-    });
-  });
-
-  // Alternating red in vertical walls
-  const alternatRedV=[
-    {x:13,segments:[{y1:9,y2:16}]},{x:51,segments:[{y1:9,y2:16}]},
-    {x:13,segments:[{y1:28,y2:35}]},{x:51,segments:[{y1:28,y2:35}]},
-  ];
-  alternatRedV.forEach(({x,segments})=>{
-    segments.forEach(({y1,y2})=>{
-      let count=0;
-      for(let y=y1;y<=y2;y++){
-        count++;
-        const pos=count%5;
-        if((pos===4||pos===0)&&m[y][x]===1) m[y][x]=4;
-      }
-    });
   });
 
   // ── GENERATORS (5) ──
@@ -2972,6 +2935,14 @@ const Game={
       Game.render(me);
       UI.updateHUD();
       if(!S.isDeadSpec)UI.showPrompts();
+
+      // Chase audio — update every tick for survivor (or spectator watching a survivor)
+      if(!S.isDeadSpec&&me&&me.role==='survivor'&&me.alive){
+        const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
+        if(killer) GameAudio.updateChase(Math.hypot(me.x-killer.x,me.y-killer.y));
+        else GameAudio.updateChase(99999);
+      }
+
       S.raf=requestAnimationFrame(tick);
     };
     S.raf=requestAnimationFrame(tick);
@@ -3427,21 +3398,29 @@ const Game={
         const seed=(tx*7+ty*13)%17;
         const seed2=(tx*3+ty*19)%11;
         if(t===1){
-          // Normal wall — thick asylum concrete
-          const wallBase=seed<6?'#2e2e3e':seed<11?'#323248':'#28283a';
+          // Normal wall — dark slate concrete, clearly different from floor
+          const wallBase=seed<6?'#1c1c2a':seed<11?'#20202e':'#181826';
           ctx.fillStyle=wallBase;ctx.fillRect(px,py,TILE,TILE);
-          ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(px,py,TILE,3);
-          ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,3,TILE);
-          ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px,py+TILE-3,TILE,3);
-          ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+TILE-3,py,3,TILE);
-          ctx.fillStyle=seed2<4?'#222235':seed2<8?'#26263c':'#1e1e30';
-          ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
-          ctx.strokeStyle='rgba(0,0,0,.45)';ctx.lineWidth=1;
-          ctx.beginPath();ctx.moveTo(px+3,py+TILE/2);ctx.lineTo(px+TILE-3,py+TILE/2);ctx.stroke();
-          if(seed<4){ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();}
-          if(seed===3){ctx.fillStyle='rgba(30,60,25,.4)';ctx.fillRect(px+4,py+3,TILE-8,4);}
-          ctx.strokeStyle='rgba(0,0,0,.95)';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
-          ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=.8;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
+          // Stronger top-left highlight for 3D block feel
+          ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(px,py,TILE,4);
+          ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(px,py,4,TILE);
+          // Stronger bottom-right shadow
+          ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(px,py+TILE-4,TILE,4);
+          ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(px+TILE-4,py,4,TILE);
+          // Inner face — noticeably darker
+          ctx.fillStyle=seed2<4?'#111120':seed2<8?'#14142a':'#0e0e1e';
+          ctx.fillRect(px+4,py+4,TILE-8,TILE-8);
+          // Concrete horizontal grout line
+          ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(px+4,py+TILE/2);ctx.lineTo(px+TILE-4,py+TILE/2);ctx.stroke();
+          // Crack detail
+          if(seed<4){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();}
+          // Moss stain
+          if(seed===3){ctx.fillStyle='rgba(25,50,20,.5)';ctx.fillRect(px+4,py+3,TILE-8,4);}
+          // Bold black outer border — very clear edge
+          ctx.strokeStyle='rgba(0,0,0,1)';ctx.lineWidth=2.5;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          // Subtle inner shimmer
+          ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
 
         } else if(t===4){
           // ── KILLER-ONLY WALL (red) ──
@@ -3473,37 +3452,37 @@ const Game={
           }
 
         } else {
-          // ── FLOOR — asylum tiles with varied ambiance ──
-          const floorBase=seed<4?'#181828':seed<9?'#1a1a2c':'#161624';
+          // ── FLOOR — warm stone tiles, clearly lighter than walls ──
+          const floorBase=seed<4?'#2a2838':seed<9?'#2c2a3c':'#262434';
           ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
-          // Tile grout
-          ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
-          // Subtle gloss
-          if(seed2<4){ctx.fillStyle='rgba(255,255,255,.025)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
-          ctx.fillStyle='rgba(255,255,255,.018)';ctx.fillRect(px+2,py+2,TILE*.4,2);
-          // Blood stains (more varied)
+          // Tile grout lines — visible dark lines between tiles
+          ctx.strokeStyle='rgba(0,0,0,.55)';ctx.lineWidth=1.2;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+          // Warm gloss on some tiles (aged stone sheen)
+          if(seed2<5){ctx.fillStyle='rgba(255,240,200,.03)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
+          // Corner highlight — gives tile a slight 3D inset feel
+          ctx.fillStyle='rgba(255,255,255,.022)';ctx.fillRect(px+2,py+2,TILE*.45,2);
+          ctx.fillStyle='rgba(255,255,255,.012)';ctx.fillRect(px+2,py+2,2,TILE*.45);
+          // Blood stains
           if(seed===5&&seed2===2){
-            ctx.save();ctx.globalAlpha=.22;ctx.fillStyle='#8a0a0a';
+            ctx.save();ctx.globalAlpha=.25;ctx.fillStyle='#8a0a0a';
             ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,.3,0,Math.PI*2);ctx.fill();
-            ctx.beginPath();ctx.ellipse(px+TILE*.6,py+TILE*.55,TILE*.12,TILE*.08,-.5,0,Math.PI*2);ctx.fill();
+            ctx.beginPath();ctx.ellipse(px+TILE*.62,py+TILE*.55,TILE*.11,TILE*.07,-.5,0,Math.PI*2);ctx.fill();
             ctx.restore();
           }
           if(seed===11&&seed2===4){
-            ctx.save();ctx.globalAlpha=.14;ctx.fillStyle='#6a0505';
-            ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.35,TILE*.2,0,0,Math.PI*2);ctx.fill();
+            ctx.save();ctx.globalAlpha=.15;ctx.fillStyle='#6a0505';
+            ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.32,TILE*.18,0,0,Math.PI*2);ctx.fill();
             ctx.restore();
           }
-          // Cracked tile lines (structural damage feel)
+          // Cracked tile
           if(seed===8){
-            ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=.8;
-            ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.6,py+TILE*.5);ctx.lineTo(px+TILE*.8,py+TILE*.9);ctx.stroke();
+            ctx.strokeStyle='rgba(0,0,0,.32)';ctx.lineWidth=.9;
+            ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.55,py+TILE*.5);ctx.lineTo(px+TILE*.8,py+TILE*.85);ctx.stroke();
           }
-          // Grime/dust
-          if(seed2===7){ctx.fillStyle='rgba(0,0,0,.16)';ctx.fillRect(px+TILE*.55,py+TILE*.55,TILE*.38,TILE*.38);}
-          // Occasional drain mark
-          if((tx*3+ty*7)%31===0){
-            ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1;
-            ctx.strokeRect(px+TILE*.35,py+TILE*.35,TILE*.3,TILE*.3);
+          // Drain/vent mark
+          if((tx*3+ty*7)%29===0){
+            ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=1;
+            ctx.strokeRect(px+TILE*.32,py+TILE*.32,TILE*.36,TILE*.36);
           }
         }
       }
@@ -4217,24 +4196,143 @@ const KillerReveal={
 //  AUDIO
 // ══════════════════════════════════════════
 const GameAudio={
-  _cur:null,
-  _play(src,loop=true,vol=0.55){
-    this.stopAll();
+  // ── Tracks ──
+  // lobby.mp3                    — raíz
+  // mapas/ronda.mp3              — música de mapa
+  // lms/soul.mp3                 — último superviviente
+  // slasher/layer1.mp3           — chase layer 1 (lejos)
+  // slasher/layer2.mp3           — chase layer 2 (cerca)
+  // slasher/layer3.mp3           — chase layer 3 (muy cerca)
+  // slasher/chase theme.mp3      — chase theme (cuando llega a layer3, no para hasta salir de layer1)
+
+  // ── Distancias en píxeles (mundo) ──
+  DIST_L1: TILE * 18,   // empieza layer 1
+  DIST_L2: TILE * 11,   // sube a layer 2
+  DIST_L3: TILE * 6,    // sube a layer 3
+  DIST_CT: TILE * 4,    // activa chase theme
+
+  // ── Estado ──
+  _lobby: null,
+  _map:   null,
+  _lms:   null,
+  _l1:    null, _l2: null, _l3: null, _ct: null,
+  _chaseActive: false,   // chase theme está sonando
+  _currentLayer: 0,      // 0=mapa, 1, 2, 3, 4=chase
+  _mode: 'none',         // 'lobby' | 'map' | 'lms'
+
+  _mkAudio(src, loop=true, vol=0.5){
     try{
       const a=new Audio(src);
-      a.loop=loop;a.volume=vol;
-      a.play().catch(()=>{});
-      this._cur=a;
-    }catch(e){}
+      a.loop=loop; a.volume=vol;
+      return a;
+    }catch(e){ return null; }
   },
-  playLobby(){this._play('lobby.mp3',true,0.45);},
-  playRound(){this._play('ronda.mp3',true,0.55);},
-  playLMS(){this._play('soul.mp3',true,0.60);},
-  stopAll(){
-    if(this._cur){
-      try{this._cur.pause();this._cur.currentTime=0;}catch(e){}
-      this._cur=null;
+
+  _fadeIn(a, targetVol, ms=400){
+    if(!a) return;
+    a.volume=0;
+    a.play().catch(()=>{});
+    const step=targetVol/(ms/50);
+    const iv=setInterval(()=>{
+      if(!a) return clearInterval(iv);
+      a.volume=Math.min(targetVol, a.volume+step);
+      if(a.volume>=targetVol) clearInterval(iv);
+    },50);
+  },
+
+  _fadeOut(a, ms=400, cb){
+    if(!a){ if(cb)cb(); return; }
+    const startVol=a.volume;
+    const step=startVol/(ms/50);
+    const iv=setInterval(()=>{
+      if(!a) return clearInterval(iv);
+      a.volume=Math.max(0, a.volume-step);
+      if(a.volume<=0){ clearInterval(iv); try{a.pause();a.currentTime=0;}catch(e){} if(cb)cb(); }
+    },50);
+  },
+
+  playLobby(){
+    this.stopAll();
+    this._mode='lobby';
+    this._lobby=this._mkAudio('lobby.mp3',true,0.45);
+    this._fadeIn(this._lobby,0.45,600);
+  },
+
+  playRound(){
+    this.stopAll();
+    this._mode='map';
+    this._map=this._mkAudio('mapas/ronda.mp3',true,0.50);
+    this._fadeIn(this._map,0.50,800);
+    // Pre-load chase layers silently
+    this._l1=this._mkAudio('slasher/layer1.mp3',true,0);
+    this._l2=this._mkAudio('slasher/layer2.mp3',true,0);
+    this._l3=this._mkAudio('slasher/layer3.mp3',true,0);
+    this._ct=this._mkAudio('slasher/chase theme.mp3',true,0);
+    [this._l1,this._l2,this._l3,this._ct].forEach(a=>{
+      if(a){ a.play().catch(()=>{}); } // start paused-silent so they're in sync
+    });
+    this._chaseActive=false;
+    this._currentLayer=0;
+  },
+
+  playLMS(){
+    this.stopAll();
+    this._mode='lms';
+    this._lms=this._mkAudio('lms/soul.mp3',true,0.60);
+    this._fadeIn(this._lms,0.60,600);
+  },
+
+  // Called every game tick from mainLoop with survivor's distance to killer (px)
+  updateChase(distPx){
+    if(this._mode!=='map') return;
+
+    const wasChase=this._chaseActive;
+    const d=distPx;
+
+    // Determine target layer
+    let targetLayer=0; // map music
+    if(d<=this.DIST_CT)       targetLayer=4; // chase theme
+    else if(d<=this.DIST_L3)  targetLayer=3;
+    else if(d<=this.DIST_L2)  targetLayer=2;
+    else if(d<=this.DIST_L1)  targetLayer=1;
+
+    // Chase theme latch: once activated, don't stop until outside DIST_L1
+    if(this._chaseActive){
+      if(d>this.DIST_L1){
+        // Far enough — exit chase theme
+        this._chaseActive=false;
+        targetLayer= d<=this.DIST_L3?3 : d<=this.DIST_L2?2 : d<=this.DIST_L1?1 : 0;
+      } else {
+        // Still inside L1 range — chase theme stays at minimum
+        targetLayer=Math.max(targetLayer,4);
+      }
     }
+    if(targetLayer===4) this._chaseActive=true;
+
+    if(targetLayer===this._currentLayer) return; // no change
+    this._currentLayer=targetLayer;
+
+    const vols={map:0, l1:0, l2:0, l3:0, ct:0};
+    if(targetLayer===0) vols.map=0.50;
+    else if(targetLayer===1){ vols.l1=0.40; }
+    else if(targetLayer===2){ vols.l1=0.25; vols.l2=0.45; }
+    else if(targetLayer===3){ vols.l2=0.20; vols.l3=0.50; }
+    else { vols.l3=0.15; vols.ct=0.60; }
+
+    const ramp=(a,v)=>{ if(!a) return; const step=Math.abs(v-a.volume)/8; const iv=setInterval(()=>{ if(!a)return clearInterval(iv); if(v>a.volume) a.volume=Math.min(v,a.volume+step); else a.volume=Math.max(v,a.volume-step); if(Math.abs(a.volume-v)<0.01){a.volume=v;clearInterval(iv);} },50); };
+    ramp(this._map, vols.map);
+    ramp(this._l1,  vols.l1);
+    ramp(this._l2,  vols.l2);
+    ramp(this._l3,  vols.l3);
+    ramp(this._ct,  vols.ct);
+  },
+
+  stopAll(){
+    [this._lobby,this._map,this._lms,this._l1,this._l2,this._l3,this._ct].forEach(a=>{
+      if(a){ try{a.pause();a.currentTime=0;}catch(e){} }
+    });
+    this._lobby=this._map=this._lms=this._l1=this._l2=this._l3=this._ct=null;
+    this._chaseActive=false; this._currentLayer=0; this._mode='none';
   },
 };
 
