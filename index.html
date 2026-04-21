@@ -273,7 +273,9 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .ability-cd-overlay{position:absolute;inset:0;border-radius:6px;background:rgba(0,0,0,.72);transform-origin:top center;pointer-events:none;}
 .ability-icon-emoji{font-size:2.8rem;z-index:1;position:relative;}
 .ability-cd-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:1.55rem;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9);z-index:2;pointer-events:none;}
-.ability-key{font-size:.55rem;letter-spacing:.18em;color:rgba(255,255,255,.4);background:rgba(0,0,0,.5);padding:2px 7px;border-radius:2px;border:1px solid rgba(255,255,255,.1);}
+@keyframes enrageGlow{0%,100%{box-shadow:0 0 10px rgba(255,80,0,.6),0 0 25px rgba(255,0,0,.3);}50%{box-shadow:0 0 20px rgba(255,80,0,.9),0 0 50px rgba(255,0,0,.5);}}
+.ability-icon-wrap.enraged-active{border-color:#ff5500!important;animation:enrageGlow 0.7s infinite;}
+
 .ability-name{font-size:.55rem;letter-spacing:.1em;color:rgba(255,255,255,.55);}
 #hudVitalsRight{min-width:190px;}
 
@@ -717,8 +719,16 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           </div>
           <div class="ability-key">E (sin gen)</div>
         </div>
+        <div class="ability-slot" id="abilityEnrageSlot" style="display:none">
+          <div class="ability-name" id="enrageName">ENRAGED</div>
+          <div class="ability-icon-wrap" id="abilityEnrageWrap">
+            <div class="ability-cd-overlay" id="abilityEnrageOverlay"></div>
+            <div class="ability-icon-emoji" id="enrageEmoji">😡</div>
+            <div class="ability-cd-num" id="abilityEnrageNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">R</div>
+        </div>
       </div>
-      <div id="hudVitalsRight"></div>
     </div>
   </div>
 
@@ -985,17 +995,25 @@ const SS_SPEED_I = 1.15;        // Speed I si se cancela manualmente (+15%)
 const SS_SPEED_DUR = 2;         // duración del bonus de velocidad post-efecto
 // ── Habilidad Q del Killer: BEHEAD ──
 const Q_CD = 18;           // cooldown en segundos
-const Q_CD_ENRAGED = 18;   // [ENRAGED] stub — sin cambio aún
+const Q_CD_ENRAGED = 12;   // [ENRAGED] cooldown reducido
 const Q_DASH_DUR = 0.2;
 const Q_DASH_MULT = 2.0;
 const Q_DMG = 20;
-const Q_DMG_ENRAGED = 20;  // [ENRAGED] stub
+const Q_DMG_ENRAGED = 35;  // [ENRAGED] daño aumentado
 const Q_HB_SIZE = HB_W*0.85/0.75;  // Behead hitbox −15% from original (HB_W already has ×0.75 applied)
 const Q_HELPLESS_DUR = 4;
 
 // ── Habilidad M1 del Killer: TAJO ──
-const M1_CD_ENRAGED = M1_CD * 0.8; // [ENRAGED] stub — CD reducido 20%
-const M1_DMG_ENRAGED = M1_DMG;     // [ENRAGED] stub
+const M1_CD_ENRAGED = 0.8; // [ENRAGED] cooldown absoluto
+const M1_DMG_ENRAGED = 25; // [ENRAGED] daño aumentado
+
+// ── Habilidad R del Killer: ENRAGED ──
+const ENRAGE_CD = 30;          // cooldown en segundos
+const ENRAGE_DUR = 14;         // duración del estado
+const ENRAGE_SPEED = 110;      // velocidad plana durante ENRAGED (px/s, ~19 studs/s)
+const ENRAGE_STAM_CAP = 70;    // stamina máxima al final del cap
+const ENRAGE_STAM_CAP_DUR = 6.5; // tiempo para alcanzar el cap
+const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar ENRAGED
 
 // ── Habilidad E del Killer: COMBO (2 tajos + motosierra) ──
 const COMBO_CD = 32;          // cooldown normal
@@ -1129,6 +1147,24 @@ const SPAWN_DEFS=[
   {x:20,y:6},{x:44,y:6},{x:4,y:16},{x:59,y:16},
 ];
 
+// Returns a safe spawn position (tile coords) that isn't inside a wall
+function safeTileSpawn(tx,ty){
+  const r=TILE*.28;
+  const px=tx*TILE+TILE/2,py=ty*TILE+TILE/2;
+  if(!wallAt(px,py,r))return{x:tx,y:ty};
+  // Search nearby open tiles in expanding rings
+  for(let ring=1;ring<=4;ring++){
+    for(let dy=-ring;dy<=ring;dy++)for(let dx=-ring;dx<=ring;dx++){
+      if(Math.abs(dx)!==ring&&Math.abs(dy)!==ring)continue;
+      const nx=tx+dx,ny=ty+dy;
+      if(nx<1||ny<1||nx>=MAP_W-1||ny>=MAP_H-1)continue;
+      const npx=nx*TILE+TILE/2,npy=ny*TILE+TILE/2;
+      if(!wallAt(npx,npy,r))return{x:nx,y:ny};
+    }
+  }
+  return{x:tx,y:ty}; // fallback
+}
+
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
@@ -1163,8 +1199,8 @@ let slashFX=[];
 //  INPUT
 // ══════════════════════════════════════════
 const Inp={
-  k:{},e:false,ep:false,sh:false,m1:false,m1p:false,q:false,qp:false,facing:0,
-  clear(){this.k={};this.e=false;this.ep=false;this.sh=false;this.m1=false;this.m1p=false;this.q=false;this.qp=false;},
+  k:{},e:false,ep:false,sh:false,m1:false,m1p:false,q:false,qp:false,r:false,rp:false,facing:0,
+  clear(){this.k={};this.e=false;this.ep=false;this.sh=false;this.m1=false;this.m1p=false;this.q=false;this.qp=false;this.r=false;this.rp=false;},
   init(){
     document.addEventListener('keydown',ev=>{
       if(ev.target.tagName==='INPUT'||ev.target.tagName==='TEXTAREA')return;
@@ -1172,6 +1208,7 @@ const Inp={
       this.k[k]=true;
       if(k==='e')this.e=true;
       if(k==='q')this.q=true;
+      if(k==='r')this.r=true;
       if(k==='shift')this.sh=true;
       if(['arrowup','arrowdown','arrowleft','arrowright','e',' '].includes(k))ev.preventDefault();
     });
@@ -1181,6 +1218,7 @@ const Inp={
       this.k[k]=false;
       if(k==='e')this.e=false;
       if(k==='q')this.q=false;
+      if(k==='r')this.r=false;
       if(k==='shift')this.sh=false;
     });
     document.addEventListener('mousemove',ev=>{
@@ -1375,6 +1413,27 @@ const UI={
       const comboSlot=document.getElementById('abilityComboSlot');if(comboSlot)comboSlot.style.display='flex';
       const ssSlotK=document.getElementById('abilitySSSlot');if(ssSlotK)ssSlotK.style.display='none';
       const bSlotK=document.getElementById('abilityBloxySlot');if(bSlotK)bSlotK.style.display='none';
+      // ENRAGED (R)
+      const enrageSlot=document.getElementById('abilityEnrageSlot');
+      if(enrageSlot)enrageSlot.style.display='flex';
+      const erCd=me.enrageCd||0;
+      const erActive=me.enraged||false;
+      const erCdMax=ENRAGE_CD;
+      const erPct=erCd>0&&!erActive?erCd/erCdMax:0;
+      const erOverlay=document.getElementById('abilityEnrageOverlay');
+      if(erOverlay)erOverlay.style.transform=`scaleY(${erPct})`;
+      const erWrap=document.getElementById('abilityEnrageWrap');
+      if(erWrap)erWrap.className='ability-icon-wrap'+(erActive?' enraged-active':erPct>0?' on-cd':' ready');
+      const erNum=document.getElementById('abilityEnrageNum');
+      const erEmoji=document.getElementById('enrageEmoji');
+      if(erNum){
+        erNum.style.display=(erPct>0||erActive)?'flex':'none';
+        if(erActive)erNum.textContent=me.enrageTimer?me.enrageTimer.toFixed(1):'';
+        else if(erPct>0)erNum.textContent=Math.ceil(erCd)+'s';
+      }
+      if(erEmoji)erEmoji.textContent=erActive?'🔥':'😡';
+      const erLabel=document.getElementById('enrageName');
+      if(erLabel)erLabel.textContent=erActive?'🔥 ENRAGED':'ENRAGED';
       const cdPct=me.m1Cd>0?me.m1Cd/M1_CD:0;
       document.getElementById('abilityM1Overlay').style.transform=`scaleY(${cdPct})`;
       document.getElementById('abilityM1Wrap').className='ability-icon-wrap'+(cdPct>0?' on-cd':' ready');
@@ -1411,6 +1470,7 @@ const UI={
       m1Slot.style.display='none';
       beheadSlot.style.display='none';
       const comboSlotS=document.getElementById('abilityComboSlot');if(comboSlotS)comboSlotS.style.display='none';
+      const enrageSlotS=document.getElementById('abilityEnrageSlot');if(enrageSlotS)enrageSlotS.style.display='none';
       // ── Bloxy Cola (Q) ──
       const bloxySlot=document.getElementById('abilityBloxySlot');
       if(bloxySlot)bloxySlot.style.display='flex';
@@ -2429,6 +2489,8 @@ const Net={
         p.ePrev=d.e;
         if(d.q&&!p.qPrev)Game.doQ(d.pid);
         p.qPrev=d.q;
+        if(d.r&&!p.rPrev)Game.doEnrage(d.pid);
+        p.rPrev=d.r;
       }
 
     } else if(d.t==='lobbyPos'){
@@ -2550,16 +2612,27 @@ const Net={
 function fireM1(killerPid){
   const k=W.players[killerPid];
   if(!k||!k.alive||k.role!=='killer'||k.m1Cd>0)return;
-  k.m1Cd=M1_CD;
+  const enraged=k.enraged||false;
+  k.m1Cd=enraged?M1_CD_ENRAGED:M1_CD;
+  // ENRAGED lunge: push killer forward before slashes
+  if(enraged){
+    const lungeDist=TILE*1.8;
+    const lax=Math.cos(k.facing)*lungeDist,lay=Math.sin(k.facing)*lungeDist;
+    const r=TILE*.28;
+    if(!wallAt(k.x+lax,k.y,r,'killer'))k.x+=lax;
+    if(!wallAt(k.x,k.y+lay,r,'killer'))k.y+=lay;
+  }
+  const dmg=enraged?M1_DMG_ENRAGED:M1_DMG;
   for(let i=0;i<M1_SLASHES;i++){
     setTimeout(()=>{
       if(!S.running)return;
       const fk=W.players[killerPid];if(!fk||!fk.alive)return;
-      doSlashHit(killerPid,fk.facing,i);
+      doSlashHit(killerPid,fk.facing,i,dmg);
     },i*M1_DELAY*1000);
   }
 }
-function doSlashHit(killerPid,ang,slashIdx){
+function doSlashHit(killerPid,ang,slashIdx,dmg){
+  dmg=dmg||M1_DMG;
   const k=W.players[killerPid];if(!k||!k.alive)return;
   const cx=k.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
   const cy=k.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
@@ -2571,7 +2644,7 @@ function doSlashHit(killerPid,ang,slashIdx){
     if(k.m1HitSet.has(s.id))return;
     if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)){
       k.m1HitSet.add(s.id);
-      s.hp=s.hp-M1_DMG;
+      s.hp=s.hp-dmg;
       if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
         if(S.isHost){W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
       }
@@ -2596,10 +2669,21 @@ const Game={
     const killerPick=topPlayers[Math.floor(Math.random()*topPlayers.length)];
     const killerIdx=plist.indexOf(killerPick);
     const roles={},spawns={};
-    const shuffledSpawns=[...SPAWN_DEFS].sort(()=>Math.random()-.5);
+    // Killer spawns in center area; survivors spread to corners/edges
+    const killerSpawnPool=[{x:32,y:22},{x:30,y:20},{x:34,y:24},{x:28,y:22},{x:36,y:22}];
+    const survivorSpawnPool=[...SPAWN_DEFS].sort(()=>Math.random()-.5);
+    let survIdx=0;
     plist.forEach((p,i)=>{
       roles[p.id]=i===killerIdx?'killer':'survivor';
-      spawns[p.id]=shuffledSpawns[i%shuffledSpawns.length];
+      if(i===killerIdx){
+        // Pick first safe killer spawn
+        let ksp=killerSpawnPool[0];
+        for(const sp of killerSpawnPool){const safe=safeTileSpawn(sp.x,sp.y);if(safe){ksp=safe;break;}}
+        spawns[p.id]=ksp;
+      } else {
+        const raw=survivorSpawnPool[survIdx%survivorSpawnPool.length];survIdx++;
+        spawns[p.id]=safeTileSpawn(raw.x,raw.y);
+      }
     });
     S.myRole=roles[S.myId];
     const d={roles,spawns,players:S.players};
@@ -2661,7 +2745,7 @@ const Game={
       const maxSt=role==='killer'?KSMAX:SMAX;
       W.players[p.id]={
         id:p.id,name:p.name,username:p.username||p.name,role,alive:true,escaped:false,
-        x:sp.x*TILE,y:sp.y*TILE,
+        x:sp.x*TILE+TILE/2,y:sp.y*TILE+TILE/2,
         hp:role==='killer'?KHP:SHP,maxHp:role==='killer'?KHP:SHP,
         stamina:maxSt,maxStamina:maxSt,sprinting:false,staminaCd:0,
         interacting:false,interactTarget:null,
@@ -2671,6 +2755,7 @@ const Game={
         bleedTicks:0,bleedTimer:0,
         bloxyCd:0,bloxyActive:false,bloxyTimer:0,speedBuff:1,
         color:p.color||PCOLORS[i%PCOLORS.length],
+        enrageCd:0,enraged:false,enrageTimer:0,enrageAuraTarget:null,enrageAuraLinger:0,enrageStamCapTimer:0,rPrev:false,
       };
     });
   },
@@ -2761,6 +2846,8 @@ const Game={
         Inp.ep=Inp.e;
         if(Inp.q&&!Inp.qp)Game.doQ(S.myId);
         Inp.qp=Inp.q;
+        if(Inp.r&&!Inp.rp)Game.doEnrage(S.myId);
+        Inp.rp=Inp.r;
 
         // Tick bloxy timers for all players
         Object.values(W.players).forEach(p=>{
@@ -2850,11 +2937,12 @@ const Game={
               const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
               slashFX.push({x:cx,y:cy,ang,hw:Q_HB_SIZE/2,hh:Q_HB_SIZE/2,life:.28,maxLife:.28,idx:0,behead:true});
               let hitSomeone=false;
+              const beheadDmg=(p._beheadEnraged)?Q_DMG_ENRAGED:Q_DMG;
               Object.values(W.players).forEach(s=>{
                 if(s.role!=='survivor'||!s.alive)return;
                 if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.02){
                   hitSomeone=true;
-                  s.hp=Math.max(0,s.hp-Q_DMG);
+                  s.hp=Math.max(0,s.hp-beheadDmg);
                   s.helpless=true;s.helplessTimer=Q_HELPLESS_DUR;
                   if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
                     W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
@@ -2878,7 +2966,32 @@ const Game={
             p.beheadSlowTimer=Math.max(0,p.beheadSlowTimer-dt);
             if(p.beheadSlowTimer<=0){p.beheadSlow=false;p.speedBuff=p.speedBuff===0.6?1:p.speedBuff;}
           }
-        });
+
+          // ── ENRAGED ticks ──
+          if(p.role==='killer'){
+            if(p.enrageCd>0)p.enrageCd=Math.max(0,p.enrageCd-dt);
+            if(p.enraged){
+              p.enrageTimer=Math.max(0,p.enrageTimer-dt);
+              // Stamina cap: over 6.5s, maxStamina decreases toward ENRAGE_STAM_CAP
+              if(p.enrageStamCapTimer>0){
+                p.enrageStamCapTimer=Math.max(0,p.enrageStamCapTimer-dt);
+                const frac=1-(p.enrageStamCapTimer/ENRAGE_STAM_CAP_DUR);
+                p.maxStamina=KSMAX-(KSMAX-ENRAGE_STAM_CAP)*frac;
+                if(p.stamina>p.maxStamina)p.stamina=p.maxStamina;
+              }
+              // Enraged ends
+              if(p.enrageTimer<=0){
+                p.enraged=false;
+                p.maxStamina=KSMAX;
+                // Aura lingers for 2s
+                p.enrageAuraLinger=ENRAGE_AURA_LINGER;
+              }
+            } else if(p.enrageAuraLinger>0){
+              p.enrageAuraLinger=Math.max(0,p.enrageAuraLinger-dt);
+              if(p.enrageAuraLinger<=0)p.enrageAuraTarget=null;
+            }
+          }
+        }); // end forEach players (timers)
 
         Object.values(W.players).forEach(p=>{
           if(!p.alive||p.role!=='survivor'||!p.interacting)return;
@@ -2998,7 +3111,16 @@ const Game={
       if(!wallAt(p.x,ny,r,'killer'))p.y=ny;
       return;
     }
-    spd=(isSprint?rw:bw)*dt*buff;
+    // ENRAGED: flat speed, sprint disabled
+    if(p.enraged){
+      p.sprinting=false;
+      // Stamina still regens slowly while enraged (no drain)
+      if(p.staminaCd>0)p.staminaCd-=dt;
+      else p.stamina=Math.min(p.maxStamina,p.stamina+KREGEN*dt);
+      spd=ENRAGE_SPEED*dt*buff;
+    } else {
+      spd=(isSprint?rw:bw)*dt*buff;
+    }
     const nx=p.x+dx*spd,ny=p.y+dy*spd;
     if(!wallAt(nx,p.y,r,p.role))p.x=nx;
     if(!wallAt(p.x,ny,r,p.role))p.y=ny;
@@ -3021,7 +3143,8 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.qCd>0)return;
-    p.qCd=Q_CD;
+    const enraged=p.enraged||false;
+    p.qCd=enraged?Q_CD_ENRAGED:Q_CD;
     // Phase 1 — Speed III (×2.0) for 0.2s, locked facing direction
     p.beheadDashing=true;
     p.beheadDashTimer=0.2;
@@ -3032,6 +3155,26 @@ const Game={
     // Slow-on-miss flag (applied after hit window if nobody was hit)
     p.beheadSlow=false;
     p.beheadSlowTimer=0;
+    p._beheadEnraged=enraged; // save for hit resolution
+  },
+
+  doEnrage(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||p.role!=='killer')return;
+    if(p.enrageCd>0||p.enraged)return;
+    p.enraged=true;
+    p.enrageTimer=ENRAGE_DUR;
+    p.enrageCd=ENRAGE_CD;
+    p.enrageStamCapTimer=ENRAGE_STAM_CAP_DUR;
+    // Find nearest alive survivor for aura
+    let nearestSurv=null,nearestDist=Infinity;
+    Object.values(W.players).forEach(s=>{
+      if(s.role!=='survivor'||!s.alive)return;
+      const d=Math.hypot(s.x-p.x,s.y-p.y);
+      if(d<nearestDist){nearestDist=d;nearestSurv=s.id;}
+    });
+    p.enrageAuraTarget=nearestSurv;
+    p.enrageAuraLinger=0;
   },
   doBloxy(pid){
     const p=W.players[pid];
@@ -3307,6 +3450,9 @@ const Game={
         comboStunned:p.comboStunned||false,comboStunTimer:p.comboStunTimer||0,
         comboKbVx:p.comboKbVx||0,comboKbVy:p.comboKbVy||0,comboKbTimer:p.comboKbTimer||0,
         enraged:p.enraged||false, // stub ENRAGED — se implementará en el futuro
+        enrageCd:p.enrageCd||0,enrageTimer:p.enrageTimer||0,
+        enrageAuraTarget:p.enrageAuraTarget||null,enrageAuraLinger:p.enrageAuraLinger||0,
+        enrageStamCapTimer:p.enrageStamCapTimer||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
       exit:{open:W.exit.open},time:W.time,
@@ -3355,6 +3501,9 @@ const Game={
         p.comboStunned=d.comboStunned||false;p.comboStunTimer=d.comboStunTimer||0;
         p.comboKbVx=d.comboKbVx||0;p.comboKbVy=d.comboKbVy||0;p.comboKbTimer=d.comboKbTimer||0;
         p.enraged=d.enraged||false;
+        p.enrageCd=d.enrageCd||0;p.enrageTimer=d.enrageTimer||0;
+        p.enrageAuraTarget=d.enrageAuraTarget||null;p.enrageAuraLinger=d.enrageAuraLinger||0;
+        p.enrageStamCapTimer=d.enrageStamCapTimer||0;
       }
 
       // Auto-enter spectate after short death pause
@@ -3734,6 +3883,15 @@ const Game={
         ctx.beginPath();ctx.arc(p.x,p.y,r+6,0,Math.PI*2);
         ctx.fillStyle=p.role==='killer'?'rgba(231,76,60,.08)':'rgba(255,215,0,.07)';ctx.fill();
       }
+      // ENRAGED aura around killer
+      if(p.role==='killer'&&p.enraged&&p.alive){
+        const t=Date.now()/400;
+        const pulse=0.55+Math.sin(t)*0.3;
+        ctx.beginPath();ctx.arc(p.x,p.y,r*2.2+Math.sin(t*1.7)*4,0,Math.PI*2);
+        ctx.fillStyle=`rgba(255,60,0,${pulse*0.15})`;ctx.fill();
+        ctx.beginPath();ctx.arc(p.x,p.y,r*1.5,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(255,80,0,${pulse*0.7})`;ctx.lineWidth=2.5;ctx.stroke();
+      }
       // Ground shadow
       ctx.beginPath();ctx.ellipse(p.x,p.y+r*.55,r*.65,r*.22,0,0,Math.PI*2);
       ctx.fillStyle='rgba(0,0,0,.38)';ctx.fill();
@@ -3953,7 +4111,17 @@ const Game={
       // Killer: subtle blood vignette only
       const gv=ctx.createRadialGradient(cx2,cy2,cw*.28,cx2,cy2,cw*.72);
       gv.addColorStop(0,'rgba(0,0,0,0)');gv.addColorStop(1,'rgba(60,0,0,.20)');
-      ctx.fillStyle=gv;ctx.fillRect(0,0,cw,ch);return;
+      ctx.fillStyle=gv;ctx.fillRect(0,0,cw,ch);
+      // ENRAGED: pulsing orange-red edge vignette
+      if(me.enraged){
+        const t=Date.now()/600;
+        const pulse=0.28+Math.sin(t)*0.12;
+        const ev=ctx.createRadialGradient(cx2,cy2,cw*.35,cx2,cy2,cw*.85);
+        ev.addColorStop(0,'rgba(0,0,0,0)');ev.addColorStop(0.7,'rgba(200,50,0,'+pulse*.4+')');
+        ev.addColorStop(1,'rgba(255,30,0,'+pulse+')');
+        ctx.fillStyle=ev;ctx.fillRect(0,0,cw,ch);
+      }
+      return;
     }
     // Survivor: same vignette technique as killer — just slightly stronger edges
     // Player is always at screen center due to camera tracking
@@ -4022,6 +4190,37 @@ const Game={
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive&&!p.escaped).forEach(s=>{
           const {sx,sy}=toScreen(s.x,s.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(s.x,s.y,'rgba(52,152,219,0.9)','🏃');else drawEdgeArrow(s.x,s.y,'rgba(52,152,219,0.9)','🏃');ctx.restore();
         });
+      }
+    }
+    // ── ENRAGED aura: killer sees aura around target survivor ──
+    if(me.role==='killer'){
+      const killer=me;
+      const auraTarget=killer.enrageAuraTarget;
+      const hasAura=(killer.enraged||killer.enrageAuraLinger>0)&&auraTarget;
+      if(hasAura){
+        const tgt=W.players[auraTarget];
+        if(tgt&&tgt.alive&&!tgt.escaped){
+          const {sx,sy}=toScreen(tgt.x,tgt.y);
+          const pulse=0.6+Math.sin(Date.now()/130)*0.4;
+          const linger=!killer.enraged&&killer.enrageAuraLinger>0;
+          const auraColor=linger?'rgba(255,180,0,':'rgba(255,60,0,';
+          ctx.save();
+          ctx.globalAlpha=pulse*(linger?0.55:0.85);
+          // Pulsing ring around survivor
+          ctx.beginPath();ctx.arc(sx,sy,(TILE*sc*.8)+Math.sin(Date.now()/100)*4,0,Math.PI*2);
+          ctx.strokeStyle=auraColor+'1)';ctx.lineWidth=3+Math.sin(Date.now()/150)*1.5;
+          ctx.shadowColor=auraColor+'1)';ctx.shadowBlur=22;ctx.stroke();
+          ctx.globalAlpha=pulse*0.18;
+          ctx.beginPath();ctx.arc(sx,sy,TILE*sc*.8,0,Math.PI*2);
+          ctx.fillStyle=auraColor+'1)';ctx.fill();
+          ctx.globalAlpha=1;ctx.shadowBlur=0;
+          // Off-screen arrow
+          if(!onScreen(sx,sy)){
+            ctx.globalAlpha=linger?0.65:1;
+            drawEdgeArrow(tgt.x,tgt.y,auraColor+'1)','👁');
+          }
+          ctx.restore();
+        }
       }
     }
   },
@@ -4467,7 +4666,7 @@ document.getElementById('profileModal').addEventListener('click',function(e){
   Net.sendHost({
     t:'input',pid:S.myId,
     inp:{...Inp.k},shift:Inp.sh,e:Inp.e,
-    m1:Inp.m1,facing:Inp.facing,q:Inp.q,
+    m1:Inp.m1,facing:Inp.facing,q:Inp.q,r:Inp.r,
   });
 })();
 </script>
