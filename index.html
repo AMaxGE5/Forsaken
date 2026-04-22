@@ -501,12 +501,23 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 /* ══ SHOP / INVENTORY MODAL ══ */
 #shopModal,#inventoryModal{
   position:absolute;inset:0;z-index:200;
-  display:none;background:rgba(0,0,0,.92);
-  backdrop-filter:blur(2px);
+  display:none;background:rgba(0,0,0,.72);
+  backdrop-filter:blur(4px);
   font-family:'Share Tech Mono',monospace;
   pointer-events:all;
+  align-items:center;
+  justify-content:center;
 }
-#shopModal.show,#inventoryModal.show{display:flex;flex-direction:column;}
+#shopModal.show,#inventoryModal.show{display:flex;}
+.store-modal-inner{
+  width:min(820px,92vw);height:min(580px,88vh);
+  display:flex;flex-direction:column;
+  background:rgba(6,4,14,.97);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 0 60px rgba(0,0,0,.9),0 0 30px rgba(192,57,43,.08);
+  animation:shopIn .18s ease;
+}
+@keyframes shopIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
 
 /* Top bar */
 .store-topbar{
@@ -930,6 +941,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 
     <!-- ══ SHOP MODAL ══ -->
     <div id="shopModal">
+      <div class="store-modal-inner">
       <div class="store-topbar">
         <div class="store-topbar-title">FORSAKEN</div>
         <div class="store-topbar-cd">
@@ -1005,10 +1017,12 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
         </div>
         <div id="shopPlayerRows"></div>
       </div>
+      </div><!-- /store-modal-inner -->
     </div>
 
     <!-- ══ INVENTORY MODAL ══ -->
     <div id="inventoryModal">
+      <div class="store-modal-inner">
       <div class="store-topbar">
         <div class="store-topbar-title">INVENTARIO</div>
         <div class="store-topbar-cd">
@@ -1063,6 +1077,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           </div>
         </div>
       </div>
+      </div><!-- /store-modal-inner -->
     </div>
   </div>
 
@@ -1443,8 +1458,8 @@ const Stats={
     this.malicia=acc.malicia||0;
     this.username=acc.user||key;
     this.coins=acc.coins!==undefined?acc.coins:100;
-    this.ownedKillers=acc.ownedKillers||[];
-    this.ownedSurvivors=acc.ownedSurvivors||[];
+    this.ownedKillers=acc.ownedKillers||['slasher'];
+    this.ownedSurvivors=acc.ownedSurvivors||['noob'];
     this.equippedKiller=acc.equippedKiller||'';
     this.equippedSurvivor=acc.equippedSurvivor||'';
     this.hitboxPref=acc.hitboxPref||false;
@@ -1458,8 +1473,8 @@ const Stats={
     db[this._key].killWins=this.killWins;
     db[this._key].malicia=this.malicia||0;
     db[this._key].coins=this.coins!==undefined?this.coins:100;
-    db[this._key].ownedKillers=this.ownedKillers||[];
-    db[this._key].ownedSurvivors=this.ownedSurvivors||[];
+    db[this._key].ownedKillers=Array.from(new Set(['slasher',...(this.ownedKillers||[])]));
+    db[this._key].ownedSurvivors=Array.from(new Set(['noob',...(this.ownedSurvivors||[])]));
     db[this._key].equippedKiller=this.equippedKiller||'';
     db[this._key].equippedSurvivor=this.equippedSurvivor||'';
     db[this._key].hitboxPref=this.hitboxPref||false;
@@ -5322,20 +5337,18 @@ const Economy={
 //  Agrega personajes aquí cuando estén listos
 // ══════════════════════════════════════════
 const STORE_KILLERS=[
-  // Ejemplo (comentado):
-  // { id:'slasher', name:'SLASHER', price:0, free:true, icon:'🗡', author:'Forsaken',
-  //   tagline:'El asesino original. Rápido y letal.',
-  //   stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
-  //   abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas.'},{key:'Q',desc:'Behead — Dash + golpe.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño.'}],
-  //   skins:[] }
+  { id:'slasher', name:'SLASHER', price:0, free:true, icon:'🗡', author:'Forsaken',
+    tagline:'El asesino original. Rápido, letal y sin piedad.',
+    stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
+    abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas con su machete.'},{key:'Q',desc:'Behead — Dash hacia adelante + golpe devastador.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño temporalmente.'}],
+    skins:[] }
 ];
 const STORE_SURVIVORS=[
-  // Ejemplo (comentado):
-  // { id:'noob', name:'NOOB', price:0, free:true, icon:'🏃', author:'Forsaken',
-  //   tagline:'El superviviente clásico. Ágil y resistente.',
-  //   stats:[{lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}],
-  //   abilities:[{key:'Q',desc:'Bloxy Cola — Aumenta velocidad temporalmente.'},{key:'E',desc:'Slate Skin — Sobrevive a un golpe mortal.'},{key:'R',desc:'Ghost Burger — Invisibilidad temporal.'}],
-  //   skins:[] }
+  { id:'noob', name:'NOOB', price:0, free:true, icon:'🏃', author:'Forsaken',
+    tagline:'El superviviente clásico. Ágil, resistente y lleno de trucos.',
+    stats:[{lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}],
+    abilities:[{key:'Q',desc:'Bloxy Cola — Bebe una cola que aumenta tu velocidad temporalmente.'},{key:'E',desc:'Slate Skin — Toma una poción que te hace sobrevivir a un golpe mortal.'},{key:'R',desc:'Ghost Burger — Come una hamburguesa que te vuelve casi invisible.'}],
+    skins:[] }
 ];
 
 // ══════════════════════════════════════════
