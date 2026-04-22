@@ -367,7 +367,18 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 @keyframes bloxyPulse{0%,100%{box-shadow:0 0 0 rgba(46,204,113,0)}50%{box-shadow:0 0 12px rgba(46,204,113,.4)}}
 #bloxyBuffBar.show{display:flex;}
 
-/* ── KILLER WIN OVERLAY ── */
+/* Ghost Burger active buff indicator */
+#gbBuffBar{
+  position:absolute;top:84px;left:50%;transform:translateX(-50%);
+  display:none;align-items:center;gap:8px;
+  background:rgba(0,0,0,.68);border:1px solid rgba(150,100,255,.35);
+  padding:4px 16px;border-radius:20px;pointer-events:none;
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;
+  color:rgba(180,150,255,.95);
+  animation:gbPulse 1.2s infinite;
+}
+@keyframes gbPulse{0%,100%{box-shadow:0 0 0 rgba(150,100,255,0)}50%{box-shadow:0 0 12px rgba(150,100,255,.45)}}
+#gbBuffBar.show{display:flex;}
 #killerWinOv{
   position:absolute;inset:0;z-index:580;
   display:none;align-items:center;justify-content:center;
@@ -651,6 +662,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
       <div id="hudGens">generadores: 0/5</div>
     </div>
     <div id="bloxyBuffBar">🥤 VELOCIDAD <span id="bloxySpeedRoman">II</span></div>
+    <div id="gbBuffBar">👻 INVIS IV · INDETECTABLE</div>
     <div id="hudAlivePanelWrap"></div>
     <button id="hitboxToggleBtn" onclick="S.showHitbox=!S.showHitbox;this.classList.toggle('on',S.showHitbox);this.title=S.showHitbox?'Hitbox: ON':'Hitbox: OFF'">⚙</button>
     <div id="hudBottomBar">
@@ -718,6 +730,15 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
             <div class="ability-cd-num" id="abilitySSNum" style="display:none"></div>
           </div>
           <div class="ability-key">E (sin gen)</div>
+        </div>
+        <div class="ability-slot" id="abilityGBSlot" style="display:none">
+          <div class="ability-name" id="gbName">GHOST BURGER</div>
+          <div class="ability-icon-wrap" id="abilityGBWrap">
+            <div class="ability-cd-overlay" id="abilityGBOverlay"></div>
+            <div class="ability-icon-emoji">👻</div>
+            <div class="ability-cd-num" id="abilityGBNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">R</div>
         </div>
         <div class="ability-slot" id="abilityEnrageSlot" style="display:none">
           <div class="ability-name" id="enrageName">ENRAGED</div>
@@ -993,6 +1014,12 @@ const SS_DRINK_DUR = 0.6;   // duración de la animación de beber (40% lentitud
 const SS_SPEED_BONUS_II = 1.30; // Speed II si dura hasta expirar (+30%)
 const SS_SPEED_I = 1.15;        // Speed I si se cancela manualmente (+15%)
 const SS_SPEED_DUR = 2;         // duración del bonus de velocidad post-efecto
+// ── Habilidad R del Survivor (Noob): GHOST BURGER ──
+const GB_CD = 45;           // cooldown en segundos
+const GB_DUR = 10;          // duración del efecto (invisibilidad + indetectable)
+const GB_EAT_DUR = 1.2;     // duración de la animación de comer (40% lentitud, sin sprint)
+const GB_INVIS_ALPHA = 0.28; // Invisibilidad IV — alpha visible para el killer (no completa, esa es nivel 6)
+
 // ── Habilidad Q del Killer: BEHEAD ──
 const Q_CD = 18;           // cooldown en segundos
 const Q_CD_ENRAGED = 12;   // [ENRAGED] cooldown reducido
@@ -1126,8 +1153,9 @@ function buildMap(){
     for(let y=y1;y<=y2;y++) if(m[y][x]===0) m[y][x]=4;
   });
 
-  // ── GENERATORS (5) ──
-  const genSpots=[[2,4],[62,4],[2,39],[62,39],[32,8]];
+  // ── GENERATORS (5) — distribuidos por todo el mapa, no en esquinas ──
+  // Top-left zone (pasillo interior), Top-right zone, Centro, Bottom-left zone, Bottom-right zone
+  const genSpots=[[10,12],[53,12],[32,22],[11,33],[52,33]];
   genSpots.forEach(([gx,gy])=>{ if(m[gy][gx]===0) m[gy][gx]=2; });
 
   return m;
@@ -1408,6 +1436,7 @@ const UI={
       const comboSlot=document.getElementById('abilityComboSlot');if(comboSlot)comboSlot.style.display='flex';
       const ssSlotK=document.getElementById('abilitySSSlot');if(ssSlotK)ssSlotK.style.display='none';
       const bSlotK=document.getElementById('abilityBloxySlot');if(bSlotK)bSlotK.style.display='none';
+      const gbSlotKiller=document.getElementById('abilityGBSlot');if(gbSlotKiller)gbSlotKiller.style.display='none';
       // ENRAGED (R)
       const enrageSlot=document.getElementById('abilityEnrageSlot');
       if(enrageSlot)enrageSlot.style.display='flex';
@@ -1493,6 +1522,21 @@ const UI={
       else if(ssCdPct>0)ssNum.textContent=Math.ceil(me.ssCd)+'s';
       const ssLabel=document.getElementById('ssName');
       if(ssLabel)ssLabel.textContent=isSSDrinking?'🧪 BEBIENDO...':(isSSActive?'SLATESKIN II':(isSSSpeed?'⚡ VEL. ACTIVA':'SLATE SKIN'));
+      // ── Ghost Burger (R) ──
+      const gbSlot=document.getElementById('abilityGBSlot');
+      if(gbSlot)gbSlot.style.display='flex';
+      const gbCdPct=me.gbCd>0?me.gbCd/GB_CD:0;
+      const isGBEating=me.gbEating||false;
+      const isGBActive=me.gbActive||false;
+      document.getElementById('abilityGBOverlay').style.transform=`scaleY(${gbCdPct})`;
+      document.getElementById('abilityGBWrap').className='ability-icon-wrap'+(isGBActive?'ready':isGBEating?'ready':gbCdPct>0?' on-cd':' ready');
+      const gbNum=document.getElementById('abilityGBNum');
+      gbNum.style.display=(gbCdPct>0||isGBEating||isGBActive)?'flex':'none';
+      if(isGBEating)gbNum.textContent='🍔';
+      else if(isGBActive)gbNum.textContent=me.gbTimer?me.gbTimer.toFixed(1):'';
+      else if(gbCdPct>0)gbNum.textContent=Math.ceil(me.gbCd)+'s';
+      const gbLabel=document.getElementById('gbName');
+      if(gbLabel)gbLabel.textContent=isGBEating?'👻 COMIENDO...':(isGBActive?'👻 INVIS IV':'GHOST BURGER');
     }
     // Bloxy buff bar
     const bbBar=document.getElementById('bloxyBuffBar');
@@ -1501,6 +1545,14 @@ const UI={
       document.getElementById('bloxySpeedRoman').textContent=S.lms?'I':'II';
     } else {
       bbBar.classList.remove('show');
+    }
+    // Ghost Burger buff bar
+    const gbBar=document.getElementById('gbBuffBar');
+    if(me.role==='survivor'&&(me.gbActive||me.gbEating)){
+      gbBar.classList.add('show');
+      gbBar.textContent=me.gbEating?'👻 COMIENDO GHOST BURGER...':'👻 INVIS IV · INDETECTABLE';
+    } else {
+      gbBar.classList.remove('show');
     }
   },
 
@@ -2482,7 +2534,7 @@ const Net={
         p.ePrev=d.e;
         if(d.q&&!p.qPrev)Game.doQ(d.pid);
         p.qPrev=d.q;
-        if(d.r&&!p.rPrev)Game.doEnrage(d.pid);
+        if(d.r&&!p.rPrev)Game.doR(d.pid);
         p.rPrev=d.r;
       }
 
@@ -2759,6 +2811,7 @@ const Game={
         bloxyCd:0,bloxyActive:false,bloxyTimer:0,speedBuff:1,
         color:p.color||PCOLORS[i%PCOLORS.length],
         enrageCd:0,enraged:false,enrageTimer:0,enrageAuraTarget:null,enrageAuraLinger:0,enrageStamCapTimer:0,rPrev:false,
+        gbCd:0,gbEating:false,gbEatTimer:0,gbActive:false,gbTimer:0,
       };
     });
   },
@@ -2849,7 +2902,7 @@ const Game={
         Inp.ep=Inp.e;
         if(Inp.q&&!Inp.qp)Game.doQ(S.myId);
         Inp.qp=Inp.q;
-        if(Inp.r&&!Inp.rp)Game.doEnrage(S.myId);
+        if(Inp.r&&!Inp.rp)Game.doR(S.myId);
         Inp.rp=Inp.r;
 
         // Tick bloxy timers for all players
@@ -2905,7 +2958,24 @@ const Game={
             if(p.ssSpeedTimer<=0){p.ssSpeedActive=false;p.speedBuff=1;}
           }
 
-          if(p.role==='killer'&&p.qCd>0)p.qCd=Math.max(0,p.qCd-dt);
+          // ── Ghost Burger ticks ──
+          if(p.gbCd>0)p.gbCd=Math.max(0,p.gbCd-dt);
+          if(p.gbEating){
+            p.gbEatTimer=Math.max(0,(p.gbEatTimer||0)-dt);
+            if(p.gbEatTimer<=0){
+              p.gbEating=false;
+              p.gbActive=true;
+              p.gbTimer=GB_DUR;
+              // Indetectable: quitar marca LMS si el survivor es el último
+              if(S.lms&&S.lmsLastSurvivorId===p.id&&S.lmsTrackerT>0){
+                S.lmsTrackerT=0;
+              }
+            }
+          }
+          if(p.gbActive){
+            p.gbTimer=Math.max(0,p.gbTimer-dt);
+            if(p.gbTimer<=0){p.gbActive=false;}
+          }p.qCd=Math.max(0,p.qCd-dt);
           if(p.role==='killer'&&p.comboCd>0)p.comboCd=Math.max(0,p.comboCd-dt);
           // Killer combo lock (can't move during combo)
           if(p.role==='killer'&&p.comboLocked){
@@ -3086,7 +3156,7 @@ const Game={
     if(inp['d']||inp['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     const moving=dx!==0||dy!==0;
-    const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking;
+    const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking&&!p.gbEating;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
     if(isSprint){
@@ -3101,7 +3171,7 @@ const Game={
     }
     if(moving)p.facing=Math.atan2(dy,dx);
     const bw=p.role==='killer'?KW:SW,rw=p.role==='killer'?KR:SR;
-    const buff=(p.ssDrinking?0.6:1)*(p.speedBuff||1); // 40% slow while drinking slate skin
+    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1); // 40% slow while drinking
     // During behead dash phase: force Speed III (×2.0 of run) in locked direction
     let spd,r=TILE*.28;
     if(p.beheadDashing){
@@ -3160,6 +3230,22 @@ const Game={
     p.beheadSlow=false;
     p.beheadSlowTimer=0;
     p._beheadEnraged=enraged; // save for hit resolution
+  },
+
+  doR(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    if(p.role==='killer')Game.doEnrage(pid);
+    else Game.doGhostBurger(pid);
+  },
+
+  doGhostBurger(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||p.role!=='survivor')return;
+    if(p.gbCd>0||p.gbEating||p.gbActive)return;
+    p.gbEating=true;
+    p.gbEatTimer=GB_EAT_DUR;
+    p.gbCd=GB_CD;
   },
 
   doEnrage(pid){
@@ -3455,6 +3541,8 @@ const Game={
         enrageCd:p.enrageCd||0,enrageTimer:p.enrageTimer||0,
         enrageAuraTarget:p.enrageAuraTarget||null,enrageAuraLinger:p.enrageAuraLinger||0,
         enrageStamCapTimer:p.enrageStamCapTimer||0,
+        gbCd:p.gbCd||0,gbEating:p.gbEating||false,gbEatTimer:p.gbEatTimer||0,
+        gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
       time:W.time,
@@ -3506,6 +3594,10 @@ const Game={
         p.enrageCd=d.enrageCd||0;p.enrageTimer=d.enrageTimer||0;
         p.enrageAuraTarget=d.enrageAuraTarget||null;p.enrageAuraLinger=d.enrageAuraLinger||0;
         p.enrageStamCapTimer=d.enrageStamCapTimer||0;
+        if(d.gbCd!==undefined){
+          p.gbCd=d.gbCd||0;p.gbEating=d.gbEating||false;p.gbEatTimer=d.gbEatTimer||0;
+          p.gbActive=d.gbActive||false;p.gbTimer=d.gbTimer||0;
+        }
       }
 
       // Auto-enter spectate after short death pause
@@ -3864,6 +3956,29 @@ const Game={
     Object.values(W.players).forEach(p=>{
       if(!p.alive)return;
       const r=TILE*.32,isMe=p.id===S.myId,dead=!p.alive;
+      const me2=W.players[S.myId];
+      // Ghost Burger invisibility — survivor partially invisible to killer
+      // isMe siempre se ve; si eres killer, el survivor con GB aparece semi-transparente
+      const isGBInvis=(p.role==='survivor')&&(p.gbActive||p.gbEating)&&!isMe&&(me2&&me2.role==='killer');
+      const gbAlpha=isGBInvis?GB_INVIS_ALPHA:1;
+      if(gbAlpha<1){ctx.save();ctx.globalAlpha=gbAlpha;}
+      // Eating animation: burger emoji floating above
+      if(p.gbEating&&isMe){
+        const t=Date.now()/300;
+        ctx.save();ctx.globalAlpha=0.85+Math.sin(t)*0.15;
+        ctx.font=`${TILE*.55}px monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.fillText('🍔',p.x,p.y-r-18+Math.sin(t*1.8)*3);
+        ctx.restore();
+      }
+      // Ghost aura when GB active (visible only to self)
+      if(p.gbActive&&isMe){
+        const t=Date.now()/400;
+        const pulse=0.4+Math.sin(t)*0.25;
+        ctx.beginPath();ctx.arc(p.x,p.y,r*1.7+Math.sin(t*1.3)*3,0,Math.PI*2);
+        ctx.fillStyle=`rgba(150,80,255,${pulse*0.12})`;ctx.fill();
+        ctx.beginPath();ctx.arc(p.x,p.y,r*1.2,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(180,100,255,${pulse*0.55})`;ctx.lineWidth=2;ctx.stroke();
+      }
       // Sprint aura
       if(p.sprinting&&p.alive){
         ctx.beginPath();ctx.arc(p.x,p.y,r+6,0,Math.PI*2);
@@ -4084,6 +4199,7 @@ const Game={
           ctx.fillText('🩸',bx+bw+6,by+bh/2);
         }
       }
+      if(gbAlpha<1)ctx.restore();
     });
   },
 
@@ -4109,12 +4225,11 @@ const Game={
       }
       return;
     }
-    // Survivor: same vignette technique as killer — just slightly stronger edges
-    // Player is always at screen center due to camera tracking
+    // Survivor: same vignette technique as killer — slightly stronger edges but 20% lighter
     const gv=ctx.createRadialGradient(cx2,cy2,Math.min(cw,ch)*.22,cx2,cy2,Math.min(cw,ch)*.62);
     gv.addColorStop(0,'rgba(0,0,0,0)');
-    gv.addColorStop(0.6,'rgba(0,0,0,0.25)');
-    gv.addColorStop(1,'rgba(0,0,0,0.82)');
+    gv.addColorStop(0.6,'rgba(0,0,0,0.20)');
+    gv.addColorStop(1,'rgba(0,0,0,0.66)');
     ctx.fillStyle=gv;ctx.fillRect(0,0,cw,ch);
   },
 
@@ -4174,6 +4289,8 @@ const Game={
         if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
       } else if(me.role==='killer'){
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
+          // Indetectable: si el survivor tiene Ghost Burger activo, no aparece en el tracker
+          if((s.gbActive||s.gbEating)&&S.lmsTrackerT<=0)return;
           const {sx,sy}=toScreen(s.x,s.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(s.x,s.y,'rgba(52,152,219,0.9)','🏃');else drawEdgeArrow(s.x,s.y,'rgba(52,152,219,0.9)','🏃');ctx.restore();
         });
       }
@@ -4215,7 +4332,44 @@ const Game={
     if(!ctx)return;
     ctx.save();Game._beginCam();Game._drawWorld(me);Game._endCam();
     Game._drawFog(me);
+    Game._drawGensGlow(me);
     Game._drawTrackers(me||W.players[S.myId]);
+    ctx.restore();
+  },
+
+  _drawGensGlow(me){
+    // Generadores brillan a través de la oscuridad para el survivor
+    if(!me||me.role==='killer')return;
+    const sc=CAM._effScale||SCALE;
+    const t=Date.now()/600;
+    ctx.save();
+    Game._beginCam();
+    W.gens.forEach(g=>{
+      if(g.on)return; // ya completado, no necesita brillo de alerta
+      const px=g.x*TILE,py=g.y*TILE;
+      const cx3=px+TILE/2,cy3=py+TILE/2;
+      const pulse=0.55+Math.sin(t+g.x*0.7+g.y*0.5)*0.35;
+      // Halo verde pulsante sobre el fog
+      const grad=ctx.createRadialGradient(cx3,cy3,TILE*.1,cx3,cy3,TILE*1.1);
+      grad.addColorStop(0,`rgba(0,255,80,${pulse*0.55})`);
+      grad.addColorStop(0.45,`rgba(0,200,60,${pulse*0.22})`);
+      grad.addColorStop(1,'rgba(0,100,30,0)');
+      ctx.fillStyle=grad;
+      ctx.beginPath();ctx.arc(cx3,cy3,TILE*1.1,0,Math.PI*2);ctx.fill();
+      // Ícono ⚡ visible sobre fog
+      ctx.font=`${TILE*.42}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.globalAlpha=0.55+Math.sin(t*1.5+g.x)*0.3;
+      ctx.shadowColor='#00ff44';ctx.shadowBlur=14*pulse;
+      ctx.fillText('⚡',cx3,cy3);
+      ctx.shadowBlur=0;ctx.globalAlpha=1;
+      // Progreso si está siendo reparado
+      if(g.prog>0){
+        const bw=TILE*.8,bh=4,bx2=cx3-bw/2,by2=py+TILE+3;
+        ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(bx2,by2,bw,bh);
+        ctx.fillStyle='#00cc44';ctx.fillRect(bx2,by2,bw*g.prog/100,bh);
+      }
+    });
+    Game._endCam();
     ctx.restore();
   },
 
