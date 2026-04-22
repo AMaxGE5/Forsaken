@@ -468,6 +468,324 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 #tUp{bottom:108px;left:55px}#tDown{bottom:52px;left:55px}#tLeft{bottom:80px;left:0}#tRight{bottom:80px;left:110px}
 #tSpr{bottom:80px;left:165px;width:36px;height:36px;font-size:.58rem;color:var(--gold);border-color:rgba(243,156,18,.3);}
 #tAct{bottom:80px;right:22px;width:62px;height:62px;border-radius:50%;background:rgba(192,57,43,.22);border-color:var(--blood);color:var(--blood);font-size:1.3rem;}
+
+/* ══ LOBBY LEFT MENU ══ */
+#lobbyLeftMenu{
+  position:absolute;left:14px;top:50%;transform:translateY(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  pointer-events:all;z-index:60;
+}
+#llmMoney{
+  font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.08em;
+  color:var(--gold);text-shadow:0 0 10px rgba(243,156,18,.5);
+  margin-bottom:10px;display:flex;align-items:center;gap:4px;
+}
+.llm-icon-btn{
+  width:60px;height:60px;
+  background:rgba(5,5,12,.82);border:2px solid rgba(255,255,255,.18);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:border-color .15s,background .15s;
+  position:relative;overflow:hidden;
+}
+.llm-icon-btn+.llm-icon-btn{border-top:none;}
+.llm-icon-btn:hover{border-color:var(--blood);background:rgba(192,57,43,.12);}
+.llm-icon-btn.active{border-color:var(--gold);background:rgba(243,156,18,.1);}
+.llm-icon-btn svg{width:30px;height:30px;opacity:.75;transition:opacity .15s;}
+.llm-icon-btn:hover svg,.llm-icon-btn.active svg{opacity:1;}
+.llm-icon-btn .llm-notif{
+  position:absolute;top:5px;right:5px;
+  width:7px;height:7px;border-radius:50%;
+  background:var(--blood);box-shadow:0 0 5px var(--blood);
+}
+
+/* ══ SHOP / INVENTORY MODAL ══ */
+#shopModal,#inventoryModal{
+  position:absolute;inset:0;z-index:200;
+  display:none;background:rgba(0,0,0,.92);
+  backdrop-filter:blur(2px);
+  font-family:'Share Tech Mono',monospace;
+  pointer-events:all;
+}
+#shopModal.show,#inventoryModal.show{display:flex;flex-direction:column;}
+
+/* Top bar */
+.store-topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;background:rgba(0,0,0,.6);
+  border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;
+}
+.store-topbar-title{
+  font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.35em;
+  color:#fff;text-shadow:0 0 12px var(--blood);
+}
+.store-topbar-cd{
+  display:flex;flex-direction:column;align-items:center;
+  font-family:'Oswald',sans-serif;
+}
+.store-topbar-cd-lbl{font-size:.48rem;letter-spacing:.4em;color:var(--dim);}
+.store-topbar-cd-val{
+  font-size:1rem;color:var(--blood);border:1px solid rgba(192,57,43,.5);
+  padding:2px 12px;letter-spacing:.1em;min-width:60px;text-align:center;
+}
+.store-close-btn{
+  background:transparent;border:1px solid rgba(255,255,255,.2);
+  color:rgba(255,255,255,.6);font-family:'Share Tech Mono',monospace;
+  font-size:.65rem;letter-spacing:.2em;padding:6px 16px;cursor:pointer;
+  text-transform:uppercase;transition:border-color .15s,color .15s;
+}
+.store-close-btn:hover{border-color:var(--blood);color:var(--blood);}
+
+/* Main layout */
+.store-body{display:flex;flex:1;overflow:hidden;gap:0;}
+
+/* Left column — tabs + grid */
+.store-left{
+  display:flex;flex-direction:column;
+  width:65%;border-right:1px solid rgba(255,255,255,.07);
+}
+.store-tabs{
+  display:flex;border-bottom:1px solid rgba(255,255,255,.08);
+  flex-shrink:0;
+}
+.store-tab{
+  padding:9px 22px;background:transparent;
+  border:none;border-right:1px solid rgba(255,255,255,.06);
+  color:rgba(255,255,255,.45);font-family:'Share Tech Mono',monospace;
+  font-size:.65rem;letter-spacing:.18em;cursor:pointer;
+  text-transform:uppercase;transition:color .15s,background .15s;
+}
+.store-tab.active{
+  background:rgba(192,57,43,.15);color:#fff;
+  border-bottom:2px solid var(--blood);
+}
+.store-tab:hover:not(.active){color:rgba(255,255,255,.7);background:rgba(255,255,255,.04);}
+.store-search{
+  padding:8px 14px;background:#020208;border-bottom:1px solid rgba(255,255,255,.06);
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.store-search-icon{color:rgba(255,255,255,.3);font-size:.75rem;}
+.store-search input{
+  background:transparent;border:none;color:rgba(255,255,255,.7);
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.1em;
+  outline:none;flex:1;
+}
+.store-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:8px;padding:14px;overflow-y:auto;flex:1;
+  align-content:start;
+}
+.store-grid::-webkit-scrollbar{width:4px;}
+.store-grid::-webkit-scrollbar-track{background:transparent;}
+.store-grid::-webkit-scrollbar-thumb{background:rgba(192,57,43,.4);}
+
+/* Character card */
+.store-card{
+  border:2px solid rgba(255,255,255,.12);background:rgba(10,8,18,.9);
+  cursor:pointer;transition:border-color .15s,transform .1s;
+  display:flex;flex-direction:column;position:relative;
+  aspect-ratio:3/4;overflow:hidden;
+}
+.store-card:hover{border-color:rgba(255,255,255,.45);transform:scale(1.02);}
+.store-card.selected{border-color:var(--gold);}
+.store-card-portrait{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#0e0210 0%,#05050f 100%);
+  font-size:3.5rem;position:relative;overflow:hidden;
+}
+.store-card-portrait::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(0,0,0,.8) 0%,transparent 50%);
+}
+.store-card-glow{
+  position:absolute;inset:0;opacity:.35;
+  background:radial-gradient(ellipse at 50% 60%,rgba(192,57,43,.7),transparent 70%);
+}
+.store-card-name{
+  font-family:'Oswald',sans-serif;font-size:.7rem;letter-spacing:.12em;
+  color:#fff;text-align:center;padding:4px 6px 2px;
+  background:rgba(0,0,0,.6);
+}
+.store-card-price{
+  font-size:.6rem;letter-spacing:.08em;color:var(--gold);
+  text-align:center;padding:2px 6px 6px;background:rgba(0,0,0,.6);
+}
+.store-card-price.owned{color:rgba(255,255,255,.5);}
+.store-card-price.free{color:var(--green);}
+.store-card-owned-badge{
+  position:absolute;top:6px;right:6px;
+  background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.3);
+  color:rgba(255,255,255,.6);font-size:.48rem;letter-spacing:.12em;
+  padding:2px 6px;text-transform:uppercase;
+}
+.store-card-equipped-badge{
+  position:absolute;top:6px;right:6px;
+  background:rgba(243,156,18,.2);border:1px solid var(--gold);
+  color:var(--gold);font-size:.48rem;letter-spacing:.12em;
+  padding:2px 6px;text-transform:uppercase;
+}
+.store-empty-msg{
+  grid-column:1/-1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;padding:60px 20px;
+  color:rgba(255,255,255,.2);
+}
+.store-empty-msg .em-icon{font-size:2.5rem;opacity:.4;}
+.store-empty-msg .em-text{font-size:.62rem;letter-spacing:.25em;text-align:center;line-height:1.8;}
+
+/* Right panel */
+.store-right{
+  width:35%;display:flex;flex-direction:column;position:relative;
+}
+.store-right-empty{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:14px;color:rgba(255,255,255,.18);
+  font-size:.62rem;letter-spacing:.2em;text-align:center;
+}
+.store-detail{display:none;flex-direction:column;height:100%;}
+.store-detail.show{display:flex;}
+.store-detail-preview{
+  height:200px;background:linear-gradient(160deg,#12010e 0%,#05050f 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:5rem;border-bottom:1px solid rgba(255,255,255,.07);
+  position:relative;overflow:hidden;flex-shrink:0;
+}
+.store-detail-preview-glow{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 80%,rgba(192,57,43,.4),transparent 65%);
+}
+.store-detail-info{padding:14px 16px;flex:1;overflow-y:auto;}
+.store-detail-info::-webkit-scrollbar{width:3px;}
+.store-detail-info::-webkit-scrollbar-thumb{background:rgba(192,57,43,.3);}
+.store-detail-name{
+  font-family:'Oswald',sans-serif;font-size:1.3rem;letter-spacing:.14em;
+  color:#fff;margin-bottom:2px;
+}
+.store-detail-author{font-size:.55rem;letter-spacing:.15em;color:rgba(255,255,255,.35);margin-bottom:8px;}
+.store-detail-tagline{font-size:.62rem;letter-spacing:.1em;color:rgba(255,255,255,.6);margin-bottom:14px;line-height:1.6;}
+.store-detail-btns{display:flex;gap:8px;margin-bottom:14px;}
+.store-detail-btn{
+  flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.15);
+  color:rgba(255,255,255,.55);font-family:'Share Tech Mono',monospace;
+  font-size:.55rem;letter-spacing:.15em;padding:8px 10px;cursor:pointer;
+  text-transform:uppercase;transition:all .15s;text-align:center;
+}
+.store-detail-btn:hover{border-color:rgba(255,255,255,.45);color:#fff;}
+.store-stats-panel{
+  background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.07);
+  padding:10px 12px;margin-bottom:12px;
+}
+.store-stats-title{font-size:.48rem;letter-spacing:.35em;color:var(--dim);margin-bottom:8px;}
+.store-stat-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.store-stat-lbl{font-size:.52rem;letter-spacing:.1em;color:rgba(255,255,255,.45);width:70px;flex-shrink:0;}
+.store-stat-bar{flex:1;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;}
+.store-stat-fill{height:100%;border-radius:3px;}
+.store-ability-panel{
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);padding:10px 12px;
+}
+.store-ability-title{font-size:.48rem;letter-spacing:.35em;color:var(--dim);margin-bottom:8px;}
+.store-ability-item{
+  display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;
+}
+.store-ability-key{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+  font-size:.5rem;letter-spacing:.1em;color:rgba(255,255,255,.6);
+  padding:2px 6px;flex-shrink:0;font-family:'Oswald',sans-serif;
+}
+.store-ability-desc{font-size:.52rem;letter-spacing:.06em;color:rgba(255,255,255,.5);line-height:1.55;}
+
+/* Bottom: price + action */
+.store-action-bar{
+  padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(0,0,0,.5);flex-shrink:0;
+}
+.store-action-price{
+  font-family:'Oswald',sans-serif;font-size:1.2rem;
+  color:var(--gold);letter-spacing:.08em;
+}
+.store-action-price.free{color:var(--green);}
+.store-action-buy{
+  background:rgba(10,10,10,.9);border:2px solid rgba(255,255,255,.3);
+  color:#fff;font-family:'Oswald',sans-serif;font-size:.85rem;
+  letter-spacing:.2em;padding:10px 28px;cursor:pointer;
+  text-transform:uppercase;transition:all .15s;
+}
+.store-action-buy:hover{background:rgba(192,57,43,.2);border-color:var(--blood);}
+.store-action-buy.owned{border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.4);cursor:default;background:transparent;}
+.store-action-buy.equip-btn{border-color:var(--gold);color:var(--gold);}
+.store-action-buy.equip-btn:hover{background:rgba(243,156,18,.15);}
+.store-action-buy.unequip-btn{border-color:rgba(52,152,219,.5);color:rgba(52,152,219,.8);}
+.store-action-buy.unequip-btn:hover{background:rgba(52,152,219,.1);}
+
+/* Money bar at bottom left of store */
+.store-money-bar{
+  position:absolute;bottom:0;left:0;
+  padding:8px 16px;font-family:'Oswald',sans-serif;
+  font-size:.85rem;letter-spacing:.08em;color:var(--gold);
+  display:flex;align-items:center;gap:6px;
+}
+
+/* Skins panel (inside detail) */
+.store-skins-panel{
+  display:none;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.07);
+  padding:10px 12px;margin-bottom:12px;
+}
+.store-skins-panel.show{display:block;}
+.store-skins-grid{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+.store-skin-slot{
+  width:48px;height:48px;border:1.5px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.04);display:flex;align-items:center;
+  justify-content:center;font-size:1.2rem;cursor:pointer;
+  transition:border-color .12s;
+}
+.store-skin-slot:hover,.store-skin-slot.active{border-color:var(--gold);}
+
+/* Player list on right of shop */
+.store-players{
+  position:absolute;top:48px;right:0;width:200px;
+  background:rgba(0,0,0,.75);border-left:1px solid rgba(255,255,255,.07);
+  overflow-y:auto;max-height:50vh;
+}
+.store-players-header{
+  display:flex;justify-content:space-between;
+  padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.07);
+  font-size:.5rem;letter-spacing:.2em;color:var(--dim);
+}
+.store-player-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.04);
+  font-size:.6rem;letter-spacing:.06em;color:rgba(255,255,255,.65);
+}
+.store-player-row.me{color:#fff;background:rgba(192,57,43,.06);}
+.store-player-money{color:var(--gold);font-family:'Oswald',sans-serif;font-size:.65rem;}
+
+/* Settings panel (inside lobby, not modal) */
+#lobbySettingsPanel{
+  display:none;position:absolute;left:84px;top:50%;transform:translateY(-50%);
+  background:rgba(5,5,14,.95);border:1px solid rgba(255,255,255,.14);
+  padding:18px 22px;min-width:200px;z-index:70;pointer-events:all;
+}
+#lobbySettingsPanel.show{display:block;}
+.lsp-title{font-size:.55rem;letter-spacing:.38em;color:var(--dim);margin-bottom:14px;}
+.lsp-option{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:16px;margin-bottom:10px;
+}
+.lsp-option-lbl{font-size:.62rem;letter-spacing:.12em;color:rgba(255,255,255,.7);}
+.lsp-toggle{
+  position:relative;width:36px;height:18px;cursor:pointer;
+}
+.lsp-toggle input{opacity:0;width:0;height:0;}
+.lsp-toggle-track{
+  position:absolute;inset:0;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.2);border-radius:9px;
+  transition:background .15s;
+}
+.lsp-toggle input:checked+.lsp-toggle-track{background:rgba(192,57,43,.7);border-color:var(--blood);}
+.lsp-toggle-thumb{
+  position:absolute;top:2px;left:2px;width:12px;height:12px;
+  background:#fff;border-radius:50%;transition:transform .15s;
+}
+.lsp-toggle input:checked~.lsp-toggle-thumb{transform:translateX(18px);}
 </style>
 </head>
 <body>
@@ -561,11 +879,191 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="lobbyBottomBar">
       <div id="lobbyPlayerList"></div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="lobby-btn" id="lobbyHitboxBtn" onclick="S.showHitbox=!S.showHitbox;this.classList.toggle('on',S.showHitbox);this.textContent=S.showHitbox?'⚙ HITBOX: ON':'⚙ HITBOX: OFF'" style="font-size:.6rem;">⚙ HITBOX: OFF</button>
         <button class="lobby-btn" onclick="MP.leaveRoom()">← SALIR</button>
       </div>
     </div>
     <div style="position:absolute;bottom:54px;left:50%;transform:translateX(-50%);font-size:.55rem;color:rgba(255,255,255,.28);letter-spacing:.18em;pointer-events:none;">WASD / ↑↓←→ PARA MOVERSE</div>
+
+    <!-- ══ LEFT LOBBY MENU ══ -->
+    <div id="lobbyLeftMenu">
+      <div id="llmMoney">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="#f39c12" stroke-width="1"/><text x="7" y="10.5" text-anchor="middle" font-family="Oswald,sans-serif" font-size="7" fill="#f39c12">$</text></svg>
+        <span id="llmMoneyAmt">0</span>$
+      </div>
+      <!-- Shop -->
+      <button class="llm-icon-btn" id="llmShopBtn" onclick="Shop.open()" title="TIENDA">
+        <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="15" cy="15" r="7" stroke="white" stroke-width="1.5"/>
+          <text x="15" y="19.5" text-anchor="middle" font-family="Oswald,sans-serif" font-size="9" fill="white">$</text>
+          <path d="M6 10h18M6 10L8 6h14l2 4" stroke="white" stroke-width="1.2"/>
+        </svg>
+      </button>
+      <!-- Inventory (backpack) -->
+      <button class="llm-icon-btn" id="llmInvBtn" onclick="Inventory.open()" title="INVENTARIO">
+        <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6" y="11" width="18" height="14" rx="1.5" stroke="white" stroke-width="1.5"/>
+          <path d="M11 11V9a4 4 0 0 1 8 0v2" stroke="white" stroke-width="1.5"/>
+          <rect x="12" y="16" width="6" height="3.5" rx="1" stroke="white" stroke-width="1.2"/>
+        </svg>
+      </button>
+      <!-- Settings (gear) -->
+      <button class="llm-icon-btn" id="llmSettBtn" onclick="LobbySettings.toggle()" title="AJUSTES">
+        <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="15" cy="15" r="3.5" stroke="white" stroke-width="1.5"/>
+          <path d="M15 6v2M15 22v2M6 15h2M22 15h2M8.5 8.5l1.4 1.4M20.1 20.1l1.4 1.4M8.5 21.5l1.4-1.4M20.1 9.9l1.4-1.4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Settings panel (appears to the right of gear btn) -->
+    <div id="lobbySettingsPanel">
+      <div class="lsp-title">AJUSTES</div>
+      <div class="lsp-option">
+        <span class="lsp-option-lbl">HITBOXES</span>
+        <label class="lsp-toggle">
+          <input type="checkbox" id="lobbyHitboxToggle" onchange="LobbySettings.setHitbox(this.checked)">
+          <span class="lsp-toggle-track"></span>
+          <span class="lsp-toggle-thumb"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ══ SHOP MODAL ══ -->
+    <div id="shopModal">
+      <div class="store-topbar">
+        <div class="store-topbar-title">FORSAKEN</div>
+        <div class="store-topbar-cd">
+          <div class="store-topbar-cd-lbl">LA RONDA COMIENZA EN:</div>
+          <div class="store-topbar-cd-val" id="shopCdVal">—</div>
+        </div>
+        <button class="store-close-btn" onclick="Shop.close()">✕ CERRAR</button>
+      </div>
+      <div class="store-body">
+        <!-- Left: tabs + grid -->
+        <div class="store-left">
+          <div class="store-tabs">
+            <button class="store-tab active" id="shopTabKillers" onclick="Shop.setTab('killers')">KILLERS</button>
+            <button class="store-tab" id="shopTabSurvivors" onclick="Shop.setTab('survivors')">SURVIVORS</button>
+          </div>
+          <div class="store-search">
+            <span class="store-search-icon">🔍</span>
+            <input type="text" placeholder="SEARCH" id="shopSearch" oninput="Shop.filter()">
+          </div>
+          <div class="store-grid" id="shopGrid"></div>
+        </div>
+        <!-- Right: detail -->
+        <div class="store-right">
+          <div class="store-right-empty" id="shopRightEmpty">
+            <div style="font-size:2rem;opacity:.3">🗡</div>
+            <div>Selecciona un personaje</div>
+          </div>
+          <div class="store-detail" id="shopDetail">
+            <div class="store-detail-preview" id="shopDetailPreview">
+              <div class="store-detail-preview-glow"></div>
+              <span id="shopDetailIcon">🗡</span>
+            </div>
+            <div class="store-detail-info">
+              <div class="store-detail-name" id="shopDetailName">—</div>
+              <div class="store-detail-author" id="shopDetailAuthor">Made By: —</div>
+              <div class="store-detail-tagline" id="shopDetailTagline"></div>
+              <div class="store-detail-btns">
+                <div class="store-detail-btn" onclick="Shop.toggleStats()">📖 STATS</div>
+                <div class="store-detail-btn" onclick="Shop.toggleSkins()">👕 SKINS</div>
+              </div>
+              <!-- Stats panel -->
+              <div class="store-stats-panel" id="shopStatsPanel" style="display:none">
+                <div class="store-stats-title">ESTADÍSTICAS</div>
+                <div id="shopStatsRows"></div>
+              </div>
+              <!-- Skins panel -->
+              <div class="store-skins-panel" id="shopSkinsPanel">
+                <div class="store-stats-title">SKINS</div>
+                <div class="store-skins-grid" id="shopSkinsGrid"></div>
+              </div>
+              <!-- Abilities -->
+              <div class="store-ability-panel" id="shopAbilityPanel">
+                <div class="store-ability-title">HABILIDADES</div>
+                <div id="shopAbilityRows"></div>
+              </div>
+            </div>
+            <div class="store-action-bar">
+              <div class="store-action-price" id="shopActionPrice">900$</div>
+              <button class="store-action-buy" id="shopActionBtn" onclick="Shop.doPurchase()">COMPRAR</button>
+            </div>
+          </div>
+          <!-- Money at bottom -->
+          <div class="store-money-bar">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="#f39c12" stroke-width="1"/><text x="7" y="10.5" text-anchor="middle" font-family="Oswald,sans-serif" font-size="7" fill="#f39c12">$</text></svg>
+            <span id="shopMoneyDisplay">0</span>$
+          </div>
+        </div>
+      </div>
+      <!-- Player list top-right overlay -->
+      <div class="store-players" id="shopPlayerList">
+        <div class="store-players-header">
+          <span>JUGADORES</span><span>DINERO</span>
+        </div>
+        <div id="shopPlayerRows"></div>
+      </div>
+    </div>
+
+    <!-- ══ INVENTORY MODAL ══ -->
+    <div id="inventoryModal">
+      <div class="store-topbar">
+        <div class="store-topbar-title">INVENTARIO</div>
+        <div class="store-topbar-cd">
+          <div class="store-topbar-cd-lbl">LA RONDA COMIENZA EN:</div>
+          <div class="store-topbar-cd-val" id="invCdVal">—</div>
+        </div>
+        <button class="store-close-btn" onclick="Inventory.close()">✕ CERRAR</button>
+      </div>
+      <div class="store-body">
+        <div class="store-left">
+          <div class="store-tabs">
+            <button class="store-tab active" id="invTabKillers" onclick="Inventory.setTab('killers')">KILLERS</button>
+            <button class="store-tab" id="invTabSurvivors" onclick="Inventory.setTab('survivors')">SURVIVORS</button>
+          </div>
+          <div class="store-grid" id="invGrid"></div>
+        </div>
+        <div class="store-right">
+          <div class="store-right-empty" id="invRightEmpty">
+            <div style="font-size:2rem;opacity:.3">🎒</div>
+            <div>Selecciona un personaje</div>
+          </div>
+          <div class="store-detail" id="invDetail">
+            <div class="store-detail-preview">
+              <div class="store-detail-preview-glow"></div>
+              <span id="invDetailIcon">🗡</span>
+            </div>
+            <div class="store-detail-info">
+              <div class="store-detail-name" id="invDetailName">—</div>
+              <div class="store-detail-author" id="invDetailAuthor"></div>
+              <div class="store-detail-tagline" id="invDetailTagline"></div>
+              <div class="store-detail-btns">
+                <div class="store-detail-btn" onclick="Inventory.toggleStats()">📖 STATS</div>
+                <div class="store-detail-btn" onclick="Inventory.toggleSkins()">👕 MIS SKINS</div>
+              </div>
+              <div class="store-stats-panel" id="invStatsPanel" style="display:none">
+                <div class="store-stats-title">ESTADÍSTICAS</div>
+                <div id="invStatsRows"></div>
+              </div>
+              <div class="store-skins-panel" id="invSkinsPanel">
+                <div class="store-stats-title">MIS SKINS</div>
+                <div class="store-skins-grid" id="invSkinsGrid"></div>
+              </div>
+              <div class="store-ability-panel" id="invAbilityPanel">
+                <div class="store-ability-title">HABILIDADES</div>
+                <div id="invAbilityRows"></div>
+              </div>
+            </div>
+            <div class="store-action-bar">
+              <div class="store-action-price" id="invActionStatus"></div>
+              <button class="store-action-buy equip-btn" id="invActionBtn" onclick="Inventory.doEquip()">EQUIPAR</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Profile modal (inside lobby) -->
@@ -664,7 +1162,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="bloxyBuffBar">🥤 VELOCIDAD <span id="bloxySpeedRoman">II</span></div>
     <div id="gbBuffBar">👻 INVIS IV · INDETECTABLE</div>
     <div id="hudAlivePanelWrap"></div>
-    <button id="hitboxToggleBtn" onclick="S.showHitbox=!S.showHitbox;this.classList.toggle('on',S.showHitbox);this.title=S.showHitbox?'Hitbox: ON':'Hitbox: OFF'">⚙</button>
+    <button id="hitboxToggleBtn" onclick="S.showHitbox=!S.showHitbox;this.classList.toggle('on',S.showHitbox);Stats.hitboxPref=S.showHitbox;Stats.save();const chk=document.getElementById('lobbyHitboxToggle');if(chk)chk.checked=S.showHitbox;">⚙</button>
     <div id="hudBottomBar">
       <div id="hudVitals">
         <div id="bleedWrap"><div class="bleed-dot"></div><div class="bleed-txt">SANGRANDO</div></div>
@@ -873,7 +1371,7 @@ const Auth={
     const db=this._db();
     if(this._tab==='register'){
       if(db[user.toLowerCase()]){this.msg('Ese usuario ya existe — inicia sesión');return;}
-      db[user.toLowerCase()]={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0};
+      db[user.toLowerCase()]={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false};
       this._save(db);
       Stats.load(user.toLowerCase());
       this._handleRemember(user);
@@ -944,6 +1442,12 @@ const Stats={
     this.killWins=acc.killWins||0;
     this.malicia=acc.malicia||0;
     this.username=acc.user||key;
+    this.coins=acc.coins!==undefined?acc.coins:100;
+    this.ownedKillers=acc.ownedKillers||[];
+    this.ownedSurvivors=acc.ownedSurvivors||[];
+    this.equippedKiller=acc.equippedKiller||'';
+    this.equippedSurvivor=acc.equippedSurvivor||'';
+    this.hitboxPref=acc.hitboxPref||false;
   },
   save(){
     if(!this._key)return;
@@ -953,6 +1457,12 @@ const Stats={
     db[this._key].survWins=this.survWins;
     db[this._key].killWins=this.killWins;
     db[this._key].malicia=this.malicia||0;
+    db[this._key].coins=this.coins!==undefined?this.coins:100;
+    db[this._key].ownedKillers=this.ownedKillers||[];
+    db[this._key].ownedSurvivors=this.ownedSurvivors||[];
+    db[this._key].equippedKiller=this.equippedKiller||'';
+    db[this._key].equippedSurvivor=this.equippedSurvivor||'';
+    db[this._key].hitboxPref=this.hitboxPref||false;
     Auth._save(db);
   },
   startSession(){this._session.start=Date.now();},
@@ -970,6 +1480,11 @@ const Stats={
   addWin(role){
     if(role==='killer')this.killWins++;else this.survWins++;
     this.save();
+  },
+  addCoins(n){
+    this.coins=(this.coins||0)+n;
+    this.save();
+    Economy.updateDisplays();
   },
   addMalicia(n){
     this.malicia=Math.max(0,(this.malicia||0)+n);
@@ -1315,6 +1830,8 @@ const UI={
     UI.show('s-lobby');
     LobbyWorld.init();
     UI.renderLobbyPlayers();
+    Economy.updateDisplays();
+    LobbySettings.loadHitbox();
     // Ensure keyboard input works in lobby
     setTimeout(()=>{document.getElementById('s-lobby').focus();},50);
   },
@@ -1369,6 +1886,10 @@ const UI={
     const el=document.getElementById('lobbyCDBig');
     el.textContent=v>0?v:'¡YA!';
     el.className=v<=10&&v>0?'urgent':'';
+    // Sync to open store modals
+    const cdTxt=v>0?String(v):'¡YA!';
+    const sc=document.getElementById('shopCdVal');if(sc)sc.textContent=cdTxt;
+    const ic=document.getElementById('invCdVal');if(ic)ic.textContent=cdTxt;
   },
 
   updateHUD(){
@@ -1732,6 +2253,10 @@ const LobbyWorld={
   },
   update(dt){
     const p=S.lobbyP;
+    // Block movement when shop or inventory is open
+    const shopOpen=document.getElementById('shopModal').classList.contains('show');
+    const invOpen=document.getElementById('inventoryModal').classList.contains('show');
+    if(shopOpen||invOpen)return;
     let dx=0,dy=0;
     if(Inp.k['w']||Inp.k['arrowup'])dy=-1;
     if(Inp.k['s']||Inp.k['arrowdown'])dy=1;
@@ -3394,6 +3919,7 @@ const Game={
     if(!S.lateJoin){ // don't count stats for mid-game spectators
     if((winner==='killer'&&myRole==='killer')||(winner==='survivors'&&myRole==='survivor')){
       Stats.addWin(myRole);
+      Stats.addCoins(30); // +30 coins for winning
     }
 
     // ── Malicia ──
@@ -4781,6 +5307,436 @@ const KillerWin={
 };
 
 // ══════════════════════════════════════════
+//  ECONOMY
+// ══════════════════════════════════════════
+const Economy={
+  updateDisplays(){
+    const m=Stats.coins||0;
+    const el=document.getElementById('llmMoneyAmt');if(el)el.textContent=m;
+    const sh=document.getElementById('shopMoneyDisplay');if(sh)sh.textContent=m;
+  },
+};
+
+// ══════════════════════════════════════════
+//  STORE DATA — killers & survivors
+//  Agrega personajes aquí cuando estén listos
+// ══════════════════════════════════════════
+const STORE_KILLERS=[
+  // Ejemplo (comentado):
+  // { id:'slasher', name:'SLASHER', price:0, free:true, icon:'🗡', author:'Forsaken',
+  //   tagline:'El asesino original. Rápido y letal.',
+  //   stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
+  //   abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas.'},{key:'Q',desc:'Behead — Dash + golpe.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño.'}],
+  //   skins:[] }
+];
+const STORE_SURVIVORS=[
+  // Ejemplo (comentado):
+  // { id:'noob', name:'NOOB', price:0, free:true, icon:'🏃', author:'Forsaken',
+  //   tagline:'El superviviente clásico. Ágil y resistente.',
+  //   stats:[{lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}],
+  //   abilities:[{key:'Q',desc:'Bloxy Cola — Aumenta velocidad temporalmente.'},{key:'E',desc:'Slate Skin — Sobrevive a un golpe mortal.'},{key:'R',desc:'Ghost Burger — Invisibilidad temporal.'}],
+  //   skins:[] }
+];
+
+// ══════════════════════════════════════════
+//  SHOP
+// ══════════════════════════════════════════
+const Shop={
+  _tab:'killers',
+  _selected:null,
+  _statsOpen:false,
+  _skinsOpen:false,
+
+  open(){
+    document.getElementById('shopModal').classList.add('show');
+    document.getElementById('s-lobby').focus();// keep lobby focus for movement
+    this._tab='killers';
+    this._selected=null;
+    this._statsOpen=false;this._skinsOpen=false;
+    document.getElementById('shopTabKillers').classList.add('active');
+    document.getElementById('shopTabSurvivors').classList.remove('active');
+    document.getElementById('shopSearch').value='';
+    this._renderGrid();
+    this._showRightEmpty();
+    this._renderPlayerList();
+    Economy.updateDisplays();
+    document.getElementById('llmShopBtn').classList.add('active');
+    document.getElementById('llmInvBtn').classList.remove('active');
+    document.getElementById('llmSettBtn').classList.remove('active');
+    const sp=document.getElementById('lobbySettingsPanel');if(sp)sp.classList.remove('show');
+  },
+
+  close(){
+    document.getElementById('shopModal').classList.remove('show');
+    document.getElementById('llmShopBtn').classList.remove('active');
+    setTimeout(()=>{document.getElementById('s-lobby').focus();},50);
+  },
+
+  setTab(t){
+    this._tab=t;
+    this._selected=null;
+    this._statsOpen=false;this._skinsOpen=false;
+    document.getElementById('shopTabKillers').classList.toggle('active',t==='killers');
+    document.getElementById('shopTabSurvivors').classList.toggle('active',t==='survivors');
+    document.getElementById('shopSearch').value='';
+    this._renderGrid();
+    this._showRightEmpty();
+  },
+
+  filter(){
+    this._renderGrid();
+  },
+
+  _getList(){return this._tab==='killers'?STORE_KILLERS:STORE_SURVIVORS;},
+  _getOwned(){return this._tab==='killers'?(Stats.ownedKillers||[]):(Stats.ownedSurvivors||[]);},
+  _getEquipped(){return this._tab==='killers'?(Stats.equippedKiller||''):(Stats.equippedSurvivor||'');},
+
+  _renderGrid(){
+    const grid=document.getElementById('shopGrid');
+    grid.innerHTML='';
+    const q=(document.getElementById('shopSearch').value||'').toLowerCase();
+    const list=this._getList().filter(c=>!q||c.name.toLowerCase().includes(q));
+    if(!list.length){
+      grid.innerHTML=`<div class="store-empty-msg"><div class="em-icon">${this._tab==='killers'?'🗡':'🏃'}</div><div class="em-text">NO HAY ${this._tab==='killers'?'KILLERS':'SURVIVORS'} DISPONIBLES AÚN<br><br>¡Pronto se agregarán<br>nuevos personajes!</div></div>`;
+      return;
+    }
+    const owned=this._getOwned();
+    const equipped=this._getEquipped();
+    list.forEach(c=>{
+      const isOwned=c.free||owned.includes(c.id);
+      const isEquipped=equipped===c.id;
+      const card=document.createElement('div');
+      card.className='store-card'+(this._selected===c.id?' selected':'');
+      card.innerHTML=`
+        <div class="store-card-portrait">
+          <div class="store-card-glow"></div>
+          <span style="position:relative;z-index:1">${c.icon||'🗡'}</span>
+        </div>
+        <div class="store-card-name">${c.name}</div>
+        <div class="store-card-price ${isOwned?'owned':c.free?'free':''}">${isOwned?(isEquipped?'EQUIPADO':'OBTENIDO'):(c.free?'FREE':c.price+'$')}</div>
+        ${isEquipped?'<div class="store-card-equipped-badge">✓ EQUIPADO</div>':(isOwned?'<div class="store-card-owned-badge">OBTENIDO</div>':'')}
+      `;
+      card.onclick=()=>this._select(c.id);
+      grid.appendChild(card);
+    });
+  },
+
+  _select(id){
+    this._selected=id;
+    this._statsOpen=false;this._skinsOpen=false;
+    this._renderGrid();
+    const list=this._getList();
+    const c=list.find(x=>x.id===id);
+    if(!c)return;
+    const owned=this._getOwned();
+    const isOwned=c.free||owned.includes(c.id);
+    const isEquipped=this._getEquipped()===c.id;
+    // Show detail
+    document.getElementById('shopRightEmpty').style.display='none';
+    const det=document.getElementById('shopDetail');
+    det.classList.add('show');
+    document.getElementById('shopDetailIcon').textContent=c.icon||'🗡';
+    document.getElementById('shopDetailName').textContent=c.name;
+    document.getElementById('shopDetailAuthor').textContent='Made By: '+(c.author||'Forsaken');
+    document.getElementById('shopDetailTagline').textContent=c.tagline||'';
+    // Stats
+    const sr=document.getElementById('shopStatsRows');
+    sr.innerHTML='';
+    (c.stats||[]).forEach(s=>{
+      const colors=['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6'];
+      const col=colors[Math.floor(Math.random()*colors.length)];
+      sr.innerHTML+=`<div class="store-stat-row"><div class="store-stat-lbl">${s.lbl}</div><div class="store-stat-bar"><div class="store-stat-fill" style="width:${s.val}%;background:${col}"></div></div></div>`;
+    });
+    // Abilities
+    const ar=document.getElementById('shopAbilityRows');
+    ar.innerHTML='';
+    (c.abilities||[]).forEach(a=>{
+      ar.innerHTML+=`<div class="store-ability-item"><div class="store-ability-key">${a.key}</div><div class="store-ability-desc">${a.desc}</div></div>`;
+    });
+    // Skins
+    const sg=document.getElementById('shopSkinsGrid');
+    sg.innerHTML='';
+    if(!isOwned){
+      sg.innerHTML='<div style="font-size:.52rem;color:rgba(255,255,255,.3);letter-spacing:.1em;">Compra este personaje para ver sus skins.</div>';
+    } else {
+      (c.skins||[]).forEach((sk,i)=>{
+        sg.innerHTML+=`<div class="store-skin-slot" title="${sk.name||'Skin '+i}">${sk.icon||'🎨'}</div>`;
+      });
+      if(!(c.skins&&c.skins.length))sg.innerHTML='<div style="font-size:.52rem;color:rgba(255,255,255,.3);letter-spacing:.1em;">No hay skins disponibles.</div>';
+    }
+    // Panels hidden by default
+    document.getElementById('shopStatsPanel').style.display='none';
+    document.getElementById('shopSkinsPanel').classList.remove('show');
+    document.getElementById('shopAbilityPanel').style.display=(c.abilities&&c.abilities.length)?'block':'none';
+    // Action bar
+    const priceEl=document.getElementById('shopActionPrice');
+    const buyBtn=document.getElementById('shopActionBtn');
+    if(isOwned){
+      priceEl.className='store-action-price owned';
+      priceEl.textContent=isEquipped?'EQUIPADO':'OBTENIDO';
+      buyBtn.className='store-action-buy owned';
+      buyBtn.textContent='OBTENIDO';
+    } else if(c.free){
+      priceEl.className='store-action-price free';priceEl.textContent='FREE';
+      buyBtn.className='store-action-buy';buyBtn.textContent='OBTENER';
+    } else {
+      priceEl.className='store-action-price';priceEl.textContent=c.price+'$';
+      const canBuy=(Stats.coins||0)>=c.price;
+      buyBtn.className='store-action-buy';
+      buyBtn.textContent='COMPRAR';
+      buyBtn.style.opacity=canBuy?'1':'0.5';
+    }
+  },
+
+  _showRightEmpty(){
+    document.getElementById('shopRightEmpty').style.display='flex';
+    document.getElementById('shopDetail').classList.remove('show');
+  },
+
+  toggleStats(){
+    this._statsOpen=!this._statsOpen;
+    document.getElementById('shopStatsPanel').style.display=this._statsOpen?'block':'none';
+  },
+  toggleSkins(){
+    this._skinsOpen=!this._skinsOpen;
+    document.getElementById('shopSkinsPanel').classList.toggle('show',this._skinsOpen);
+  },
+
+  doPurchase(){
+    if(!this._selected)return;
+    const list=this._getList();
+    const c=list.find(x=>x.id===this._selected);
+    if(!c)return;
+    const owned=this._getOwned();
+    if(c.free||owned.includes(c.id))return; // already owned
+    if(!c.free&&(Stats.coins||0)<c.price){
+      // Flash not enough money
+      const btn=document.getElementById('shopActionBtn');
+      btn.textContent='SIN DINERO';btn.style.borderColor='#e74c3c';
+      setTimeout(()=>{btn.textContent='COMPRAR';btn.style.borderColor='';},1500);
+      return;
+    }
+    // Deduct coins
+    if(!c.free)Stats.addCoins(-c.price);
+    // Add to owned
+    if(this._tab==='killers'){Stats.ownedKillers=[...(Stats.ownedKillers||[]),c.id];}
+    else{Stats.ownedSurvivors=[...(Stats.ownedSurvivors||[]),c.id];}
+    Stats.save();
+    this._select(c.id);
+    this._renderGrid();
+    Economy.updateDisplays();
+  },
+
+  _renderPlayerList(){
+    const rows=document.getElementById('shopPlayerRows');
+    if(!rows)return;
+    rows.innerHTML='';
+    const players=[...S.players];
+    // Put self first
+    const myIdx=players.findIndex(p=>p.id===S.myId);
+    if(myIdx>0){const [me]=players.splice(myIdx,1);players.unshift(me);}
+    players.forEach(p=>{
+      const isMe=p.id===S.myId;
+      const money=isMe?(Stats.coins||0):'—';
+      const div=document.createElement('div');
+      div.className='store-player-row'+(isMe?' me':'');
+      div.innerHTML=`<span>${p.username||p.name}</span><span class="store-player-money">${money}$</span>`;
+      rows.appendChild(div);
+    });
+  },
+};
+
+// ══════════════════════════════════════════
+//  INVENTORY
+// ══════════════════════════════════════════
+const Inventory={
+  _tab:'killers',
+  _selected:null,
+  _statsOpen:false,
+  _skinsOpen:false,
+
+  open(){
+    document.getElementById('inventoryModal').classList.add('show');
+    this._tab='killers';
+    this._selected=null;
+    this._statsOpen=false;this._skinsOpen=false;
+    document.getElementById('invTabKillers').classList.add('active');
+    document.getElementById('invTabSurvivors').classList.remove('active');
+    this._renderGrid();
+    this._showRightEmpty();
+    document.getElementById('llmInvBtn').classList.add('active');
+    document.getElementById('llmShopBtn').classList.remove('active');
+    document.getElementById('llmSettBtn').classList.remove('active');
+    const sp=document.getElementById('lobbySettingsPanel');if(sp)sp.classList.remove('show');
+  },
+
+  close(){
+    document.getElementById('inventoryModal').classList.remove('show');
+    document.getElementById('llmInvBtn').classList.remove('active');
+    setTimeout(()=>{document.getElementById('s-lobby').focus();},50);
+  },
+
+  setTab(t){
+    this._tab=t;
+    this._selected=null;
+    this._statsOpen=false;this._skinsOpen=false;
+    document.getElementById('invTabKillers').classList.toggle('active',t==='killers');
+    document.getElementById('invTabSurvivors').classList.toggle('active',t==='survivors');
+    this._renderGrid();
+    this._showRightEmpty();
+  },
+
+  _getOwnedList(){
+    const all=this._tab==='killers'?STORE_KILLERS:STORE_SURVIVORS;
+    const owned=this._tab==='killers'?(Stats.ownedKillers||[]):(Stats.ownedSurvivors||[]);
+    return all.filter(c=>c.free||owned.includes(c.id));
+  },
+
+  _getEquipped(){return this._tab==='killers'?(Stats.equippedKiller||''):(Stats.equippedSurvivor||'');},
+
+  _renderGrid(){
+    const grid=document.getElementById('invGrid');
+    grid.innerHTML='';
+    const list=this._getOwnedList();
+    const equipped=this._getEquipped();
+    if(!list.length){
+      grid.innerHTML=`<div class="store-empty-msg"><div class="em-icon">🎒</div><div class="em-text">NO TIENES ${this._tab==='killers'?'KILLERS':'SURVIVORS'} AÚN<br><br>Ve a la tienda para comprar personajes.</div></div>`;
+      return;
+    }
+    list.forEach(c=>{
+      const isEquipped=equipped===c.id;
+      const card=document.createElement('div');
+      card.className='store-card'+(this._selected===c.id?' selected':'');
+      card.innerHTML=`
+        <div class="store-card-portrait">
+          <div class="store-card-glow"></div>
+          <span style="position:relative;z-index:1">${c.icon||'🗡'}</span>
+        </div>
+        <div class="store-card-name">${c.name}</div>
+        <div class="store-card-price owned">${isEquipped?'EQUIPADO':'OBTENIDO'}</div>
+        ${isEquipped?'<div class="store-card-equipped-badge">✓ EQUIPADO</div>':''}
+      `;
+      card.onclick=()=>this._select(c.id);
+      grid.appendChild(card);
+    });
+  },
+
+  _select(id){
+    this._selected=id;
+    this._statsOpen=false;this._skinsOpen=false;
+    this._renderGrid();
+    const c=this._getOwnedList().find(x=>x.id===id);
+    if(!c)return;
+    const isEquipped=this._getEquipped()===c.id;
+    document.getElementById('invRightEmpty').style.display='none';
+    const det=document.getElementById('invDetail');det.classList.add('show');
+    document.getElementById('invDetailIcon').textContent=c.icon||'🗡';
+    document.getElementById('invDetailName').textContent=c.name;
+    document.getElementById('invDetailAuthor').textContent='Made By: '+(c.author||'Forsaken');
+    document.getElementById('invDetailTagline').textContent=c.tagline||'';
+    // Stats
+    const sr=document.getElementById('invStatsRows');sr.innerHTML='';
+    (c.stats||[]).forEach(s=>{
+      const colors=['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6'];
+      const col=colors[Math.floor(Math.random()*colors.length)];
+      sr.innerHTML+=`<div class="store-stat-row"><div class="store-stat-lbl">${s.lbl}</div><div class="store-stat-bar"><div class="store-stat-fill" style="width:${s.val}%;background:${col}"></div></div></div>`;
+    });
+    // Abilities
+    const ar=document.getElementById('invAbilityRows');ar.innerHTML='';
+    (c.abilities||[]).forEach(a=>{
+      ar.innerHTML+=`<div class="store-ability-item"><div class="store-ability-key">${a.key}</div><div class="store-ability-desc">${a.desc}</div></div>`;
+    });
+    // Skins (only owned skins)
+    const sg=document.getElementById('invSkinsGrid');sg.innerHTML='';
+    const ownedSkins=(c.skins||[]);// filter to owned when skin system is added
+    if(!ownedSkins.length){
+      sg.innerHTML='<div style="font-size:.52rem;color:rgba(255,255,255,.3);letter-spacing:.1em;">No tienes skins para este personaje.</div>';
+    } else {
+      ownedSkins.forEach((sk,i)=>{
+        sg.innerHTML+=`<div class="store-skin-slot" title="${sk.name||'Skin '+i}">${sk.icon||'🎨'}</div>`;
+      });
+    }
+    document.getElementById('invStatsPanel').style.display='none';
+    document.getElementById('invSkinsPanel').classList.remove('show');
+    document.getElementById('invAbilityPanel').style.display=(c.abilities&&c.abilities.length)?'block':'none';
+    // Action btn
+    const statusEl=document.getElementById('invActionStatus');
+    const btn=document.getElementById('invActionBtn');
+    if(isEquipped){
+      statusEl.textContent='✓ EQUIPADO';statusEl.style.color='var(--gold)';
+      btn.className='store-action-buy unequip-btn';btn.textContent='DESEQUIPAR';
+    } else {
+      statusEl.textContent='';
+      btn.className='store-action-buy equip-btn';btn.textContent='EQUIPAR';
+    }
+  },
+
+  _showRightEmpty(){
+    document.getElementById('invRightEmpty').style.display='flex';
+    document.getElementById('invDetail').classList.remove('show');
+  },
+
+  toggleStats(){
+    this._statsOpen=!this._statsOpen;
+    document.getElementById('invStatsPanel').style.display=this._statsOpen?'block':'none';
+  },
+  toggleSkins(){
+    this._skinsOpen=!this._skinsOpen;
+    document.getElementById('invSkinsPanel').classList.toggle('show',this._skinsOpen);
+  },
+
+  doEquip(){
+    if(!this._selected)return;
+    const c=this._getOwnedList().find(x=>x.id===this._selected);
+    if(!c)return;
+    const isEquipped=this._getEquipped()===c.id;
+    if(this._tab==='killers'){
+      Stats.equippedKiller=isEquipped?'':c.id;
+    } else {
+      Stats.equippedSurvivor=isEquipped?'':c.id;
+    }
+    Stats.save();
+    this._select(c.id);
+    this._renderGrid();
+  },
+};
+
+// ══════════════════════════════════════════
+//  LOBBY SETTINGS
+// ══════════════════════════════════════════
+const LobbySettings={
+  toggle(){
+    const panel=document.getElementById('lobbySettingsPanel');
+    const isOpen=panel.classList.contains('show');
+    panel.classList.toggle('show',!isOpen);
+    document.getElementById('llmSettBtn').classList.toggle('active',!isOpen);
+    document.getElementById('llmShopBtn').classList.remove('active');
+    document.getElementById('llmInvBtn').classList.remove('active');
+    if(!isOpen){ // closing shop/inv if open
+      document.getElementById('shopModal').classList.remove('show');
+      document.getElementById('inventoryModal').classList.remove('show');
+    }
+  },
+  loadHitbox(){
+    const pref=Stats.hitboxPref||false;
+    S.showHitbox=pref;
+    const chk=document.getElementById('lobbyHitboxToggle');
+    if(chk)chk.checked=pref;
+    // Also sync the in-game hitbox button state
+    const btn=document.getElementById('hitboxToggleBtn');
+    if(btn)btn.classList.toggle('on',pref);
+  },
+  setHitbox(val){
+    S.showHitbox=val;
+    Stats.hitboxPref=val;
+    Stats.save();
+    // Sync in-game button
+    const btn=document.getElementById('hitboxToggleBtn');
+    if(btn)btn.classList.toggle('on',val);
+  },
+};
+
+// ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
 Inp.init();
@@ -4795,6 +5751,16 @@ window.addEventListener('beforeunload',()=>{
 // Click outside profile modal to close
 document.getElementById('profileModal').addEventListener('click',function(e){
   if(e.target===this)LobbyWorld.closeProfile();
+});
+
+// Click outside settings panel to close
+document.getElementById('s-lobby').addEventListener('click',function(e){
+  const panel=document.getElementById('lobbySettingsPanel');
+  const settBtn=document.getElementById('llmSettBtn');
+  if(panel&&panel.classList.contains('show')&&!panel.contains(e.target)&&!settBtn.contains(e.target)){
+    panel.classList.remove('show');
+    settBtn.classList.remove('active');
+  }
 });
 
 // Client input loop — sends inputs to host every frame
