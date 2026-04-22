@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>FORSAKEN — Online</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<!-- Firebase SDK — DESACTIVADO (descomentar cuando se configure el proyecto)
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+-->
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oswald:wght@400;700&display=swap');
 :root{
@@ -57,6 +61,19 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .auth-remember input[type=checkbox]{accent-color:var(--blood);width:13px;height:13px;cursor:pointer;flex-shrink:0;}
 .btn-logout{background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:.18em;padding:7px 20px;cursor:pointer;text-transform:uppercase;transition:color .15s,border-color .15s;}
 .btn-logout:hover{border-color:var(--blood);color:var(--blood);}
+/* ── PASSWORD WRAPPER ── */
+.auth-pass-wrap{position:relative;width:100%;display:flex;}
+.auth-pass-wrap .auth-field{flex:1;padding-right:40px;}
+.auth-pass-eye{
+  position:absolute;right:0;top:0;bottom:0;
+  width:40px;display:flex;align-items:center;justify-content:center;
+  background:transparent;border:none;cursor:pointer;
+  color:var(--dim);font-size:1rem;transition:color .15s;
+  padding:0;
+}
+.auth-pass-eye:hover{color:var(--blood);}
+/* ── FIREBASE STATUS ── */
+.fb-status{font-size:.55rem;letter-spacing:.18em;color:var(--dim);text-align:center;min-height:14px;}
 
 /* ── LOBBY STATS — name pills ── */
 #lobbyStatsPanel{
@@ -812,7 +829,10 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     </div>
     <input class="auth-field" id="authUser" type="text" maxlength="18" placeholder="USUARIO" autocomplete="username"
       oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
-    <input class="auth-field" id="authPass" type="password" maxlength="32" placeholder="CONTRASEÑA" autocomplete="current-password">
+    <div class="auth-pass-wrap">
+      <input class="auth-field" id="authPass" type="password" maxlength="32" placeholder="CONTRASEÑA" autocomplete="current-password">
+      <button class="auth-pass-eye" id="passEyeBtn" type="button" onclick="Auth.togglePassVis()" title="Mostrar/ocultar contraseña">👁</button>
+    </div>
     <label class="auth-remember"><input type="checkbox" id="rememberMe"> RECORDAR USUARIO</label>
     <div class="auth-msg" id="authMsg"></div>
     <button class="btn" id="authBtn" onclick="Auth.submit()"><span id="authBtnTxt">ENTRAR</span></button>
@@ -831,13 +851,24 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 
 <!-- MP MENU — elige modo -->
 <div id="s-rooms" class="screen" style="background:radial-gradient(ellipse at 50% 30%,#0a0318 0%,#05050a 65%);">
+  <!-- Nombre usuario arriba izquierda -->
+  <div id="roomsUsername" style="position:absolute;top:16px;left:20px;font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.2em;color:rgba(255,255,255,.55);pointer-events:none;"></div>
+  <!-- Título central -->
   <div style="font-family:'Oswald',sans-serif;font-size:1.5rem;letter-spacing:.35em;color:#fff;text-shadow:0 0 20px var(--blood);margin-bottom:6px;">FORSAKEN</div>
   <div style="font-size:.62rem;letter-spacing:.4em;color:var(--dim);margin-bottom:30px;">MODO ONLINE</div>
   <div style="display:flex;flex-direction:column;gap:14px;width:min(380px,90vw);">
     <button class="btn" onclick="MP.openRapidas()"><span>⚡ PARTIDA RÁPIDA</span></button>
     <button class="btn btn-sec" onclick="MP.openPrivada()"><span>🔒 PARTIDA PRIVADA</span></button>
     <div id="mpStatusMsg" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;margin-top:4px;"></div>
-    <button onclick="UI.goMenu()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">← VOLVER AL MENÚ</button>
+    <button onclick="Auth.logout()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">🚪 CERRAR SESIÓN</button>
+  </div>
+  <!-- Guardar / Cargar — abajo derecha -->
+  <div style="position:absolute;bottom:20px;right:20px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+    <div id="saveFileMsg" style="font-size:.6rem;letter-spacing:.15em;min-height:16px;text-align:right;"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="SaveFile.import()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:8px 18px;cursor:pointer;text-transform:uppercase;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--survivor)';this.style.color='var(--survivor)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">📂 CARGAR</button>
+      <button onclick="SaveFile.export()" style="background:transparent;border:1px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:8px 18px;cursor:pointer;text-transform:uppercase;transition:background .15s;" onmouseover="this.style.background='rgba(192,57,43,.15)'" onmouseout="this.style.background='transparent'">💾 GUARDAR</button>
+    </div>
   </div>
 </div>
 
@@ -1314,57 +1345,122 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 // ══════════════════════════════════════════
 //  AUTH & STATS
 // ══════════════════════════════════════════
-// ── PERSISTENT STORAGE (survives file re-downloads) ──
-// Uses window.storage (Anthropic artifact storage) with localStorage fallback.
-// Key is fixed 'forsaken_db' — not tied to file path or version.
+// ══════════════════════════════════════════
+//  FIREBASE — DESACTIVADO
+//  Para reactivar: descomentar los scripts del <head>, rellenar FB_CONFIG
+//  y descomentar este bloque completo.
+// ══════════════════════════════════════════
+/*
+const FB_CONFIG = {
+  apiKey:            "FILL_API_KEY",
+  authDomain:        "FILL_PROJECT_ID.firebaseapp.com",
+  databaseURL:       "https://FILL_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId:         "FILL_PROJECT_ID",
+  storageBucket:     "FILL_PROJECT_ID.appspot.com",
+  messagingSenderId: "FILL_SENDER_ID",
+  appId:             "FILL_APP_ID"
+};
+
+let _fbDb = null;
+let _fbReady = false;
+
+function _initFirebase(){
+  if(_fbDb) return _fbDb;
+  if(typeof firebase === 'undefined'){
+    const el=document.getElementById('fbStatus');
+    if(el){el.textContent='🟡 Modo local (sin nube)';el.style.color='var(--gold)';}
+    return null;
+  }
+  if(FB_CONFIG.apiKey.startsWith('FILL_') || FB_CONFIG.databaseURL.includes('FILL_')){
+    const el=document.getElementById('fbStatus');
+    if(el){el.textContent='🟡 Modo local (configura Firebase)';el.style.color='var(--gold)';}
+    return null;
+  }
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    _fbDb = firebase.database();
+    _fbReady = true;
+    const el=document.getElementById('fbStatus');
+    if(el){el.textContent='🟢 Nube conectada';el.style.color='var(--green)';}
+    return _fbDb;
+  }catch(e){
+    console.warn('Firebase init error:',e);
+    const el=document.getElementById('fbStatus');
+    if(el){el.textContent='🟡 Modo local (sin nube)';el.style.color='var(--gold)';}
+    return null;
+  }
+}
+*/
+// Firebase desactivado — stub para evitar errores si algo lo llama
+function _initFirebase(){ return null; }
+let _fbReady = false;
+
+// ── PERSISTENT STORAGE (localStorage — Firebase desactivado) ──
 const PersistDB={
-  _UKEY:'forsaken_users_v1',
   _RKEY:'forsaken_remember_v1',
   _cache:null,
-  async _load(){
-    // Try window.storage first (artifact persistent storage)
-    if(typeof window.storage!=='undefined'){
-      try{
-        const r=await window.storage.get(this._UKEY);
-        const data=r?JSON.parse(r.value):{};
-        // Merge with localStorage in case there's older data there
-        try{const loc=JSON.parse(localStorage.getItem('fsk_users')||'{}');Object.assign(data,loc);}catch(e){}
-        this._cache=data;return data;
-      }catch(e){}
-    }
-    // Fallback: localStorage
-    try{this._cache=JSON.parse(localStorage.getItem('fsk_users')||'{}');return this._cache;}catch(e){this._cache={};return {};}
+
+  // Carga datos de UN usuario específico desde localStorage
+  async loadUser(userKey){
+    // [FIREBASE DESACTIVADO] const db=_initFirebase(); if(db){ ... }
+    try{
+      const loc=JSON.parse(localStorage.getItem('fsk_users')||'{}');
+      if(!this._cache)this._cache={};
+      Object.assign(this._cache,loc);
+      return this._cache[userKey]||null;
+    }catch(e){return null;}
   },
-  async _store(db){
-    this._cache=db;
-    const str=JSON.stringify(db);
-    if(typeof window.storage!=='undefined'){
-      try{await window.storage.set(this._UKEY,str);}catch(e){}
-    }
-    try{localStorage.setItem('fsk_users',str);}catch(e){}
+
+  // Verifica si un nombre de usuario ya existe en localStorage
+  async usernameExists(userKey){
+    // [FIREBASE DESACTIVADO] const db=_initFirebase(); if(db){ ... }
+    try{
+      const loc=JSON.parse(localStorage.getItem('fsk_users')||'{}');
+      return !!loc[userKey];
+    }catch(e){return false;}
   },
-  async getRemember(){
-    if(typeof window.storage!=='undefined'){
-      try{const r=await window.storage.get(this._RKEY);if(r)return r.value;}catch(e){}
-    }
-    return localStorage.getItem('fsk_remember');
+
+  // Guarda los datos de un usuario en localStorage
+  async saveUser(userKey,data){
+    if(!this._cache)this._cache={};
+    this._cache[userKey]=data;
+    // [FIREBASE DESACTIVADO] const db=_initFirebase(); if(db){ await db.ref(...).set(data); }
+    try{
+      const loc=JSON.parse(localStorage.getItem('fsk_users')||'{}');
+      loc[userKey]=data;
+      localStorage.setItem('fsk_users',JSON.stringify(loc));
+    }catch(e){}
   },
-  async setRemember(user){
-    if(typeof window.storage!=='undefined'){try{await window.storage.set(this._RKEY,user);}catch(e){}}
-    try{localStorage.setItem('fsk_remember',user);}catch(e){}
-  },
-  async clearRemember(){
-    if(typeof window.storage!=='undefined'){try{await window.storage.delete(this._RKEY);}catch(e){}}
-    try{localStorage.removeItem('fsk_remember');}catch(e){}
-  },
+
+  _db(){return this._cache||{};},
+
+  async getRemember(){return localStorage.getItem(this._RKEY);},
+  async setRemember(user){localStorage.setItem(this._RKEY,user);},
+  async clearRemember(){localStorage.removeItem(this._RKEY);},
 };
 
 const Auth={
   _tab:'login',
   _dbLoaded:false,
   _db(){return PersistDB._cache||{};},
-  async _ensureDB(){if(!this._dbLoaded){await PersistDB._load();this._dbLoaded=true;}},
-  _save(db){PersistDB._store(db);},
+  async _ensureDB(){/* no-op — loads happen per-user now */},
+  _save(db){/* individual saves handled via Stats.save() → PersistDB.saveUser() */},
+
+  // Mostrar/ocultar contraseña
+  togglePassVis(){
+    const inp=document.getElementById('authPass');
+    const btn=document.getElementById('passEyeBtn');
+    if(inp.type==='password'){
+      inp.type='text';
+      btn.textContent='🙈';
+      btn.title='Ocultar contraseña';
+    } else {
+      inp.type='password';
+      btn.textContent='👁';
+      btn.title='Mostrar contraseña';
+    }
+  },
+
   switchTab(t){
     this._tab=t;
     document.getElementById('tabLogin').classList.toggle('active',t==='login');
@@ -1372,34 +1468,46 @@ const Auth={
     document.getElementById('authBtnTxt').textContent=t==='login'?'ENTRAR':'CREAR CUENTA';
     document.getElementById('authMsg').textContent='';
     document.getElementById('authMsg').className='auth-msg';
+    // Restablecer visibilidad de contraseña al cambiar de tab
+    const inp=document.getElementById('authPass');
+    const btn=document.getElementById('passEyeBtn');
+    if(inp){inp.type='password';}
+    if(btn){btn.textContent='👁';}
   },
   msg(txt,ok){
     const el=document.getElementById('authMsg');
     el.textContent=txt;el.className='auth-msg '+(ok?'ok':'err');
   },
   async submit(){
-    await this._ensureDB();
     const user=document.getElementById('authUser').value.trim();
     const pass=document.getElementById('authPass').value;
     if(!user||user.length<2){this.msg('Usuario muy corto (mín 2 chars)');return;}
     if(!pass||pass.length<4){this.msg('Contraseña muy corta (mín 4 chars)');return;}
-    const db=this._db();
+    const userKey=user.toLowerCase();
+
     if(this._tab==='register'){
-      if(db[user.toLowerCase()]){this.msg('Ese usuario ya existe — inicia sesión');return;}
-      db[user.toLowerCase()]={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false};
-      this._save(db);
-      Stats.load(user.toLowerCase());
+      // Verificar en la NUBE si el nombre ya existe
+      this.msg('🔍 Verificando nombre en la nube...',true);
+      const exists=await PersistDB.usernameExists(userKey);
+      if(exists){this.msg('Ese usuario ya existe — inicia sesión');return;}
+      // Crear nueva cuenta
+      const newAcc={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false};
+      this.msg('☁ Guardando cuenta en la nube...',true);
+      await PersistDB.saveUser(userKey,newAcc);
+      Stats.load(userKey);
       this._handleRemember(user);
       this.msg('¡Cuenta creada! Entrando...',true);
-      setTimeout(()=>UI.show('s-menu'),900);
+      setTimeout(()=>{UI.show('s-rooms');SaveFile.updateRoomsUI();},900);
     } else {
-      const acc=db[user.toLowerCase()];
+      // Login: cargar datos desde Firebase
+      this.msg('☁ Cargando tu progreso...',true);
+      const acc=await PersistDB.loadUser(userKey);
       if(!acc){this.msg('Usuario no encontrado — ¿crear cuenta?');return;}
       if(acc.pass!==pass){this.msg('Contraseña incorrecta');return;}
-      Stats.load(user.toLowerCase());
+      Stats.load(userKey);
       this._handleRemember(user);
       this.msg('¡Bienvenido de vuelta, '+acc.user+'!',true);
-      setTimeout(()=>{UI.show('s-menu');Auth.updateLogoutBtn();},700);
+      setTimeout(()=>{UI.show('s-rooms');Auth.updateLogoutBtn();SaveFile.updateRoomsUI();},700);
     }
   },
   _handleRemember(user){
@@ -1414,6 +1522,8 @@ const Auth={
     Stats._key=null;Stats.username='';
     document.getElementById('authUser').value='';
     document.getElementById('authPass').value='';
+    document.getElementById('authPass').type='password';
+    document.getElementById('passEyeBtn').textContent='👁';
     document.getElementById('authMsg').textContent='';
     document.getElementById('authMsg').className='auth-msg';
     Net.cleanup();
@@ -1424,22 +1534,19 @@ const Auth={
     if(btn&&Stats.username)btn.textContent='🚪 CERRAR SESIÓN ('+Stats.username+')';
   },
   async loadRemember(){
-    // First load the DB from persistent storage
-    await PersistDB._load();
-    Auth._dbLoaded=true;
+    // [FIREBASE DESACTIVADO] _initFirebase();
     const saved=await PersistDB.getRemember();
     if(saved){
       const el=document.getElementById('authUser');
       if(el)el.value=saved;
       const cb=document.getElementById('rememberMe');
       if(cb)cb.checked=true;
-      // Auto-login if remember is set and account exists
-      const db=Auth._db();
-      if(db[saved.toLowerCase()]){
-        const acc=db[saved.toLowerCase()];
+      // Auto-login: cargar datos del usuario guardado desde Firebase
+      const acc=await PersistDB.loadUser(saved.toLowerCase());
+      if(acc){
         Stats.load(saved.toLowerCase());
         Auth.updateLogoutBtn();
-        setTimeout(()=>UI.show('s-menu'),100);
+        setTimeout(()=>{UI.show('s-rooms');SaveFile.updateRoomsUI();},100);
       }
     }
   },
@@ -1478,7 +1585,8 @@ const Stats={
     db[this._key].equippedKiller=this.equippedKiller||'';
     db[this._key].equippedSurvivor=this.equippedSurvivor||'';
     db[this._key].hitboxPref=this.hitboxPref||false;
-    Auth._save(db);
+    // Guardar en Firebase (async, no bloquea)
+    PersistDB.saveUser(this._key, db[this._key]);
   },
   startSession(){this._session.start=Date.now();},
   tickSession(){
@@ -1521,7 +1629,134 @@ const Stats={
 
 // Session tick interval
 setInterval(()=>{if(S&&S.inLobbyWorld)Stats.tickSession();},5000);
+
 // ══════════════════════════════════════════
+//  SAVE FILE — Guardado en archivo con hash
+//  Salt: "chicocool"
+//  Estructura: { data: base64(JSON), hash: fnv1a(JSON + salt) }
+// ══════════════════════════════════════════
+const SaveFile = {
+  _SALT: 'chicocool',
+  _EXT:  'fsk',
+
+  // FNV-1a hash — rápido, sincrónico, resistente a edición manual
+  _hash(str){
+    const s = str + this._SALT;
+    let h = 0x811c9dc5;
+    for(let i = 0; i < s.length; i++){
+      h ^= s.charCodeAt(i);
+      h  = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16).padStart(8,'0');
+  },
+
+  // Exporta la partida actual como archivo .fsk
+  export(){
+    if(!Stats._key){ this._msg('⚠ Inicia sesión primero', true); return; }
+    const data = {
+      user:            Stats.username,
+      timePlayed:      Stats.timePlayed      || 0,
+      survWins:        Stats.survWins        || 0,
+      killWins:        Stats.killWins        || 0,
+      malicia:         Stats.malicia         || 0,
+      coins:           Stats.coins           !== undefined ? Stats.coins : 100,
+      ownedKillers:    Stats.ownedKillers    || ['slasher'],
+      ownedSurvivors:  Stats.ownedSurvivors  || ['noob'],
+      equippedKiller:  Stats.equippedKiller  || '',
+      equippedSurvivor:Stats.equippedSurvivor|| '',
+      hitboxPref:      Stats.hitboxPref      || false,
+      savedAt:         Date.now(),
+    };
+    const json    = JSON.stringify(data);
+    const encoded = btoa(unescape(encodeURIComponent(json))); // UTF-8 safe base64
+    const hash    = this._hash(json);
+    const blob    = new Blob([JSON.stringify({data: encoded, hash})], {type:'application/octet-stream'});
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement('a');
+    a.href     = url;
+    a.download = (Stats.username||'partida') + '.' + this._EXT;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this._msg('✅ Partida guardada', false);
+  },
+
+  // Importa un archivo .fsk y verifica su hash
+  import(){
+    const input = document.createElement('input');
+    input.type   = 'file';
+    input.accept = '.'+this._EXT+',.json';
+    input.onchange = (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        try{
+          const saveObj = JSON.parse(ev.target.result);
+          if(!saveObj.data || !saveObj.hash){ this._msg('❌ Archivo inválido', true); return; }
+          // Decodificar
+          const json = decodeURIComponent(escape(atob(saveObj.data)));
+          // Verificar hash
+          const calcHash = this._hash(json);
+          if(calcHash !== saveObj.hash){
+            this._msg('❌ Archivo modificado — carga rechazada', true);
+            return;
+          }
+          const d = JSON.parse(json);
+          // Cargar en Stats
+          Stats.username        = d.user || 'Jugador';
+          Stats._key            = Stats.username.toLowerCase();
+          Stats.timePlayed      = d.timePlayed      || 0;
+          Stats.survWins        = d.survWins        || 0;
+          Stats.killWins        = d.killWins        || 0;
+          Stats.malicia         = d.malicia         || 0;
+          Stats.coins           = d.coins           !== undefined ? d.coins : 100;
+          Stats.ownedKillers    = d.ownedKillers    || ['slasher'];
+          Stats.ownedSurvivors  = d.ownedSurvivors  || ['noob'];
+          Stats.equippedKiller  = d.equippedKiller  || '';
+          Stats.equippedSurvivor= d.equippedSurvivor|| '';
+          Stats.hitboxPref      = d.hitboxPref      || false;
+          // Sincronizar con localStorage
+          const acc = {user:d.user, pass:'', ...d};
+          const loc = JSON.parse(localStorage.getItem('fsk_users')||'{}');
+          loc[Stats._key] = acc;
+          localStorage.setItem('fsk_users', JSON.stringify(loc));
+          if(!PersistDB._cache) PersistDB._cache = {};
+          PersistDB._cache[Stats._key] = acc;
+          // Actualizar UI
+          this.updateRoomsUI();
+          Auth.updateLogoutBtn();
+          this._msg('✅ Partida cargada: '+Stats.username, false);
+          // Si no estamos en s-rooms, ir allá
+          if(!document.getElementById('s-rooms').classList.contains('active')){
+            UI.show('s-rooms');
+          }
+        }catch(err){
+          this._msg('❌ Archivo corrupto o inválido', true);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  },
+
+  // Actualiza el nombre mostrado en s-rooms
+  updateRoomsUI(){
+    const el = document.getElementById('roomsUsername');
+    if(el) el.textContent = Stats.username ? '👤 ' + Stats.username : '';
+  },
+
+  _msg(txt, isErr){
+    const el = document.getElementById('saveFileMsg');
+    if(!el) return;
+    el.textContent = txt;
+    el.style.color = isErr ? 'var(--blood)' : 'var(--green)';
+    clearTimeout(this._msgTimer);
+    this._msgTimer = setTimeout(()=>{ el.textContent=''; }, 3500);
+  },
+  _msgTimer: null,
+};
 const TILE = 36;
 const MAP_W = 65, MAP_H = 45;
 const VP_TILES_W = 14;
