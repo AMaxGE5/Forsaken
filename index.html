@@ -861,14 +861,6 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="mpStatusMsg" style="color:var(--dim);font-size:.65rem;letter-spacing:.18em;min-height:18px;text-align:center;margin-top:4px;"></div>
     <button onclick="Auth.logout()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:7px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--blood)';this.style.color='var(--blood)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">🚪 CERRAR SESIÓN</button>
   </div>
-  <!-- Guardar / Cargar — abajo derecha -->
-  <div style="position:absolute;bottom:20px;right:20px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
-    <div id="saveFileMsg" style="font-size:.6rem;letter-spacing:.15em;min-height:16px;text-align:right;"></div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="SaveFile.import()" style="background:transparent;border:1px solid var(--muted);color:var(--dim);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:8px 18px;cursor:pointer;text-transform:uppercase;transition:color .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--survivor)';this.style.color='var(--survivor)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--dim)'">📂 CARGAR</button>
-      <button onclick="SaveFile.export()" style="background:transparent;border:1px solid var(--blood);color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.2em;padding:8px 18px;cursor:pointer;text-transform:uppercase;transition:background .15s;" onmouseover="this.style.background='rgba(192,57,43,.15)'" onmouseout="this.style.background='transparent'">💾 GUARDAR</button>
-    </div>
-  </div>
 </div>
 
 <!-- PARTIDA RÁPIDA — salas numeradas -->
@@ -1772,7 +1764,7 @@ const BLOXY_CD = 40, BLOXY_DUR = 8; // Bloxy Cola cooldown & effect duration
 // ── Habilidad Q del Survivor: SLATE SKIN ──
 const SS_CD = 30;           // cooldown en segundos
 const SS_DUR = 6;           // duración del efecto principal
-const SS_OVERHEAL = 30;     // HP extra de overheal mientras dura
+const SS_OVERHEAL = 45;     // HP extra de escudo mientras dura
 const SS_DRINK_DUR = 0.6;   // duración de la animación de beber (40% lentitud, sin sprint)
 const SS_SPEED_BONUS_II = 1.30; // Speed II si dura hasta expirar (+30%)
 const SS_SPEED_I = 1.15;        // Speed I si se cancela manualmente (+15%)
@@ -2165,26 +2157,24 @@ const UI={
     if(S.isDeadSpec)return;
     const me=W.players[S.myId];if(!me)return;
 
-    // HP — grey during Slate Skin overheal, normal color when at/below base HP
+    // HP — always normal color (green/yellow/red). Shield is shown separately.
     const realMax=me.maxHp;
-    const totalMax=me.ssActive?(realMax+SS_OVERHEAL):realMax;
     const pctHp=Math.max(0,Math.min(me.hp,realMax)/realMax);
-    const hasOverheal=me.ssActive&&me.hp>realMax;
-    // While overheal is active: bar is grey. Once overheal gone: normal green/yellow/red
-    const hpCol=me.role==='killer'?'#e74c3c':hasOverheal?'#8a8aaa':(pctHp>.5?'#2ecc71':pctHp>.25?'#f39c12':'#e74c3c');
+    const hpCol=me.role==='killer'?'#e74c3c':(pctHp>.5?'#2ecc71':pctHp>.25?'#f39c12':'#e74c3c');
     const hpFill=document.getElementById('hpBarFill');
     hpFill.style.cssText=`width:${Math.min(pctHp,1)*100}%;background:${hpCol}`;
-    // Overheal extension — slightly brighter grey on top
     const hpBg=hpFill.parentElement;
+    // Shield bar (ssShield) — blue overlay on top
     let ovEl=document.getElementById('overhealFill');
-    if(hasOverheal){
-      const ovPct=(me.hp-realMax)/SS_OVERHEAL;
+    const hasShield=(me.ssShield||0)>0&&me.ssActive;
+    if(hasShield){
+      const shPct=Math.min((me.ssShield||0)/SS_OVERHEAL,1);
       if(!ovEl){ovEl=document.createElement('div');ovEl.id='overhealFill';ovEl.style.cssText='position:absolute;top:0;left:0;height:100%;border-radius:7px;pointer-events:none;transition:width .1s,background .15s;';if(hpBg.style.position!=='relative')hpBg.style.position='relative';hpBg.appendChild(ovEl);}
-      ovEl.style.width=`${Math.min(pctHp+ovPct*(SS_OVERHEAL/realMax),1)*100}%`;
-      ovEl.style.background='rgba(160,160,200,0.6)';
+      ovEl.style.width=`${shPct*100}%`;
+      ovEl.style.background='rgba(80,160,255,0.55)';
       ovEl.style.display='block';
     } else if(ovEl){ovEl.style.display='none';}
-    document.getElementById('hpNum').textContent=hasOverheal?`${Math.ceil(me.hp)}/${realMax}+${Math.ceil(me.hp-realMax)}`:`${Math.ceil(me.hp)}/${realMax}`;
+    document.getElementById('hpNum').textContent=hasShield?`${Math.ceil(me.hp)}/${realMax} 🛡${Math.ceil(me.ssShield||0)}`:`${Math.ceil(me.hp)}/${realMax}`;
     document.getElementById('bleedWrap').style.display=me.bleedTicks>0?'flex':'none';
 
     // Stamina — bar = % of max, number = actual/max
@@ -3473,7 +3463,16 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
     if(k.m1HitSet.has(s.id))return;
     if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)){
       k.m1HitSet.add(s.id);
-      s.hp=s.hp-dmg;
+      // Shield absorbs damage first
+      if(s.ssShield>0){
+        const absorbed=Math.min(s.ssShield,dmg);
+        s.ssShield=Math.max(0,s.ssShield-dmg);
+        const leftover=dmg-absorbed;
+        if(leftover>0)s.hp=Math.max(0,s.hp-leftover);
+        if(s.ssShield<=0){s.ssActive=false;s.ssTimer=0;}
+      } else {
+        s.hp=s.hp-dmg;
+      }
       if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
         if(S.isHost){W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
       }
@@ -3661,7 +3660,13 @@ const Game={
           p.bleedTimer-=dt;
           if(p.bleedTimer<=0){
             p.bleedTimer=BLEED_TICK;p.bleedTicks--;
-            p.hp=Math.max(BLEED_MIN_HP,p.hp-BLEED_DMG);
+            // Shield absorbs bleed damage first
+            if(p.ssShield>0){
+              p.ssShield=Math.max(0,p.ssShield-BLEED_DMG);
+              if(p.ssShield<=0){p.ssActive=false;p.ssTimer=0;}
+            } else {
+              p.hp=Math.max(BLEED_MIN_HP,p.hp-BLEED_DMG);
+            }
             if(S.isHost)Game.checkWin();
           }
         }
@@ -3703,8 +3708,8 @@ const Game={
             p.ssDrinkTimer=Math.max(0,(p.ssDrinkTimer||0)-dt);
             if(p.ssDrinkTimer<=0){
               p.ssDrinking=false;
-              // Apply overheal and activate
-              p.hp=Math.min(p.maxHp+SS_OVERHEAL,p.hp+SS_OVERHEAL);
+              // Activate shield (separate from HP)
+              p.ssShield=SS_OVERHEAL;
               p.ssActive=true;
               p.ssTimer=SS_DUR;
             }
@@ -3714,14 +3719,13 @@ const Game={
             // End naturally → grant Speed II
             if(p.ssTimer<=0){
               p.ssActive=false;
-              p.hp=Math.min(p.maxHp,p.hp); // strip overheal
+              p.ssShield=0;
               p.speedBuff=SS_SPEED_BONUS_II;
               p.ssSpeedActive=true;
               p.ssSpeedTimer=SS_SPEED_DUR;
             }
-            // Overheal depleted by damage → end prematurely (no speed bonus)
-            if(p.hp<=p.maxHp-0.1&&p.ssActive){
-              // HP dropped below base max → overheal is gone
+            // Shield depleted by damage → end prematurely (no speed bonus)
+            if((p.ssShield||0)<=0&&p.ssActive){
               p.ssActive=false;
               p.ssTimer=0;
             }
@@ -3788,7 +3792,16 @@ const Game={
                 if(s.role!=='survivor'||!s.alive)return;
                 if(pointInRotRect(s.x,s.y,cx,cy,Q_HB_SIZE/2,Q_HB_SIZE/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.02){
                   hitSomeone=true;
-                  s.hp=Math.max(0,s.hp-beheadDmg);
+                  // Shield absorbs damage first
+                  if(s.ssShield>0){
+                    const absorbed=Math.min(s.ssShield,beheadDmg);
+                    s.ssShield=Math.max(0,s.ssShield-beheadDmg);
+                    const leftover=beheadDmg-absorbed;
+                    if(leftover>0)s.hp=Math.max(0,s.hp-leftover);
+                    if(s.ssShield<=0){s.ssActive=false;s.ssTimer=0;}
+                  } else {
+                    s.hp=Math.max(0,s.hp-beheadDmg);
+                  }
                   s.helpless=true;s.helplessTimer=Q_HELPLESS_DUR;
                   if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
                     W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
@@ -3944,7 +3957,7 @@ const Game={
     }
     if(moving)p.facing=Math.atan2(dy,dx);
     const bw=p.role==='killer'?KW:SW,rw=p.role==='killer'?KR:SR;
-    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1); // 40% slow while drinking
+    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1); // 40% slow while drinking, Slow II while SS active
     // During behead dash phase: force Speed III (×2.0 of run) in locked direction
     let spd,r=TILE*.28;
     if(p.beheadDashing){
@@ -4056,7 +4069,7 @@ const Game={
     if(p.ssActive){
       p.ssActive=false;
       p.ssTimer=0;
-      p.hp=Math.min(p.maxHp,p.hp);  // remove overheal
+      p.ssShield=0;
       p.speedBuff=SS_SPEED_I;
       p.ssSpeedActive=true;
       p.ssSpeedTimer=SS_SPEED_DUR;
@@ -4108,7 +4121,16 @@ const Game={
             // Stun survivor during combo
             s.comboStunned=true;
             s.comboStunTimer=comboDur-delay+0.10; // recovers 0.1s after last hit
-            s.hp=Math.max(0,s.hp-hitDmg);
+            // Shield absorbs damage first
+            if(s.ssShield>0){
+              const absorbed=Math.min(s.ssShield,hitDmg);
+              s.ssShield=Math.max(0,s.ssShield-hitDmg);
+              const leftover=hitDmg-absorbed;
+              if(leftover>0)s.hp=Math.max(0,s.hp-leftover);
+              if(s.ssShield<=0){s.ssActive=false;s.ssTimer=0;}
+            } else {
+              s.hp=Math.max(0,s.hp-hitDmg);
+            }
             if(s.hp<=0){
               s.hp=0;s.alive=false;s.bleedTicks=0;
               s.comboStunned=false;
@@ -4955,16 +4977,16 @@ const Game={
         const bw=TILE*.9,bh=5,bx=p.x-bw/2,by=p.y-r-10;
         const baseHp=Math.min(p.hp,p.maxHp);
         const pct=baseHp/p.maxHp;
-        const hasOv=p.ssActive&&p.hp>p.maxHp;
         ctx.fillStyle='#10101e';ctx.fillRect(bx,by,bw,bh);
-        // Base HP bar — grey if overheal active, normal color otherwise
-        const barCol=p.role==='killer'?'#c0392b':hasOv?'#8a8aaa':(pct>.5?'#2ecc71':pct>.25?'#f39c12':'#e74c3c');
+        // Base HP bar — always normal color (green/yellow/red), never grey
+        const barCol=p.role==='killer'?'#c0392b':(pct>.5?'#2ecc71':pct>.25?'#f39c12':'#e74c3c');
         ctx.fillStyle=barCol;ctx.fillRect(bx,by,bw*pct,bh);
-        // Overheal extension (lighter grey)
-        if(hasOv){
-          const ovPct=Math.min((p.hp-p.maxHp)/SS_OVERHEAL,1);
-          ctx.fillStyle='rgba(160,160,200,0.65)';
-          ctx.fillRect(bx+bw*pct,by,bw*ovPct*(p.maxHp/p.maxHp)*0.3,bh); // small extension cap
+        // Shield bar (ssShield) — blue overlay on top of HP bar
+        const hasShield=(p.ssShield||0)>0&&p.ssActive;
+        if(hasShield){
+          const shPct=Math.min((p.ssShield||0)/SS_OVERHEAL,1);
+          ctx.fillStyle='rgba(80,160,255,0.6)';
+          ctx.fillRect(bx,by,bw*shPct,bh);
         }
         ctx.strokeStyle='#22223a';ctx.lineWidth=.5;ctx.strokeRect(bx,by,bw,bh);
         if(p.bleedTicks>0&&p.role==='survivor'){
