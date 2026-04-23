@@ -1019,6 +1019,11 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
                 <div class="store-ability-title">HABILIDADES</div>
                 <div id="shopAbilityRows"></div>
               </div>
+              <!-- Lore -->
+              <div class="store-ability-panel" id="shopLorePanel" style="display:none">
+                <div class="store-ability-title">⚰ HISTORIA</div>
+                <div id="shopLoreText" style="font-size:.6rem;color:rgba(255,255,255,.5);letter-spacing:.06em;line-height:1.75;font-style:italic;padding:4px 0;"></div>
+              </div>
             </div>
             <div class="store-action-bar">
               <div class="store-action-price" id="shopActionPrice">900$</div>
@@ -1090,6 +1095,10 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
               <div class="store-ability-panel" id="invAbilityPanel">
                 <div class="store-ability-title">HABILIDADES</div>
                 <div id="invAbilityRows"></div>
+              </div>
+              <div class="store-ability-panel" id="invLorePanel" style="display:none">
+                <div class="store-ability-title">⚰ HISTORIA</div>
+                <div id="invLoreText" style="font-size:.6rem;color:rgba(255,255,255,.5);letter-spacing:.06em;line-height:1.75;font-style:italic;padding:4px 0;"></div>
               </div>
             </div>
             <div class="store-action-bar">
@@ -5577,6 +5586,34 @@ const STORE_KILLERS=[
     tagline:'El asesino original. Rápido, letal y sin piedad.',
     stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
     abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas con su machete.'},{key:'Q',desc:'Behead — Dash hacia adelante + golpe devastador.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño temporalmente.'}],
+    skins:[] },
+  { id:'nicostos', name:'NICOSTOS', price:1200, free:false, icon:'🔪', author:'nicolaselprocrack123',
+    tagline:'Corrompido por el poder. El cuchillo ya no es suyo... es de él.',
+    stats:[
+      {lbl:'DIFICULTAD',val:60},
+      {lbl:'VIDA',val:78},
+      {lbl:'VELOCIDAD',val:62},
+      {lbl:'DAÑO',val:70},
+      {lbl:'STAMINA',val:73}
+    ],
+    statsDetail:[
+      {lbl:'Dificultad',val:'3/5'},
+      {lbl:'Vida',val:'1567'},
+      {lbl:'Velocidad normal',val:'15.51 u/s'},
+      {lbl:'Velocidad sprint',val:'21.34 u/s'},
+      {lbl:'Stamina total',val:'110'},
+      {lbl:'Stamina pérdida/seg',val:'10'},
+      {lbl:'Stamina ganada/seg',val:'20'}
+    ],
+    abilities:[
+      {key:'M1',desc:'Cuchillazo — 22.5 de daño con cuchillo (19 sin él). CD: 1.9s. Sin cuchillo se mueve un 20% más veloz.'},
+      {key:'Q',desc:'Embestida — Se lanza en línea recta difícilmente girando. Gasta 15 stamina/seg. Si impacta: agarra al objetivo, 10 de daño + 20 al lanzarlo al suelo. Nicostos recibe Lentitud I por 1s. CD: 25s.'},
+      {key:'E',desc:'¿Quieres? — Lanza el cuchillo hacia donde mira. Si impacta: marca al objetivo por 10s con Lentitud I. Inflige 1 de daño. Al lanzarlo pierde el cuchillo y lo recupera en 20s; el CD de 10s inicia al recuperarlo.'},
+      {key:'R',desc:'Estrés Agudo — Se detiene 1s y se vuelve invisible progresivamente en 2s. Puede ver a todos los supervivientes. Dura máx 10s. Al volverse visible espera 0.5s antes de poder moverse. CD: 30s.'},
+      {key:'T',desc:'¿Conseguimos Berserk? — Se desbloquea al matar 2 personas (no acumulable). Recarga stamina a 35/seg (máx 85 en este modo), Invisibilidad II por 20s, invulnerable al aturdimiento y rango de detección +10%. Dura 20s.'},
+      {key:'PASIVA',desc:'Al golpear a alguien puede ver un rastro de sangre que lo guía hacia el superviviente más cercano.'}
+    ],
+    lore:'Nicolás siempre fue un chico amable, divertido y muy unido a sus amigos. Le gustaba pasar tiempo con ellos, hacerlos reír y nunca parecía tener problemas. Pero un día ocurrió una desgracia que lo cambió todo, algo que nadie logró entender del todo. Desde entonces, comenzó a escuchar una presencia que lo buscaba directamente. No lo insultaba ni lo rompía… lo intentó. Le prometía poder y agresividad. Poco a poco, Nicolás empezó a creer en esas palabras y a desear ese poder. Una noche, con la mente consumida por la ambición, tomó un cuchillo. Aceptó el trato sin saber realmente el precio. Y en ese momento, se corrompió.',
     skins:[] }
 ];
 const STORE_SURVIVORS=[
@@ -5717,6 +5754,11 @@ const Shop={
     document.getElementById('shopStatsPanel').style.display='none';
     document.getElementById('shopSkinsPanel').classList.remove('show');
     document.getElementById('shopAbilityPanel').style.display=(c.abilities&&c.abilities.length)?'block':'none';
+    // Lore
+    const shopLorePanel=document.getElementById('shopLorePanel');
+    const shopLoreTxt=document.getElementById('shopLoreText');
+    if(c.lore){shopLorePanel.style.display='block';shopLoreTxt.textContent=c.lore;}
+    else{shopLorePanel.style.display='none';shopLoreTxt.textContent='';}
     // Action bar
     const priceEl=document.getElementById('shopActionPrice');
     const buyBtn=document.getElementById('shopActionBtn');
@@ -5908,6 +5950,11 @@ const Inventory={
     document.getElementById('invStatsPanel').style.display='none';
     document.getElementById('invSkinsPanel').classList.remove('show');
     document.getElementById('invAbilityPanel').style.display=(c.abilities&&c.abilities.length)?'block':'none';
+    // Lore
+    const lorePanel=document.getElementById('invLorePanel');
+    const loreTxt=document.getElementById('invLoreText');
+    if(c.lore){lorePanel.style.display='block';loreTxt.textContent=c.lore;}
+    else{lorePanel.style.display='none';loreTxt.textContent='';}
     // Action btn
     const statusEl=document.getElementById('invActionStatus');
     const btn=document.getElementById('invActionBtn');
