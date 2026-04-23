@@ -5591,6 +5591,24 @@ const Game={
         });
       }
     }
+    // ── NICOSTOS E mark: killer sees purple aura around marked survivors ──
+    if(me.role==='killer'&&isNicostos(me)){
+      Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive&&p.nicoMarked).forEach(tgt=>{
+        const {sx,sy}=toScreen(tgt.x,tgt.y);
+        const pulse=0.55+Math.sin(Date.now()/140)*0.45;
+        ctx.save();
+        ctx.globalAlpha=pulse*0.9;
+        ctx.beginPath();ctx.arc(sx,sy,(TILE*sc*.85)+Math.sin(Date.now()/110)*4,0,Math.PI*2);
+        ctx.strokeStyle='rgba(160,0,255,1)';ctx.lineWidth=3+Math.sin(Date.now()/160)*1.5;
+        ctx.shadowColor='rgba(160,0,255,1)';ctx.shadowBlur=24;ctx.stroke();
+        ctx.globalAlpha=pulse*0.18;
+        ctx.beginPath();ctx.arc(sx,sy,TILE*sc*.85,0,Math.PI*2);
+        ctx.fillStyle='rgba(160,0,255,1)';ctx.fill();
+        ctx.globalAlpha=1;ctx.shadowBlur=0;
+        if(!onScreen(sx,sy)){drawEdgeArrow(tgt.x,tgt.y,'rgba(160,0,255,','🔮');}
+        ctx.restore();
+      });
+    }
     // ── ENRAGED aura: killer sees aura around target survivor ──
     if(me.role==='killer'){
       const killer=me;
