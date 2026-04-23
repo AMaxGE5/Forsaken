@@ -1293,6 +1293,52 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           </div>
           <div class="ability-key">R</div>
         </div>
+        <!-- NICOSTOS ability slots -->
+        <div class="ability-slot" id="nicoM1Slot" style="display:none">
+          <div class="ability-name" id="nicoM1Name">CUCHILLAZO</div>
+          <div class="ability-icon-wrap" id="nicoM1Wrap">
+            <div class="ability-cd-overlay" id="nicoM1Overlay"></div>
+            <div class="ability-icon-emoji" id="nicoM1Emoji">🔪</div>
+            <div class="ability-cd-num" id="nicoM1Num" style="display:none"></div>
+          </div>
+          <div class="ability-key">CLICK</div>
+        </div>
+        <div class="ability-slot" id="nicoQSlot" style="display:none">
+          <div class="ability-name">EMBESTIDA</div>
+          <div class="ability-icon-wrap" id="nicoQWrap">
+            <div class="ability-cd-overlay" id="nicoQOverlay"></div>
+            <div class="ability-icon-emoji">💨</div>
+            <div class="ability-cd-num" id="nicoQNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">Q</div>
+        </div>
+        <div class="ability-slot" id="nicoESlot" style="display:none">
+          <div class="ability-name">¿QUIERES?</div>
+          <div class="ability-icon-wrap" id="nicoEWrap">
+            <div class="ability-cd-overlay" id="nicoEOverlay"></div>
+            <div class="ability-icon-emoji" id="nicoEEmoji">🔪</div>
+            <div class="ability-cd-num" id="nicoENum" style="display:none"></div>
+          </div>
+          <div class="ability-key">E</div>
+        </div>
+        <div class="ability-slot" id="nicoRSlot" style="display:none">
+          <div class="ability-name" id="nicoRName">ESTRÉS AGUDO</div>
+          <div class="ability-icon-wrap" id="nicoRWrap">
+            <div class="ability-cd-overlay" id="nicoROverlay"></div>
+            <div class="ability-icon-emoji" id="nicoREmoji">👁</div>
+            <div class="ability-cd-num" id="nicoRNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">R</div>
+        </div>
+        <div class="ability-slot" id="nicoTSlot" style="display:none">
+          <div class="ability-name" id="nicoTName">BERSERK</div>
+          <div class="ability-icon-wrap" id="nicoTWrap">
+            <div class="ability-cd-overlay" id="nicoTOverlay"></div>
+            <div class="ability-icon-emoji" id="nicoTEmoji">💀</div>
+            <div class="ability-cd-num" id="nicoTNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">T</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1806,6 +1852,36 @@ const ENRAGE_STAM_CAP = 70;    // stamina máxima al final del cap
 const ENRAGE_STAM_CAP_DUR = 6.5; // tiempo para alcanzar el cap
 const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar ENRAGED
 
+// ── NICOSTOS — constantes ──
+const NICO_WALK = KW * 0.97;
+const NICO_RUN  = KR * 0.97;
+const NICO_M1_DMG = 22.5;
+const NICO_M1_DMG_NO_KNIFE = 19;
+const NICO_NO_KNIFE_SPEED = 1.20;
+const NICO_M1_CD = 1.9;
+const NICO_Q_CD = 25;
+const NICO_Q_STAM_DRAIN = 15;
+const NICO_Q_DMG_GRAB = 10;
+const NICO_Q_DMG_SLAM = 20;
+const NICO_Q_SLOW_DUR = 1.0;
+const NICO_Q_SPEED = KR * 2.0;
+const NICO_Q_MAX_TURN = 0.6;
+const NICO_E_CD = 10;
+const NICO_E_KNIFE_RECOVER = 20;
+const NICO_E_DMG = 1;
+const NICO_E_MARK_DUR = 10;
+const NICO_E_KNIFE_SPEED = KR * 3.2;
+const NICO_R_CD = 30;
+const NICO_R_STILL_DUR = 1.0;
+const NICO_R_FADE_DUR = 2.0;
+const NICO_R_MAX_DUR = 10;
+const NICO_R_REVIVE_DUR = 0.5;
+const NICO_T_KILLS_REQ = 2;
+const NICO_T_DUR = 20;
+const NICO_T_STAM_REGEN = 35;
+const NICO_T_STAM_MAX = 85;
+const NICO_T_DETECT_BONUS = 1.10;
+
 // ── Habilidad E del Killer: COMBO (2 tajos + motosierra) ──
 const COMBO_CD = 32;          // cooldown normal
 const COMBO_CD_ENRAGED = 24;  // [ENRAGED]
@@ -1986,8 +2062,8 @@ let slashFX=[];
 //  INPUT
 // ══════════════════════════════════════════
 const Inp={
-  k:{},e:false,ep:false,sh:false,m1:false,m1p:false,q:false,qp:false,r:false,rp:false,facing:0,
-  clear(){this.k={};this.e=false;this.ep=false;this.sh=false;this.m1=false;this.m1p=false;this.q=false;this.qp=false;this.r=false;this.rp=false;},
+  k:{},e:false,ep:false,sh:false,m1:false,m1p:false,q:false,qp:false,r:false,rp:false,t:false,tp:false,facing:0,
+  clear(){this.k={};this.e=false;this.ep=false;this.sh=false;this.m1=false;this.m1p=false;this.q=false;this.qp=false;this.r=false;this.rp=false;this.t=false;this.tp=false;},
   init(){
     document.addEventListener('keydown',ev=>{
       if(ev.target.tagName==='INPUT'||ev.target.tagName==='TEXTAREA')return;
@@ -1996,6 +2072,7 @@ const Inp={
       if(k==='e')this.e=true;
       if(k==='q')this.q=true;
       if(k==='r')this.r=true;
+      if(k==='t')this.t=true;
       if(k==='shift')this.sh=true;
       if(['arrowup','arrowdown','arrowleft','arrowright','e',' '].includes(k))ev.preventDefault();
     });
@@ -2006,6 +2083,7 @@ const Inp={
       if(k==='e')this.e=false;
       if(k==='q')this.q=false;
       if(k==='r')this.r=false;
+      if(k==='t')this.t=false;
       if(k==='shift')this.sh=false;
     });
     document.addEventListener('mousemove',ev=>{
@@ -2058,6 +2136,7 @@ function pointInRotRect(px,py,cx,cy,hw,hh,ang){
   const dx=px-cx,dy=py-cy;
   return Math.abs(dx*cosA-dy*sinA)<=hw&&Math.abs(dx*sinA+dy*cosA)<=hh;
 }
+function isNicostos(p){return p&&p.role==='killer'&&p.killerChar==='nicostos';}
 
 // ══════════════════════════════════════════
 //  UI
@@ -2199,12 +2278,59 @@ const UI={
     const m1Slot=document.getElementById('abilityM1Slot');
     const beheadSlot=document.getElementById('abilityBeheadSlot');
     if(me.role==='killer'){
-      m1Slot.style.display='flex';
-      beheadSlot.style.display='flex';
-      const comboSlot=document.getElementById('abilityComboSlot');if(comboSlot)comboSlot.style.display='flex';
+      const nicoMode=isNicostos(me);
+      // Hide/show Slasher vs Nicostos slots
+      ['abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.style.display=nicoMode?'none':'flex';
+      });
+      ['nicoM1Slot','nicoQSlot','nicoESlot','nicoRSlot','nicoTSlot'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.style.display=nicoMode?'flex':'none';
+      });
       const ssSlotK=document.getElementById('abilitySSSlot');if(ssSlotK)ssSlotK.style.display='none';
       const bSlotK=document.getElementById('abilityBloxySlot');if(bSlotK)bSlotK.style.display='none';
       const gbSlotKiller=document.getElementById('abilityGBSlot');if(gbSlotKiller)gbSlotKiller.style.display='none';
+
+      if(nicoMode){
+        // M1
+        const cdPctN=me.m1Cd>0?me.m1Cd/NICO_M1_CD:0;
+        const nm1Ov=document.getElementById('nicoM1Overlay');if(nm1Ov)nm1Ov.style.transform=`scaleY(${cdPctN})`;
+        const nm1W=document.getElementById('nicoM1Wrap');if(nm1W)nm1W.className='ability-icon-wrap'+(cdPctN>0?' on-cd':' ready');
+        const nm1Num=document.getElementById('nicoM1Num');if(nm1Num){nm1Num.style.display=cdPctN>0?'flex':'none';if(cdPctN>0)nm1Num.textContent=me.m1Cd.toFixed(1);}
+        const nm1Em=document.getElementById('nicoM1Emoji');if(nm1Em)nm1Em.textContent=me.nicoHasKnife?'🔪':'✊';
+        const nm1Name=document.getElementById('nicoM1Name');if(nm1Name)nm1Name.textContent=me.nicoHasKnife?'CUCHILLAZO':'PUÑETAZO';
+        // Q
+        const qPctN=me.qCd>0?me.qCd/NICO_Q_CD:0;
+        const nqOv=document.getElementById('nicoQOverlay');if(nqOv)nqOv.style.transform=`scaleY(${qPctN})`;
+        const nqW=document.getElementById('nicoQWrap');if(nqW)nqW.className='ability-icon-wrap'+(me.nicoCharge?'enraged-active':qPctN>0?' on-cd':' ready');
+        const nqNum=document.getElementById('nicoQNum');if(nqNum){nqNum.style.display=(qPctN>0||me.nicoCharge)?'flex':'none';nqNum.textContent=me.nicoCharge?'💨':Math.ceil(me.qCd)+'s';}
+        // E
+        const hasKnife=me.nicoHasKnife;
+        const eFlying=me.nicoKnifeFlying;
+        const eCdPct=me.nicoECd>0?me.nicoECd/NICO_E_CD:0;
+        const eRecPct=!hasKnife&&!eFlying?me.nicoKnifeRecoverTimer/NICO_E_KNIFE_RECOVER:0;
+        const neOv=document.getElementById('nicoEOverlay');if(neOv)neOv.style.transform=`scaleY(${eCdPct||eRecPct})`;
+        const neW=document.getElementById('nicoEWrap');if(neW)neW.className='ability-icon-wrap'+(eFlying?'enraged-active':(!hasKnife||eCdPct>0)?' on-cd':' ready');
+        const neNum=document.getElementById('nicoENum');if(neNum){neNum.style.display=(eFlying||!hasKnife||eCdPct>0)?'flex':'none';if(eFlying)neNum.textContent='✈';else if(!hasKnife)neNum.textContent=Math.ceil(me.nicoKnifeRecoverTimer)+'s';else if(eCdPct>0)neNum.textContent=me.nicoECd.toFixed(1);}
+        const neEm=document.getElementById('nicoEEmoji');if(neEm)neEm.textContent=hasKnife?'🔪':(eFlying?'✈':'⏳');
+        // R
+        const rCdPct=me.nicoRCd>0?me.nicoRCd/NICO_R_CD:0;
+        const rActive=me.nicoInvis||me.nicoInvisStill;
+        const nrOv=document.getElementById('nicoROverlay');if(nrOv)nrOv.style.transform=`scaleY(${rCdPct})`;
+        const nrW=document.getElementById('nicoRWrap');if(nrW)nrW.className='ability-icon-wrap'+(rActive?'enraged-active':rCdPct>0?' on-cd':' ready');
+        const nrNum=document.getElementById('nicoRNum');if(nrNum){nrNum.style.display=(rCdPct>0||rActive)?'flex':'none';if(me.nicoInvisStill)nrNum.textContent='😶';else if(me.nicoInvis)nrNum.textContent=me.nicoInvisDurTimer?me.nicoInvisDurTimer.toFixed(1):'';else if(rCdPct>0)nrNum.textContent=Math.ceil(me.nicoRCd)+'s';}
+        const nrEm=document.getElementById('nicoREmoji');if(nrEm)nrEm.textContent=rActive?'👻':'👁';
+        const nrName=document.getElementById('nicoRName');if(nrName)nrName.textContent=rActive?'👻 INVISIBLE':'ESTRÉS AGUDO';
+        // T
+        const tReady=(me.nicoBerserkReady||0)>0;
+        const tActive=me.nicoBerserk||false;
+        const ntW=document.getElementById('nicoTWrap');if(ntW)ntW.className='ability-icon-wrap'+(tActive?'enraged-active':tReady?' ready':' on-cd');
+        const ntNum=document.getElementById('nicoTNum');if(ntNum){ntNum.style.display=(tActive||!tReady)?'flex':'none';if(tActive)ntNum.textContent=me.nicoBerserkTimer?me.nicoBerserkTimer.toFixed(1):'';else if(!tReady)ntNum.textContent=`${me.nicoKillCount||0}/${NICO_T_KILLS_REQ}💀`;}
+        const ntEm=document.getElementById('nicoTEmoji');if(ntEm)ntEm.textContent=tActive?'🔥':(tReady?'⚡':'💀');
+        const ntName=document.getElementById('nicoTName');if(ntName)ntName.textContent=tActive?'🔥 BERSERK':(tReady?'¡BERSERK!':'BERSERK');
+      } else {
+      m1Slot.style.display='flex';
+      beheadSlot.style.display='flex';
+      const comboSlot=document.getElementById('abilityComboSlot');if(comboSlot)comboSlot.style.display='flex';
       // ENRAGED (R)
       const enrageSlot=document.getElementById('abilityEnrageSlot');
       if(enrageSlot)enrageSlot.style.display='flex';
@@ -2258,6 +2384,7 @@ const UI={
       else if(comboPct>0)comboNum.textContent=Math.ceil(comboCdCur)+'s';
       const comboLabel=document.getElementById('comboName');
       if(comboLabel)comboLabel.textContent=enraged?'🔥 COMBO':'COMBO';
+      } // end !nicoMode
     } else {
       m1Slot.style.display='none';
       beheadSlot.style.display='none';
@@ -3308,6 +3435,8 @@ const Net={
         p.qPrev=d.q;
         if(d.r&&!p.rPrev)Game.doR(d.pid);
         p.rPrev=d.r;
+        if(d.tk&&!p.tPrev)Game.doT(d.pid);
+        p.tPrev=d.tk;
       }
 
     } else if(d.t==='lobbyPos'){
@@ -3584,6 +3713,12 @@ const Game={
       const role=roles[p.id]||'survivor';
       const sp=spawns[p.id]||SPAWN_DEFS[i%SPAWN_DEFS.length];
       const maxSt=role==='killer'?KSMAX:SMAX;
+      // Detect which killer char to use based on equipped killer
+      let killerChar='slasher';
+      if(role==='killer'){
+        const equipped=p.equippedKiller||Stats.equippedKiller||'';
+        if(equipped==='nicostos')killerChar='nicostos';
+      }
       W.players[p.id]={
         id:p.id,name:p.name,username:p.username||p.name,role,alive:true,escaped:false,
         x:sp.x*TILE+TILE/2,y:sp.y*TILE+TILE/2,
@@ -3598,6 +3733,19 @@ const Game={
         color:p.color||PCOLORS[i%PCOLORS.length],
         enrageCd:0,enraged:false,enrageTimer:0,enrageAuraTarget:null,enrageAuraLinger:0,enrageStamCapTimer:0,rPrev:false,
         gbCd:0,gbEating:false,gbEatTimer:0,gbActive:false,gbTimer:0,
+        killerChar,
+        // Nicostos state
+        nicoHasKnife:true,
+        nicoKnifeRecoverTimer:0,
+        nicoKnifeProjX:0,nicoKnifeProjY:0,nicoKnifeVx:0,nicoKnifeVy:0,nicoKnifeFlying:false,
+        nicoCharge:false,nicoChargeAng:0,nicoChargeTimer:0,nicoChargeHit:false,
+        nicoSlow:false,nicoSlowTimer:0,
+        nicoMarkTargets:{},
+        nicoInvis:false,nicoInvisStill:false,nicoInvisStillTimer:0,nicoInvisFadeTimer:0,nicoInvisDurTimer:0,nicoInvisRevive:false,nicoInvisReviveTimer:0,nicoRCd:0,
+        nicoECd:0,
+        nicoBerserk:false,nicoBerserkTimer:0,nicoBerserkStamGained:0,nicoKillCount:0,nicoBerserkReady:0,nicoBerserkPrev:false,
+        nicoBloodTrailTarget:null,nicoBloodTrailTimer:0,
+        tPrev:false,
       };
     });
   },
@@ -3691,6 +3839,8 @@ const Game={
         Inp.qp=Inp.q;
         if(Inp.r&&!Inp.rp)Game.doR(S.myId);
         Inp.rp=Inp.r;
+        if(Inp.t&&!Inp.tp)Game.doT(S.myId);
+        Inp.tp=Inp.t;
 
         // Tick bloxy timers for all players
         Object.values(W.players).forEach(p=>{
@@ -3850,6 +4000,126 @@ const Game={
               if(p.enrageAuraLinger<=0)p.enrageAuraTarget=null;
             }
           }
+
+          // ── NICOSTOS ticks ──
+          if(isNicostos(p)){
+            // Q charge ticks
+            if(p.nicoCharge){
+              p.stamina=Math.max(0,p.stamina-NICO_Q_STAM_DRAIN*dt);
+              // Move in locked direction with slow turn
+              const targetAng=p.facing;
+              let diff=targetAng-p.nicoChargeAng;
+              while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;
+              const maxD=NICO_Q_MAX_TURN*dt;
+              p.nicoChargeAng+=Math.max(-maxD,Math.min(maxD,diff));
+              const spd=NICO_Q_SPEED*dt;
+              const nx2=p.x+Math.cos(p.nicoChargeAng)*spd;
+              const ny2=p.y+Math.sin(p.nicoChargeAng)*spd;
+              if(!wallAt(nx2,p.y,TILE*.28,'killer'))p.x=nx2;
+              if(!wallAt(p.x,ny2,TILE*.28,'killer'))p.y=ny2;
+              // Hit check during charge
+              if(!p.nicoChargeHit){
+                Object.values(W.players).forEach(s=>{
+                  if(s.role!=='survivor'||!s.alive||p.nicoChargeHit)return;
+                  if(Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.3){
+                    p.nicoChargeHit=true;
+                    p.nicoCharge=false;
+                    // Grab: 10 dmg + 20 slam = 30 total
+                    applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
+                    s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+                    if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
+                    // Slam FX — knock survivor back
+                    const kbDist=TILE*2.8;
+                    s.comboKbVx=Math.cos(p.nicoChargeAng)*kbDist;
+                    s.comboKbVy=Math.sin(p.nicoChargeAng)*kbDist;
+                    s.comboKbTimer=0.22;
+                    // Nicostos slow
+                    p.nicoSlow=true;p.nicoSlowTimer=NICO_Q_SLOW_DUR;
+                    // Blood trail to nearest
+                    p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=8;
+                    Game.checkWin();
+                  }
+                });
+              }
+              // Stop if no stamina
+              if(p.stamina<=0&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
+            }
+            // Q slow
+            if(p.nicoSlow){p.nicoSlowTimer=Math.max(0,p.nicoSlowTimer-dt);if(p.nicoSlowTimer<=0)p.nicoSlow=false;}
+            // E cooldown
+            if(p.nicoECd>0)p.nicoECd=Math.max(0,p.nicoECd-dt);
+            // E knife flying projectile
+            if(p.nicoKnifeFlying){
+              const spd=NICO_E_KNIFE_SPEED*dt;
+              p.nicoKnifeProjX+=p.nicoKnifeVx*spd;
+              p.nicoKnifeProjY+=p.nicoKnifeVy*spd;
+              // Wall collision
+              if(wallAt(p.nicoKnifeProjX,p.nicoKnifeProjY,4)){p.nicoKnifeFlying=false;p.nicoKnifeRecoverTimer=NICO_E_KNIFE_RECOVER;}
+              // Range check (40 studs = 40*TILE px)
+              if(Math.hypot(p.nicoKnifeProjX-p.x,p.nicoKnifeProjY-p.y)>40*TILE){p.nicoKnifeFlying=false;p.nicoKnifeRecoverTimer=NICO_E_KNIFE_RECOVER;}
+              // Hit check
+              if(p.nicoKnifeFlying){
+                Object.values(W.players).forEach(s=>{
+                  if(s.role!=='survivor'||!s.alive)return;
+                  if(Math.hypot(s.x-p.nicoKnifeProjX,s.y-p.nicoKnifeProjY)<TILE*.7){
+                    p.nicoKnifeFlying=false;p.nicoKnifeRecoverTimer=NICO_E_KNIFE_RECOVER;
+                    applyShieldDamage(s,NICO_E_DMG);
+                    // Mark target: slow I for 10s
+                    if(!p.nicoMarkTargets)p.nicoMarkTargets={};
+                    p.nicoMarkTargets[s.id]=(p.nicoMarkTargets[s.id]||0)+NICO_E_MARK_DUR;
+                    // Blood trail
+                    p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=NICO_E_MARK_DUR;
+                    Game.checkWin();
+                  }
+                });
+              }
+            }
+            // E knife recover timer
+            if(!p.nicoHasKnife&&!p.nicoKnifeFlying){
+              p.nicoKnifeRecoverTimer=Math.max(0,(p.nicoKnifeRecoverTimer||0)-dt);
+              if(p.nicoKnifeRecoverTimer<=0){p.nicoHasKnife=true;p.nicoECd=NICO_E_CD;}
+            }
+            // E mark timers on survivors
+            if(p.nicoMarkTargets){
+              Object.keys(p.nicoMarkTargets).forEach(sid=>{
+                p.nicoMarkTargets[sid]-=dt;
+                const s=W.players[sid];
+                if(p.nicoMarkTargets[sid]<=0){delete p.nicoMarkTargets[sid];if(s)s.nicoMarked=false;}
+                else{if(s)s.nicoMarked=true;}
+              });
+            }
+            // R — Estrés Agudo
+            if(p.nicoRCd>0)p.nicoRCd=Math.max(0,p.nicoRCd-dt);
+            if(p.nicoInvisStill){
+              p.nicoInvisStillTimer=Math.max(0,p.nicoInvisStillTimer-dt);
+              if(p.nicoInvisStillTimer<=0){p.nicoInvisStill=false;p.nicoInvis=true;p.nicoInvisFadeTimer=NICO_R_FADE_DUR;p.nicoInvisDurTimer=NICO_R_MAX_DUR;}
+            }
+            if(p.nicoInvis){
+              p.nicoInvisFadeTimer=Math.max(0,(p.nicoInvisFadeTimer||0)-dt);
+              p.nicoInvisDurTimer=Math.max(0,(p.nicoInvisDurTimer||0)-dt);
+              if(p.nicoInvisDurTimer<=0){
+                p.nicoInvis=false;p.nicoInvisRevive=true;p.nicoInvisReviveTimer=NICO_R_REVIVE_DUR;
+              }
+            }
+            if(p.nicoInvisRevive){
+              p.nicoInvisReviveTimer=Math.max(0,(p.nicoInvisReviveTimer||0)-dt);
+              if(p.nicoInvisReviveTimer<=0){p.nicoInvisRevive=false;}
+            }
+            // Blood trail timer
+            if(p.nicoBloodTrailTimer>0){p.nicoBloodTrailTimer=Math.max(0,p.nicoBloodTrailTimer-dt);if(p.nicoBloodTrailTimer<=0)p.nicoBloodTrailTarget=null;}
+            // T — Berserk
+            if(p.nicoBerserk){
+              p.nicoBerserkTimer=Math.max(0,p.nicoBerserkTimer-dt);
+              // Stamina regen
+              const canGain=(p.nicoBerserkStamGained||0)<NICO_T_STAM_MAX;
+              if(canGain){
+                const gain=Math.min(NICO_T_STAM_REGEN*dt,NICO_T_STAM_MAX-(p.nicoBerserkStamGained||0));
+                p.stamina=Math.min(KSMAX,p.stamina+gain);
+                p.nicoBerserkStamGained=(p.nicoBerserkStamGained||0)+gain;
+              }
+              if(p.nicoBerserkTimer<=0){p.nicoBerserk=false;p.nicoBerserkStamGained=0;}
+            }
+          }
         }); // end forEach players (timers)
 
         Object.values(W.players).forEach(p=>{
@@ -3935,6 +4205,11 @@ const Game={
   moveP(p,dt,inp,sprinting){
     // Block all movement during combo stun (survivor) or killer combo lock
     if(p.comboStunned||p.comboLocked)return;
+    // Nicostos: charge handles its own movement; still/revive blocks
+    if(isNicostos(p)){
+      if(p.nicoCharge)return; // charge handles movement itself
+      if(p.nicoInvisStill||p.nicoInvisRevive)return; // locked during still/revive
+    }
     let dx=0,dy=0;
     if(inp['w']||inp['arrowup'])dy=-1;
     if(inp['s']||inp['arrowdown'])dy=1;
@@ -3956,8 +4231,12 @@ const Game={
       else p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+(p.role==='killer'?KREGEN:SREGEN)*dt);
     }
     if(moving)p.facing=Math.atan2(dy,dx);
-    const bw=p.role==='killer'?KW:SW,rw=p.role==='killer'?KR:SR;
-    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1); // 40% slow while drinking, Slow II while SS active
+    const bw=p.role==='killer'?(isNicostos(p)?NICO_WALK:KW):SW;
+    const rw=p.role==='killer'?(isNicostos(p)?NICO_RUN:KR):SR;
+    // Nicostos no-knife speed bonus, but only when not in berserk/charge
+    const nicoNoKnifeBonus=isNicostos(p)&&!p.nicoHasKnife&&!p.nicoCharge?NICO_NO_KNIFE_SPEED:1;
+    const nicoSlow=isNicostos(p)&&p.nicoSlow?0.6:1; // Lentitud I tras embestida
+    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1)*nicoNoKnifeBonus*nicoSlow;
     // During behead dash phase: force Speed III (×2.0 of run) in locked direction
     let spd,r=TILE*.28;
     if(p.beheadDashing){
@@ -3970,8 +4249,8 @@ const Game={
       if(!wallAt(p.x,ny,r,'killer'))p.y=ny;
       return;
     }
-    // ENRAGED: flat speed, sprint disabled
-    if(p.enraged){
+    // ENRAGED: flat speed, sprint disabled (only Slasher)
+    if(p.enraged&&!isNicostos(p)){
       p.sprinting=false;
       // Stamina still regens slowly while enraged (no drain)
       if(p.staminaCd>0)p.staminaCd-=dt;
@@ -3988,14 +4267,46 @@ const Game={
   tryM1(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer'||p.m1Cd>0)return;
-    fireM1(pid);
+    if(p.nicoBerserk||p.nicoCharge)return; // block M1 during berserk charge? no — allow
+    if(isNicostos(p))Game.nicoFireM1(pid);
+    else fireM1(pid);
+  },
+
+  nicoFireM1(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    p.m1Cd=NICO_M1_CD;
+    const dmg=p.nicoHasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
+    const ang=p.facing;
+    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
+    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+    slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2,maxLife:.2,idx:0,nicoSlash:true,hasKnife:p.nicoHasKnife});
+    Object.values(W.players).forEach(s=>{
+      if(s.role!=='survivor'||!s.alive)return;
+      if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
+        applyShieldDamage(s,dmg);
+        s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+          W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+          // Track kill for berserk unlock
+          p.nicoKillCount=(p.nicoKillCount||0)+1;
+          if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+        } else {
+          // Passive: blood trail to nearest survivor from hit
+          p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
+        }
+        Game.checkWin();
+      }
+    });
   },
 
   doQ(pid){
     const p=W.players[pid];
     if(!p||!p.alive)return;
-    if(p.role==='killer')Game.doBehead(pid);
-    else Game.doBloxy(pid);
+    if(p.role==='killer'){
+      if(isNicostos(p))Game.nicoDoEmbestida(pid);
+      else Game.doBehead(pid);
+    } else Game.doBloxy(pid);
   },
 
   doBehead(pid){
@@ -4021,8 +4332,19 @@ const Game={
   doR(pid){
     const p=W.players[pid];
     if(!p||!p.alive)return;
-    if(p.role==='killer')Game.doEnrage(pid);
-    else Game.doGhostBurger(pid);
+    if(p.role==='killer'){
+      if(isNicostos(p))Game.nicoDoEstresAgudo(pid);
+      else Game.doEnrage(pid);
+    } else Game.doGhostBurger(pid);
+  },
+
+  nicoDoEstresAgudo(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    if(p.nicoRCd>0||p.nicoInvis||p.nicoInvisStill||p.nicoInvisRevive)return;
+    p.nicoRCd=NICO_R_CD;
+    p.nicoInvisStill=true;p.nicoInvisStillTimer=NICO_R_STILL_DUR;
+    p.nicoInvis=false;p.nicoInvisRevive=false;
   },
 
   doGhostBurger(pid){
@@ -4147,7 +4469,8 @@ const Game={
   doActionE(pid){
     const p=W.players[pid];if(!p||!p.alive)return;
     if(p.role==='killer'){
-      Game.doCombo(pid);
+      if(isNicostos(p))Game.nicoDoQuieres(pid);
+      else Game.doCombo(pid);
       return;
     }
     if(p.role==='survivor'){
@@ -4159,6 +4482,43 @@ const Game={
       // No gen/exit available — try Slate Skin
       Game.doSlateSkin(pid);
     }
+  },
+
+  doT(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||p.role!=='killer')return;
+    if(isNicostos(p))Game.nicoDoT(pid);
+  },
+
+  nicoDoT(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    if(!p.nicoBerserkReady||p.nicoBerserkReady<=0)return;
+    if(p.nicoBerserk)return;
+    p.nicoBerserkReady--;
+    p.nicoBerserk=true;p.nicoBerserkTimer=NICO_T_DUR;p.nicoBerserkStamGained=0;
+  },
+
+  nicoDoEmbestida(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    if(p.qCd>0||p.nicoCharge)return;
+    if(p.stamina<=0)return;
+    p.nicoCharge=true;p.nicoChargeAng=p.facing;p.nicoChargeHit=false;
+    p.qCd=NICO_Q_CD;
+  },
+
+  nicoDoQuieres(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive)return;
+    if(!p.nicoHasKnife)return; // no knife, can't throw
+    if(p.nicoECd>0)return;
+    // Throw knife
+    p.nicoHasKnife=false;
+    p.nicoKnifeFlying=true;
+    p.nicoKnifeProjX=p.x;p.nicoKnifeProjY=p.y;
+    p.nicoKnifeVx=Math.cos(p.facing);p.nicoKnifeVy=Math.sin(p.facing);
+    p.nicoKnifeRecoverTimer=0; // starts counting after knife lands
   },
 
   checkWin(){
@@ -4329,6 +4689,19 @@ const Game={
         enrageStamCapTimer:p.enrageStamCapTimer||0,
         gbCd:p.gbCd||0,gbEating:p.gbEating||false,gbEatTimer:p.gbEatTimer||0,
         gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
+        killerChar:p.killerChar||'slasher',
+        nicoHasKnife:p.nicoHasKnife!==undefined?p.nicoHasKnife:true,
+        nicoKnifeFlying:p.nicoKnifeFlying||false,nicoKnifeProjX:p.nicoKnifeProjX||0,nicoKnifeProjY:p.nicoKnifeProjY||0,
+        nicoCharge:p.nicoCharge||false,nicoChargeAng:p.nicoChargeAng||0,
+        nicoSlow:p.nicoSlow||false,nicoSlowTimer:p.nicoSlowTimer||0,
+        nicoMarkTargets:p.nicoMarkTargets||{},
+        nicoInvis:p.nicoInvis||false,nicoInvisStill:p.nicoInvisStill||false,nicoInvisStillTimer:p.nicoInvisStillTimer||0,
+        nicoInvisFadeTimer:p.nicoInvisFadeTimer||0,nicoInvisDurTimer:p.nicoInvisDurTimer||0,
+        nicoInvisRevive:p.nicoInvisRevive||false,nicoRCd:p.nicoRCd||0,nicoECd:p.nicoECd||0,
+        nicoKnifeRecoverTimer:p.nicoKnifeRecoverTimer||0,
+        nicoBerserk:p.nicoBerserk||false,nicoBerserkTimer:p.nicoBerserkTimer||0,nicoBerserkReady:p.nicoBerserkReady||0,
+        nicoBloodTrailTarget:p.nicoBloodTrailTarget||null,nicoBloodTrailTimer:p.nicoBloodTrailTimer||0,
+        nicoMarked:p.nicoMarked||false,nicoKillCount:p.nicoKillCount||0,
       }])),
       gens:W.gens.map(g=>({id:g.id,on:g.on,prog:g.prog})),
       time:W.time,
@@ -4383,6 +4756,22 @@ const Game={
         if(d.gbCd!==undefined){
           p.gbCd=d.gbCd||0;p.gbEating=d.gbEating||false;p.gbEatTimer=d.gbEatTimer||0;
           p.gbActive=d.gbActive||false;p.gbTimer=d.gbTimer||0;
+        }
+        // Nicostos sync
+        if(d.killerChar)p.killerChar=d.killerChar;
+        if(d.nicoHasKnife!==undefined){
+          p.nicoHasKnife=d.nicoHasKnife;p.nicoKnifeFlying=d.nicoKnifeFlying||false;
+          p.nicoKnifeProjX=d.nicoKnifeProjX||0;p.nicoKnifeProjY=d.nicoKnifeProjY||0;
+          p.nicoCharge=d.nicoCharge||false;p.nicoChargeAng=d.nicoChargeAng||0;
+          p.nicoSlow=d.nicoSlow||false;p.nicoSlowTimer=d.nicoSlowTimer||0;
+          p.nicoMarkTargets=d.nicoMarkTargets||{};
+          p.nicoInvis=d.nicoInvis||false;p.nicoInvisStill=d.nicoInvisStill||false;
+          p.nicoInvisStillTimer=d.nicoInvisStillTimer||0;p.nicoInvisFadeTimer=d.nicoInvisFadeTimer||0;
+          p.nicoInvisDurTimer=d.nicoInvisDurTimer||0;p.nicoInvisRevive=d.nicoInvisRevive||false;
+          p.nicoRCd=d.nicoRCd||0;p.nicoECd=d.nicoECd||0;p.nicoKnifeRecoverTimer=d.nicoKnifeRecoverTimer||0;
+          p.nicoBerserk=d.nicoBerserk||false;p.nicoBerserkTimer=d.nicoBerserkTimer||0;p.nicoBerserkReady=d.nicoBerserkReady||0;
+          p.nicoBloodTrailTarget=d.nicoBloodTrailTarget||null;p.nicoBloodTrailTimer=d.nicoBloodTrailTimer||0;
+          p.nicoMarked=d.nicoMarked||false;p.nicoKillCount=d.nicoKillCount||0;
         }
       }
 
@@ -4793,9 +5182,129 @@ const Game={
         ctx.font=`${TILE*.38}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillStyle='#303040';ctx.fillText('💀',0,0);
       } else if(p.role==='killer'){
-        // ── SLASHER — hooded figure with cloak and machete ──
-        const t2=Date.now()/1000;
-        ctx.shadowColor='rgba(200,0,0,0.5)';ctx.shadowBlur=14;
+        // Invisibility for Nicostos R
+        const nicoInvisAlpha=isNicostos(p)&&(p.nicoInvis||p.nicoInvisStill||p.nicoInvisRevive)?(
+          p.nicoInvisStill?1: // still phase — fully visible
+          p.nicoInvisRevive?0.15: // revive phase — mostly visible
+          p.nicoInvisFadeTimer>0?Math.max(0.05,p.nicoInvisFadeTimer/NICO_R_FADE_DUR):0.05 // fading in/fully invis
+        ):1;
+        const isSelf=p.id===S.myId;
+        const meP2=W.players[S.myId];
+        // Nicostos invis: killer (other than self) sees at 0.05 alpha; self always at low alpha so they know
+        const nicoVisibleAlpha=isNicostos(p)&&(p.nicoInvis||p.nicoInvisRevive)?(isSelf?0.28:
+          (meP2&&meP2.role==='killer')?0.28:0.05):nicoInvisAlpha;
+        if(nicoVisibleAlpha<1){ctx.save();ctx.globalAlpha=nicoVisibleAlpha;}
+
+        if(isNicostos(p)){
+          // ── NICOSTOS — hoodie guy with knife ──
+          const t2=Date.now()/1000;
+          ctx.shadowColor='rgba(80,0,160,0.5)';ctx.shadowBlur=12;
+
+          // Berserk glow
+          if(p.nicoBerserk){
+            const bPulse=0.5+Math.sin(t2*5)*0.4;
+            ctx.beginPath();ctx.arc(0,0,s*2.2+Math.sin(t2*4)*5,0,Math.PI*2);
+            ctx.fillStyle=`rgba(100,0,200,${bPulse*0.18})`;ctx.fill();
+            ctx.beginPath();ctx.arc(0,0,s*1.4,0,Math.PI*2);
+            ctx.strokeStyle=`rgba(150,0,255,${bPulse*0.7})`;ctx.lineWidth=2.5;ctx.stroke();
+            ctx.shadowColor='rgba(150,0,255,0.8)';ctx.shadowBlur=20;
+          }
+
+          // Body — dark hoodie
+          ctx.fillStyle='#1a0a2a';
+          ctx.beginPath();
+          ctx.moveTo(-s*.45,s*.9);
+          ctx.bezierCurveTo(-s*.55,s*.3,-s*.5,-s*.05,-s*.3,-s*.38);
+          ctx.lineTo(s*.3,-s*.38);
+          ctx.bezierCurveTo(s*.5,-s*.05,s*.55,s*.3,s*.45,s*.9);
+          ctx.closePath();ctx.fill();
+
+          // Hoodie pocket
+          ctx.fillStyle='rgba(255,255,255,0.04)';
+          ctx.fillRect(-s*.22,s*.3,s*.44,s*.22);
+
+          // Hood
+          ctx.fillStyle='#13062a';
+          ctx.beginPath();ctx.ellipse(0,-s*.55,s*.42,s*.38,0,0,Math.PI*2);ctx.fill();
+          // Hood inner shadow
+          ctx.fillStyle='#0a0318';
+          ctx.beginPath();ctx.ellipse(0,-s*.5,s*.3,s*.26,0,0,Math.PI*2);ctx.fill();
+
+          // Face — human face (not skull)
+          ctx.fillStyle='#c8a882'; // skin tone
+          ctx.beginPath();ctx.ellipse(0,-s*.5,s*.2,s*.24,0,0,Math.PI*2);ctx.fill();
+          // Eyes — dark, intense
+          ctx.fillStyle='#1a0a2a';
+          ctx.beginPath();ctx.ellipse(-s*.08,-s*.54,s*.055,s*.045,0,0,Math.PI*2);ctx.fill();
+          ctx.beginPath();ctx.ellipse(s*.08,-s*.54,s*.055,s*.045,0,0,Math.PI*2);ctx.fill();
+          // Eye glow (corrupted)
+          const eyePulse=0.7+Math.sin(t2*2.5)*0.3;
+          ctx.fillStyle=p.nicoBerserk?`rgba(180,0,255,${eyePulse})`:`rgba(100,0,200,${eyePulse})`;
+          ctx.shadowColor=p.nicoBerserk?'#aa00ff':'#5500cc';ctx.shadowBlur=8*eyePulse;
+          ctx.beginPath();ctx.ellipse(-s*.08,-s*.54,s*.033,s*.028,0,0,Math.PI*2);ctx.fill();
+          ctx.beginPath();ctx.ellipse(s*.08,-s*.54,s*.033,s*.028,0,0,Math.PI*2);ctx.fill();
+          ctx.shadowBlur=0;
+          // Mouth — slight frown
+          ctx.strokeStyle='rgba(80,40,20,0.8)';ctx.lineWidth=s*.022;ctx.lineCap='round';
+          ctx.beginPath();ctx.moveTo(-s*.1,-s*.37);ctx.bezierCurveTo(-s*.04,-s*.33,s*.04,-s*.33,s*.1,-s*.37);ctx.stroke();
+
+          // Arms
+          ctx.fillStyle='#1a0a2a';
+          // Right arm
+          ctx.beginPath();ctx.moveTo(s*.3,s*.05);
+          ctx.bezierCurveTo(s*.5,s*.1,s*.65,s*.3,s*.62,s*.6);
+          ctx.lineTo(s*.46,s*.6);ctx.bezierCurveTo(s*.44,s*.32,s*.32,s*.14,s*.18,s*.1);
+          ctx.closePath();ctx.fill();
+          // Left arm (holding/no knife)
+          ctx.beginPath();ctx.moveTo(-s*.3,s*.05);
+          ctx.bezierCurveTo(-s*.5,s*.1,-s*.65,s*.3,-s*.62,s*.6);
+          ctx.lineTo(-s*.46,s*.6);ctx.bezierCurveTo(-s*.44,s*.32,-s*.32,s*.14,-s*.18,s*.1);
+          ctx.closePath();ctx.fill();
+
+          // Knife (if has it)
+          if(p.nicoHasKnife){
+            ctx.save();ctx.translate(s*.55,s*.45);ctx.rotate(-0.4);
+            // Handle
+            ctx.fillStyle='#2a1a0a';ctx.fillRect(-s*.04,-s*.06,s*.08,s*.2);
+            ctx.strokeStyle='#4a2a10';ctx.lineWidth=s*.015;
+            ctx.beginPath();ctx.moveTo(-s*.04,-s*.06);ctx.lineTo(s*.04,-s*.06);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(-s*.04,s*.04);ctx.lineTo(s*.04,s*.04);ctx.stroke();
+            // Guard
+            ctx.fillStyle='#888';ctx.fillRect(-s*.1,s*.14,s*.2,s*.04);
+            // Blade
+            const bladeG=ctx.createLinearGradient(-s*.035,s*.18,s*.035,s*.18);
+            bladeG.addColorStop(0,'#c0c0c0');bladeG.addColorStop(1,'#777');
+            ctx.fillStyle=bladeG;
+            ctx.beginPath();ctx.moveTo(-s*.04,s*.18);ctx.lineTo(s*.04,s*.18);
+            ctx.lineTo(0,s*.18+s*.65);ctx.closePath();ctx.fill();
+            // Blood on blade
+            ctx.fillStyle='rgba(180,0,0,0.75)';
+            ctx.beginPath();ctx.moveTo(-s*.035,s*.42);ctx.lineTo(s*.035,s*.42);
+            ctx.lineTo(0,s*.83);ctx.closePath();ctx.fill();
+            ctx.restore();
+          } else {
+            // No knife — show fist ready
+            ctx.fillStyle='#b8926a';
+            ctx.beginPath();ctx.ellipse(s*.56,s*.55,s*.1,s*.08,0.3,0,Math.PI*2);ctx.fill();
+          }
+
+          // Charge effect
+          if(p.nicoCharge){
+            const cPulse=0.6+Math.sin(t2*10)*0.4;
+            ctx.strokeStyle=`rgba(200,100,255,${cPulse})`;ctx.lineWidth=3;
+            ctx.beginPath();ctx.moveTo(-s*.6,0);ctx.lineTo(-s*1.2,s*.3);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(-s*.6,s*.2);ctx.lineTo(-s*1.1,s*.6);ctx.stroke();
+          }
+
+          // ME indicator
+          if(isMe){
+            ctx.shadowColor='rgba(200,100,255,0.5)';ctx.shadowBlur=8;
+            ctx.strokeStyle='rgba(180,80,255,.35)';ctx.lineWidth=1.5;
+            ctx.strokeRect(-s*.62,-s*.82,s*1.24,s*1.9);
+            ctx.shadowBlur=0;
+          }
+          ctx.shadowBlur=0;
+        } else {
 
         // ── CLOAK / body silhouette — wide flowing shape ──
         ctx.fillStyle='#1a0505';
@@ -5587,7 +6096,7 @@ const STORE_KILLERS=[
     stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
     abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas con su machete.'},{key:'Q',desc:'Behead — Dash hacia adelante + golpe devastador.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño temporalmente.'}],
     skins:[] },
-  { id:'nicostos', name:'NICOSTOS', price:20, free:false, icon:'🔪', author:'nicolaselprocrack123',
+  { id:'nicostos', name:'NICOSTOS', price:1200, free:false, icon:'🔪', author:'nicolaselprocrack123',
     tagline:'Corrompido por el poder. El cuchillo ya no es suyo... es de él.',
     stats:[
       {lbl:'DIFICULTAD',val:60},
@@ -5621,6 +6130,28 @@ const STORE_SURVIVORS=[
     tagline:'El superviviente clásico. Ágil, resistente y lleno de trucos.',
     stats:[{lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}],
     abilities:[{key:'Q',desc:'Bloxy Cola — Bebe una cola que aumenta tu velocidad temporalmente.'},{key:'E',desc:'Slate Skin — Toma una poción que te hace sobrevivir a un golpe mortal.'},{key:'R',desc:'Ghost Burger — Come una hamburguesa que te vuelve casi invisible.'}],
+    skins:[] },
+  { id:'amaxge5', name:'AMAXGE5', price:1200, free:false, icon:'🔨', author:'AMaxGe5',
+    tagline:'Support. Protege a los demás y no se rinde jamás.',
+    stats:[
+      {lbl:'DIFICULTAD',val:55},
+      {lbl:'VIDA',val:30},
+      {lbl:'VELOCIDAD',val:70},
+      {lbl:'STAMINA',val:80},
+      {lbl:'SOPORTE',val:95}
+    ],
+    statsDetail:[
+      {lbl:'Tipo',val:'Support'},
+      {lbl:'Vida',val:'90'},
+      {lbl:'Velocidad normal',val:'igual a NOOB'},
+      {lbl:'Stamina total',val:'igual a NOOB'}
+    ],
+    abilities:[
+      {key:'Q',desc:'Referencia?????!!!!! — Planta un guisante que dispara cada 5s a 40 studs. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
+      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 1.5 HP/seg. Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
+      {key:'R',desc:'Escudito para siempre — Solo disponible tras usar Lore de Fnaf con éxito. Usa el martillo como escudo: invulnerable 2.5s. Si el asesino golpea durante el escudo: contraataque automático que aleja 5 studs y stunea 2s. Si nadie ataca durante el escudo: Lentitud II por 3s y Mareo I por 2s. En LMS: invulnerabilidad reducida a 1s. CD: 45s.'}
+    ],
+    lore:'Alejandro estaba en su casa después de la piscina, listo para estudiar francés para su examen. De pronto, un fuerte dolor de cabeza lo interrumpió y no lo dejó concentrarse. Cansado, decidió recostarse y se quedó dormido. Al despertar, sintió que algo no estaba bien, como si el ambiente hubiera cambiado. Se levantó lentamente y, sin saber por qué, tomó un martillo cerca de su cuarto. Al salir, ya no estaba en su mundo, sino en un lugar extraño y oscuro. Allí encontró a otros supervivientes igual de confundidos. A pesar del miedo, Alejandro se mantuvo positivo y animó al grupo. Desde ese momento, decidió proteger a los demás y no rendirse.',
     skins:[] }
 ];
 
@@ -6068,7 +6599,7 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
   Net.sendHost({
     t:'input',pid:S.myId,
     inp:{...Inp.k},shift:Inp.sh,e:Inp.e,
-    m1:Inp.m1,facing:Inp.facing,q:Inp.q,r:Inp.r,
+    m1:Inp.m1,facing:Inp.facing,q:Inp.q,r:Inp.r,tk:Inp.t,
   });
 })();
 </script>
