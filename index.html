@@ -1026,7 +1026,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
               </div>
             </div>
             <div class="store-action-bar">
-              <div class="store-action-price" id="shopActionPrice">900$</div>
+              <div class="store-action-price" id="shopActionPrice">1200$</div>
               <button class="store-action-buy" id="shopActionBtn" onclick="Shop.doPurchase()">COMPRAR</button>
             </div>
           </div>
@@ -2390,6 +2390,10 @@ const UI={
       beheadSlot.style.display='none';
       const comboSlotS=document.getElementById('abilityComboSlot');if(comboSlotS)comboSlotS.style.display='none';
       const enrageSlotS=document.getElementById('abilityEnrageSlot');if(enrageSlotS)enrageSlotS.style.display='none';
+      // Always hide Nicostos killer slots for survivor role
+      ['nicoM1Slot','nicoQSlot','nicoESlot','nicoRSlot','nicoTSlot'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.style.display='none';
+      });
       // ── Bloxy Cola (Q) ──
       const bloxySlot=document.getElementById('abilityBloxySlot');
       if(bloxySlot)bloxySlot.style.display='flex';
@@ -4513,11 +4517,13 @@ const Game={
     if(!p||!p.alive)return;
     if(!p.nicoHasKnife)return; // no knife, can't throw
     if(p.nicoECd>0)return;
+    const throwAng=(pid===S.myId&&Number.isFinite(Inp.facing))?Inp.facing:p.facing;
+    p.facing=throwAng;
     // Throw knife
     p.nicoHasKnife=false;
     p.nicoKnifeFlying=true;
     p.nicoKnifeProjX=p.x;p.nicoKnifeProjY=p.y;
-    p.nicoKnifeVx=Math.cos(p.facing);p.nicoKnifeVy=Math.sin(p.facing);
+    p.nicoKnifeVx=Math.cos(throwAng);p.nicoKnifeVy=Math.sin(throwAng);
     p.nicoKnifeRecoverTimer=0; // starts counting after knife lands
   },
 
@@ -5178,6 +5184,7 @@ const Game={
       if(!dead) ctx.rotate(p.facing+Math.PI/2);
       const s=r;
 
+      let nicoAlphaSaved=false;
       if(dead){
         ctx.font=`${TILE*.38}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillStyle='#303040';ctx.fillText('💀',0,0);
@@ -5193,7 +5200,8 @@ const Game={
         // Nicostos invis: killer (other than self) sees at 0.05 alpha; self always at low alpha so they know
         const nicoVisibleAlpha=isNicostos(p)&&(p.nicoInvis||p.nicoInvisRevive)?(isSelf?0.28:
           (meP2&&meP2.role==='killer')?0.28:0.05):nicoInvisAlpha;
-        if(nicoVisibleAlpha<1){ctx.save();ctx.globalAlpha=nicoVisibleAlpha;}
+        nicoAlphaSaved=nicoVisibleAlpha<1;
+        if(nicoAlphaSaved){ctx.save();ctx.globalAlpha=nicoVisibleAlpha;}
 
         if(isNicostos(p)){
           // ── NICOSTOS — hoodie guy with knife ──
@@ -5460,6 +5468,7 @@ const Game={
         if(isMe){ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=1.5;ctx.strokeRect(-s*.52,-s*1.1,s*1.04,s*2.02);}
       }
 
+      if(nicoAlphaSaved)ctx.restore(); // pop nicoVisibleAlpha save before the translate/rotate restore
       ctx.restore();
 
       // Name label
@@ -5496,6 +5505,30 @@ const Game={
         }
       }
       if(gbAlpha<1)ctx.restore();
+    });
+
+    // Nicostos E projectile (knife) — visible travel path
+    Object.values(W.players).forEach(p=>{
+      if(!p.alive||!p.nicoKnifeFlying)return;
+      const ang=Math.atan2(p.nicoKnifeVy||0,p.nicoKnifeVx||1);
+      const kx=p.nicoKnifeProjX,ky=p.nicoKnifeProjY;
+      ctx.save();
+      // trail
+      const trailLen=TILE*0.9;
+      const tx=kx-Math.cos(ang)*trailLen,ty=ky-Math.sin(ang)*trailLen;
+      const grad=ctx.createLinearGradient(tx,ty,kx,ky);
+      grad.addColorStop(0,'rgba(180,0,0,0)');
+      grad.addColorStop(1,'rgba(220,40,40,0.8)');
+      ctx.strokeStyle=grad;ctx.lineWidth=3.2;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(kx,ky);ctx.stroke();
+      // knife sprite
+      ctx.translate(kx,ky);ctx.rotate(ang+Math.PI/2);
+      ctx.fillStyle='#2a1a0a';ctx.fillRect(-3,-7,6,11);
+      ctx.fillStyle='#777';
+      ctx.beginPath();ctx.moveTo(-3,4);ctx.lineTo(3,4);ctx.lineTo(0,20);ctx.closePath();ctx.fill();
+      ctx.fillStyle='rgba(170,0,0,0.8)';
+      ctx.beginPath();ctx.moveTo(-2,9);ctx.lineTo(2,9);ctx.lineTo(0,18);ctx.closePath();ctx.fill();
+      ctx.restore();
     });
   },
 
@@ -5534,30 +5567,33 @@ const Game={
     const sc=CAM._effScale||SCALE;
     const pad=38;
     const toScreen=(wx,wy)=>({sx:(wx-CAM.x)*sc,sy:(wy-CAM.y)*sc});
-    const drawEdgeArrow=(wx,wy,color,label)=>{
-      const cx=canvas.width/2,cy=canvas.height/2;
-      const {sx,sy}=toScreen(wx,wy);
-      const dx=sx-cx,dy=sy-cy;
-      const ang=Math.atan2(dy,dx);
-      let ex=cx,ey=cy;
-      const absD=Math.max(Math.abs(dx),Math.abs(dy));
-      if(absD>0){
-        const rx=(canvas.width/2-pad)/Math.abs(dx||1e-9);
-        const ry=(canvas.height/2-pad)/Math.abs(dy||1e-9);
-        ex=cx+dx*Math.min(rx,ry);ey=cy+dy*Math.min(rx,ry);
-      }
-      ex=Math.max(pad,Math.min(canvas.width-pad,ex));
-      ey=Math.max(pad,Math.min(canvas.height-pad,ey));
-      ctx.save();ctx.translate(ex,ey);ctx.rotate(ang);
-      // Outer glow
-      ctx.shadowColor=color;ctx.shadowBlur=16;
-      ctx.beginPath();ctx.moveTo(26,0);ctx.lineTo(-16,-16);ctx.lineTo(-8,0);ctx.lineTo(-16,16);ctx.closePath();
-      ctx.fillStyle=color;ctx.fill();
-      ctx.strokeStyle='rgba(0,0,0,0.7)';ctx.lineWidth=2.5;ctx.stroke();
-      ctx.shadowBlur=0;
-      if(label){ctx.rotate(-ang);ctx.font='bold 14px monospace';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,30);}
-      ctx.restore();
-    };
+      const drawEdgeArrow=(wx,wy,color,label)=>{
+        const cx=canvas.width/2,cy=canvas.height/2;
+        const {sx,sy}=toScreen(wx,wy);
+        const dx=sx-cx,dy=sy-cy;
+        const ang=Math.atan2(dy,dx);
+        let ex=cx,ey=cy;
+        const topPad=74;
+        const bottomPad=132; // keep clear of bottom HUD/abilities
+        const sidePad=44;
+        const absD=Math.max(Math.abs(dx),Math.abs(dy));
+        if(absD>0){
+          const rx=(canvas.width/2-sidePad)/Math.abs(dx||1e-9);
+          const ry=(canvas.height/2-sidePad)/Math.abs(dy||1e-9);
+          ex=cx+dx*Math.min(rx,ry);ey=cy+dy*Math.min(rx,ry);
+        }
+        ex=Math.max(sidePad,Math.min(canvas.width-sidePad,ex));
+        ey=Math.max(topPad,Math.min(canvas.height-bottomPad,ey));
+        ctx.save();ctx.translate(ex,ey);ctx.rotate(ang);
+        // Outer glow
+        ctx.shadowColor=color;ctx.shadowBlur=24;
+        ctx.beginPath();ctx.moveTo(34,0);ctx.lineTo(-21,-21);ctx.lineTo(-9,0);ctx.lineTo(-21,21);ctx.closePath();
+        ctx.fillStyle=color;ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.7)';ctx.lineWidth=3;ctx.stroke();
+        ctx.shadowBlur=0;
+        if(label){ctx.rotate(-ang);ctx.font='bold 18px monospace';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,0,38);}
+        ctx.restore();
+      };
     const drawOnscreen=(wx,wy,color,icon)=>{
       const {sx,sy}=toScreen(wx,wy);
       ctx.save();ctx.font='24px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
@@ -5605,7 +5641,7 @@ const Game={
         ctx.beginPath();ctx.arc(sx,sy,TILE*sc*.85,0,Math.PI*2);
         ctx.fillStyle='rgba(160,0,255,1)';ctx.fill();
         ctx.globalAlpha=1;ctx.shadowBlur=0;
-        if(!onScreen(sx,sy)){drawEdgeArrow(tgt.x,tgt.y,'rgba(160,0,255,','🔮');}
+        if(!onScreen(sx,sy)){drawEdgeArrow(tgt.x,tgt.y,'rgba(160,0,255,1)','🔮');}
         ctx.restore();
       });
     }
