@@ -5203,252 +5203,613 @@ const Game={
     const tx1=Math.min(MAP_W-1,Math.ceil((CAM.x+vpW)/TILE));
     const ty1=Math.min(MAP_H-1,Math.ceil((CAM.y+vpH)/TILE));
 
+    // ── ZONE DETECTION ── cada zona tiene su propia paleta y decorado
+    // QUIROFANO: zona médica/asilo (arriba, y<16)
+    // TUBERIAS: flancos industriales (x<14 o x>50, y 16-35)
+    // MORGUE: sala central (x 14-50, y 16-28)
+    // SOTANO: sótano/catacumbas (abajo, y>35)
+    const getZone=(tx,ty)=>{
+      if(ty<16) return 'QUIROFANO';
+      if(ty>35) return 'SOTANO';
+      if(tx<14||tx>50) return 'TUBERIAS';
+      return 'MORGUE';
+    };
+
     for(let ty=ty0;ty<=ty1;ty++){
       for(let tx=tx0;tx<=tx1;tx++){
         const t=BASE_MAP[ty][tx];const px=tx*TILE,py=ty*TILE;
-        // Seeded noise for variation per tile
         const seed=(tx*7+ty*13)%17;
         const seed2=(tx*3+ty*19)%11;
+        const seed3=(tx*11+ty*5)%23;
+        const zone=getZone(tx,ty);
+
         if(t===1){
-          // Normal wall — dark slate concrete, clearly different from floor
-          const wallBase=seed<6?'#1c1c2a':seed<11?'#20202e':'#181826';
-          ctx.fillStyle=wallBase;ctx.fillRect(px,py,TILE,TILE);
-          // Stronger top-left highlight for 3D block feel
-          ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(px,py,TILE,4);
-          ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(px,py,4,TILE);
-          // Stronger bottom-right shadow
-          ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(px,py+TILE-4,TILE,4);
-          ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(px+TILE-4,py,4,TILE);
-          // Inner face — noticeably darker
-          ctx.fillStyle=seed2<4?'#111120':seed2<8?'#14142a':'#0e0e1e';
-          ctx.fillRect(px+4,py+4,TILE-8,TILE-8);
-          // Concrete horizontal grout line
-          ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=1;
-          ctx.beginPath();ctx.moveTo(px+4,py+TILE/2);ctx.lineTo(px+TILE-4,py+TILE/2);ctx.stroke();
-          // Crack detail
-          if(seed<4){ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+7,py+5);ctx.lineTo(px+12,py+15);ctx.lineTo(px+10,py+24);ctx.stroke();}
-          // Moss stain
-          if(seed===3){ctx.fillStyle='rgba(25,50,20,.5)';ctx.fillRect(px+4,py+3,TILE-8,4);}
-          // Bold black outer border — very clear edge
-          ctx.strokeStyle='rgba(0,0,0,1)';ctx.lineWidth=2.5;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
-          // Subtle inner shimmer
-          ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
+          // ══ PAREDES CON ESTÉTICA POR ZONA ══
+          if(zone==='QUIROFANO'){
+            // Azulejos blancos sucios de hospital abandonado
+            const base=seed<5?'#2e2e38':seed<10?'#2a2a34':'#323238';
+            ctx.fillStyle=base;ctx.fillRect(px,py,TILE,TILE);
+            // Grout lines — patrón de azulejo
+            ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;
+            ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+            // Inner tile face (más claro, tono clínico)
+            ctx.fillStyle=seed2<4?'#3a3846':seed2<8?'#383646':'#343244';
+            ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+            // Grout horizontal en mitad del tile
+            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.8;
+            ctx.beginPath();ctx.moveTo(px+2,py+TILE/2);ctx.lineTo(px+TILE-2,py+TILE/2);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(px+TILE/2,py+2);ctx.lineTo(px+TILE/2,py+TILE-2);ctx.stroke();
+            // Highlight top-left (luz fría)
+            ctx.fillStyle='rgba(180,200,255,.1)';ctx.fillRect(px,py,TILE,3);
+            ctx.fillStyle='rgba(180,200,255,.06)';ctx.fillRect(px,py,3,TILE);
+            // Sombra bottom-right
+            ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(px,py+TILE-3,TILE,3);
+            // Grieta en algunos tiles
+            if(seed<3){ctx.strokeStyle='rgba(0,0,0,.55)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+5,py+4);ctx.lineTo(px+9,py+14);ctx.lineTo(px+7,py+22);ctx.stroke();}
+            // Mancha de humedad (azul-verdosa)
+            if(seed===6){ctx.fillStyle='rgba(30,40,60,.4)';ctx.fillRect(px+3,py+TILE-6,TILE-6,5);}
+            // Cruz médica desteñida en algunas paredes
+            if(seed3===0){
+              ctx.globalAlpha=.08;ctx.fillStyle='#cc4444';
+              ctx.fillRect(px+TILE/2-2,py+3,4,TILE-6);
+              ctx.fillRect(px+3,py+TILE/2-2,TILE-6,4);
+              ctx.globalAlpha=1;
+            }
+            // Borde negro exterior
+            ctx.strokeStyle='rgba(0,0,0,.9)';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+
+          } else if(zone==='SOTANO'){
+            // Ladrillo rojo oscuro del sótano
+            const brickRow=(ty%2===0);
+            const brickCol=brickRow?(tx%2===0):(tx%2===1);
+            const brickBase=seed<5?'#241010':seed<11?'#2a1212':'#201010';
+            ctx.fillStyle=brickBase;ctx.fillRect(px,py,TILE,TILE);
+            // Mortero (líneas grises entre ladrillos)
+            ctx.fillStyle='#181010';ctx.fillRect(px,py,TILE,2);  // top mortar
+            ctx.fillStyle='#181010';ctx.fillRect(px,py,2,TILE);  // left mortar
+            // Cara del ladrillo (tono rojizo)
+            const brickFace=seed<5?'#2e1414':seed<11?'#341616':'#281212';
+            ctx.fillStyle=brickFace;ctx.fillRect(px+3,py+3,TILE-5,TILE-5);
+            // Junta horizontal en mitad del ladrillo (textura)
+            if(brickCol){ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(px+3,py+TILE/2-1,TILE-5,2);}
+            // Highlight top (cálido)
+            ctx.fillStyle='rgba(255,180,100,.06)';ctx.fillRect(px+3,py+3,TILE-5,3);
+            // Sombra bottom
+            ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(px,py+TILE-3,TILE,3);
+            // Humedad/salitre manchas blanquecinas
+            if(seed===4){ctx.fillStyle='rgba(200,200,180,.12)';ctx.fillRect(px+4,py+4,TILE-8,TILE-10);}
+            // Grieta profunda
+            if(seed<2){ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(px+TILE*.25,py+2);ctx.lineTo(px+TILE*.4,py+TILE*.6);ctx.lineTo(px+TILE*.6,py+TILE-3);ctx.stroke();}
+            // Musgo negro en esquinas
+            if(seed2===0){ctx.fillStyle='rgba(10,20,8,.6)';ctx.fillRect(px+3,py+TILE-6,6,5);}
+            // Borde
+            ctx.strokeStyle='rgba(0,0,0,1)';ctx.lineWidth=2.5;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+
+          } else if(zone==='TUBERIAS'){
+            // Paneles metálicos industriales oxidados
+            const rustBase=seed<4?'#1a0f06':seed<9?'#1e1208':'#160c04';
+            ctx.fillStyle=rustBase;ctx.fillRect(px,py,TILE,TILE);
+            // Panel de metal (planchas con remaches)
+            ctx.fillStyle=seed2<4?'#221508':seed2<8?'#1e1206':'#241608';
+            ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
+            // Seam horizontal del panel
+            ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(px+2,py+TILE/2);ctx.lineTo(px+TILE-2,py+TILE/2);ctx.stroke();
+            // Seam vertical
+            ctx.beginPath();ctx.moveTo(px+TILE/2,py+2);ctx.lineTo(px+TILE/2,py+TILE-2);ctx.stroke();
+            // Remaches en esquinas
+            const rivets=[[4,4],[TILE-5,4],[4,TILE-5],[TILE-5,TILE-5]];
+            rivets.forEach(([rx,ry])=>{
+              ctx.fillStyle='#0a0806';ctx.beginPath();ctx.arc(px+rx,py+ry,2.2,0,Math.PI*2);ctx.fill();
+              ctx.fillStyle='rgba(255,200,100,.15)';ctx.beginPath();ctx.arc(px+rx-1,py+ry-1,1,0,Math.PI*2);ctx.fill();
+            });
+            // Óxido/corrosión
+            if(seed<5){ctx.fillStyle='rgba(120,50,10,.3)';ctx.fillRect(px+4,py+3,TILE*.4,TILE*.3);}
+            if(seed===8){ctx.fillStyle='rgba(80,30,5,.45)';ctx.fillRect(px+TILE-8,py+TILE*.4,5,TILE*.4);}
+            // Highlight top (brillo metálico)
+            ctx.fillStyle='rgba(255,200,100,.07)';ctx.fillRect(px+2,py+2,TILE-4,3);
+            // Sombra bottom
+            ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(px,py+TILE-3,TILE,3);
+            // Borde negro marcado
+            ctx.strokeStyle='rgba(0,0,0,.95)';ctx.lineWidth=2.5;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+
+          } else {
+            // MORGUE — piedra oscura con musgo
+            const stoneBase=seed<5?'#101a0e':seed<10?'#0e180c':'#12200f';
+            ctx.fillStyle=stoneBase;ctx.fillRect(px,py,TILE,TILE);
+            // Cara de piedra
+            ctx.fillStyle=seed2<3?'#0c1409':seed2<7?'#0e160b':'#101808';
+            ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
+            // Junta de piedra (irregular)
+            ctx.strokeStyle='rgba(0,0,0,.65)';ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(px+3,py+TILE/2+(seed%5-2));ctx.lineTo(px+TILE-3,py+TILE/2+(seed2%3-1));ctx.stroke();
+            // Musgo
+            if(seed<6){ctx.fillStyle='rgba(20,45,10,.55)';ctx.fillRect(px+3,py+3,TILE-6,5);}
+            if(seed2<3){ctx.fillStyle='rgba(15,38,8,.45)';ctx.fillRect(px+3,py+3,5,TILE-6);}
+            // Humedad oscura (charcos en la pared)
+            if(seed===5){ctx.fillStyle='rgba(5,15,5,.5)';ctx.fillRect(px+4,py+TILE-8,TILE-8,6);}
+            // Grieta con líquido verdoso
+            if(seed<3){
+              ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=1;
+              ctx.beginPath();ctx.moveTo(px+8,py+4);ctx.lineTo(px+12,py+16);ctx.lineTo(px+9,py+26);ctx.stroke();
+              if(seed===1){ctx.strokeStyle='rgba(20,50,10,.5)';ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(px+10,py+10);ctx.lineTo(px+11,py+20);ctx.stroke();}
+            }
+            // Highlight tenue (luz fría verdosa)
+            ctx.fillStyle='rgba(80,120,50,.05)';ctx.fillRect(px,py,TILE,3);
+            ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(px,py+TILE-3,TILE,3);
+            ctx.strokeStyle='rgba(0,0,0,.95)';ctx.lineWidth=2.5;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          }
 
         } else if(t===4){
-          // ── KILLER-ONLY WALL (red) ──
+          // ── KILLER-ONLY WALL (red) ── (igual que antes)
           const rPulse=(Math.sin(Date.now()*0.002+tx*0.5+ty*0.7)*0.12)+0.88;
           ctx.fillStyle='#2a0505';ctx.fillRect(px,py,TILE,TILE);
-          // Red glow face
           ctx.fillStyle=`rgba(140,10,10,${rPulse*0.85})`;ctx.fillRect(px+2,py+2,TILE-4,TILE-4);
-          // Inner darker center
           ctx.fillStyle='rgba(80,0,0,0.7)';ctx.fillRect(px+5,py+5,TILE-10,TILE-10);
-          // Top highlight
           ctx.fillStyle='rgba(255,80,80,.18)';ctx.fillRect(px,py,TILE,3);
           ctx.fillStyle='rgba(255,60,60,.08)';ctx.fillRect(px,py,3,TILE);
-          // Skull symbol on some tiles
           if((tx+ty)%5===0){
             ctx.globalAlpha=0.35*rPulse;ctx.font=`${TILE*.55}px monospace`;
             ctx.textAlign='center';ctx.textBaseline='middle';
             ctx.fillStyle='#ff2200';ctx.fillText('☠',px+TILE/2,py+TILE/2);
             ctx.globalAlpha=1;
           }
-          // Red border glow
           ctx.strokeStyle=`rgba(200,20,20,${rPulse*0.9})`;ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
           ctx.strokeStyle='rgba(255,80,80,.35)';ctx.lineWidth=1;ctx.strokeRect(px+2.5,py+2.5,TILE-5,TILE-5);
-          // "KILLER ONLY" warning stripe on first tile of each segment
-          if(seed===0||seed===7){
-            ctx.globalAlpha=0.2;
-            ctx.fillStyle='#ff0000';
-            ctx.fillRect(px,py,TILE,4);ctx.fillRect(px,py+TILE-4,TILE,4);
-            ctx.globalAlpha=1;
-          }
 
         } else {
-          // ── FLOOR — warm stone tiles, clearly lighter than walls ──
-          const floorBase=seed<4?'#2a2838':seed<9?'#2c2a3c':'#262434';
-          ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
-          // Tile grout lines — visible dark lines between tiles
-          ctx.strokeStyle='rgba(0,0,0,.55)';ctx.lineWidth=1.2;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
-          // Warm gloss on some tiles (aged stone sheen)
-          if(seed2<5){ctx.fillStyle='rgba(255,240,200,.03)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
-          // Corner highlight — gives tile a slight 3D inset feel
-          ctx.fillStyle='rgba(255,255,255,.022)';ctx.fillRect(px+2,py+2,TILE*.45,2);
-          ctx.fillStyle='rgba(255,255,255,.012)';ctx.fillRect(px+2,py+2,2,TILE*.45);
-          // Blood stains
-          if(seed===5&&seed2===2){
-            ctx.save();ctx.globalAlpha=.25;ctx.fillStyle='#8a0a0a';
-            ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,.3,0,Math.PI*2);ctx.fill();
-            ctx.beginPath();ctx.ellipse(px+TILE*.62,py+TILE*.55,TILE*.11,TILE*.07,-.5,0,Math.PI*2);ctx.fill();
-            ctx.restore();
-          }
-          if(seed===11&&seed2===4){
-            ctx.save();ctx.globalAlpha=.15;ctx.fillStyle='#6a0505';
-            ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.32,TILE*.18,0,0,Math.PI*2);ctx.fill();
-            ctx.restore();
-          }
-          // Cracked tile
-          if(seed===8){
-            ctx.strokeStyle='rgba(0,0,0,.32)';ctx.lineWidth=.9;
-            ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.55,py+TILE*.5);ctx.lineTo(px+TILE*.8,py+TILE*.85);ctx.stroke();
-          }
-          // Drain/vent mark
-          if((tx*3+ty*7)%29===0){
-            ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=1;
-            ctx.strokeRect(px+TILE*.32,py+TILE*.32,TILE*.36,TILE*.36);
+          // ══ SUELO CON ESTÉTICA POR ZONA ══
+          if(zone==='QUIROFANO'){
+            // Suelo de baldosa clínica (bicolor, sucio)
+            const checker=((tx+ty)%2===0);
+            const floorBase=checker?(seed<5?'#2e2c3e':'#2c2a3a'):(seed<5?'#272535':'#252333');
+            ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
+            // Grout fino entre baldosas
+            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=1;ctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+            // Brillo frío en baldosas claras
+            if(checker&&seed2<4){ctx.fillStyle='rgba(180,200,255,.03)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
+            // Manchas de sangre
+            if(seed===5&&seed2===2){ctx.save();ctx.globalAlpha=.28;ctx.fillStyle='#7a0a0a';ctx.beginPath();ctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.26,TILE*.14,.3,0,Math.PI*2);ctx.fill();ctx.restore();}
+            // Baldosa rota / levantada
+            if(seed===9){ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px+TILE*.15,py+TILE*.1);ctx.lineTo(px+TILE*.6,py+TILE*.55);ctx.lineTo(px+TILE*.85,py+TILE*.9);ctx.stroke();}
+            // Polvo de yeso
+            if(seed3===5){ctx.fillStyle='rgba(200,195,185,.04)';ctx.fillRect(px+3,py+TILE-8,TILE-6,6);}
+
+          } else if(zone==='SOTANO'){
+            // Suelo de tierra/piedra húmeda roja
+            const floorBase=seed<4?'#1e1010':seed<9?'#1c0e0e':'#211212';
+            ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
+            // Grieta en la tierra
+            ctx.strokeStyle='rgba(0,0,0,.45)';ctx.lineWidth=1.1;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+            // Polvo rojizo
+            if(seed2<5){ctx.fillStyle='rgba(80,20,10,.06)';ctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
+            // Charco/humedad oscura
+            if(seed===6&&seed2===3){
+              ctx.save();ctx.globalAlpha=.3;ctx.fillStyle='#050808';
+              ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.52,TILE*.3,TILE*.15,.15,0,Math.PI*2);ctx.fill();
+              ctx.restore();
+            }
+            // Tierra suelta (granos)
+            if(seed3<4){ctx.fillStyle='rgba(60,20,10,.12)';ctx.fillRect(px+TILE*.4,py+TILE*.3,4,4);}
+            // Grieta de pared
+            if(seed===8){ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.5,py+TILE*.5);ctx.lineTo(px+TILE*.75,py+TILE*.85);ctx.stroke();}
+            // Sangre seca
+            if(seed===11&&seed2===4){ctx.save();ctx.globalAlpha=.18;ctx.fillStyle='#5a0505';ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.28,TILE*.15,0,0,Math.PI*2);ctx.fill();ctx.restore();}
+
+          } else if(zone==='TUBERIAS'){
+            // Suelo de metal con rejilla / placas
+            const floorBase=seed<5?'#141008':seed<10?'#120e07':'#160f08';
+            ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
+            // Patrón de rejilla metálica
+            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=.9;
+            for(let g=0;g<3;g++){
+              ctx.beginPath();ctx.moveTo(px+2,py+4+g*(TILE/3));ctx.lineTo(px+TILE-2,py+4+g*(TILE/3));ctx.stroke();
+            }
+            for(let g=0;g<3;g++){
+              ctx.beginPath();ctx.moveTo(px+4+g*(TILE/3),py+2);ctx.lineTo(px+4+g*(TILE/3),py+TILE-2);ctx.stroke();
+            }
+            // Brillo metálico
+            if(seed2<4){ctx.fillStyle='rgba(255,200,80,.025)';ctx.fillRect(px+2,py+2,TILE*.4,2);}
+            // Manchas de aceite/grasa
+            if(seed===4&&seed2===5){
+              ctx.save();ctx.globalAlpha=.35;ctx.fillStyle='#050305';
+              ctx.beginPath();ctx.ellipse(px+TILE*.45,py+TILE*.48,TILE*.22,TILE*.12,.1,0,Math.PI*2);ctx.fill();
+              ctx.restore();
+            }
+            // Óxido en el suelo
+            if(seed<3){ctx.fillStyle='rgba(100,40,5,.1)';ctx.fillRect(px+TILE*.5,py+TILE*.6,TILE*.3,TILE*.2);}
+
+          } else {
+            // MORGUE — losa de piedra mojada con musgo
+            const floorBase=seed<4?'#111710':seed<9?'#121810':'#101610';
+            ctx.fillStyle=floorBase;ctx.fillRect(px,py,TILE,TILE);
+            // Juntas de piedra irregular
+            ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=1.1;ctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+            // Musgo en las juntas
+            if(seed<5){ctx.strokeStyle='rgba(20,40,10,.45)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(px+2,py+TILE/2+(seed%3));ctx.lineTo(px+TILE-2,py+TILE/2-(seed%2));ctx.stroke();}
+            // Reflejo de charco
+            if(seed===7&&seed2===3){
+              ctx.save();ctx.globalAlpha=.18;ctx.fillStyle='#0a1208';
+              ctx.beginPath();
+ctx.ellipse(px+TILE*.48,py+TILE*.5,TILE*.28,TILE*.14,.1,0,Math.PI*2);ctx.fill();
+              ctx.globalAlpha=.06;ctx.fillStyle='rgba(80,120,50,.5)';
+              ctx.beginPath();ctx.ellipse(px+TILE*.46,py+TILE*.48,TILE*.18,TILE*.09,.1,0,Math.PI*2);ctx.fill();
+              ctx.restore();
+            }
+            // Grieta profunda
+            if(seed===8){ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=.9;ctx.beginPath();ctx.moveTo(px+TILE*.2,py+TILE*.1);ctx.lineTo(px+TILE*.55,py+TILE*.55);ctx.lineTo(px+TILE*.8,py+TILE*.85);ctx.stroke();}
+            // Gloss húmedo
+            if(seed2<4){ctx.fillStyle='rgba(60,100,40,.025)';ctx.fillRect(px+2,py+2,TILE*.4,2);}
           }
         }
       }
     }
 
-    // ── ASYLUM PROPS ──
-    // Draw themed props on specific floor tiles
+    // ── PROPS POR ZONA ──
     const drawProp=(wx,wy,fn)=>{
       const px=wx*TILE,py=wy*TILE;
       if(px<(CAM.x-TILE*2)||px>(CAM.x+vpW+TILE)||py<(CAM.y-TILE*2)||py>(CAM.y+vpH+TILE))return;
       ctx.save();fn(px,py);ctx.restore();
     };
-    // Broken beds / cots in corner rooms
-    [[4,3],[5,3],[59,3],[60,3],[4,40],[5,40],[59,40],[60,40]].forEach(([wx,wy])=>{
+
+    // ══ ZONA QUIROFANO (arriba y<16) ══
+    // Camas rotas / catres en habitaciones de esquina
+    [[4,3],[5,3],[59,3],[60,3],[4,4],[60,4]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
         ctx.fillStyle='#1a100a';ctx.fillRect(px+4,py+6,TILE-8,TILE-12);
         ctx.strokeStyle='#2a1a0f';ctx.lineWidth=1.2;ctx.strokeRect(px+4,py+6,TILE-8,TILE-12);
-        ctx.fillStyle='#221410';ctx.fillRect(px+5,py+7,TILE-10,8);// pillow
-        ctx.fillStyle='rgba(120,20,20,.15)';ctx.fillRect(px+5,py+16,TILE-10,6);// blood on sheet
+        ctx.fillStyle='#221410';ctx.fillRect(px+5,py+7,TILE-10,8);
+        ctx.fillStyle='rgba(120,20,20,.18)';ctx.fillRect(px+5,py+16,TILE-10,6);
       });
     });
-    // Operating/restraint chairs
-    [[29,5],[35,5],[29,39],[35,39]].forEach(([wx,wy])=>{
+    // Sillas de restraints / operación
+    [[29,5],[35,5]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
         ctx.fillStyle='#111118';ctx.fillRect(px+8,py+6,TILE-16,TILE-12);
         ctx.strokeStyle='#333340';ctx.lineWidth=1.5;ctx.strokeRect(px+8,py+6,TILE-16,TILE-12);
-        // restraint straps
         ctx.strokeStyle='rgba(80,60,20,.7)';ctx.lineWidth=2;
         ctx.beginPath();ctx.moveTo(px+8,py+12);ctx.lineTo(px+TILE-8,py+12);ctx.stroke();
         ctx.beginPath();ctx.moveTo(px+8,py+20);ctx.lineTo(px+TILE-8,py+20);ctx.stroke();
       });
     });
-    // Barred window on some walls (drawn on top of wall tiles)
-    [[13,5],[51,5],[13,39],[51,39],[13,16],[51,16]].forEach(([wx,wy])=>{
+    // Armarios médicos en paredes
+    [[2,7],[62,7],[20,4],[44,4]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='#1c1c2a';ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
+        ctx.strokeStyle='#2e2e40';ctx.lineWidth=1.2;ctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
+        // Puerta del armario
+        ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(px+TILE/2,py+4);ctx.lineTo(px+TILE/2,py+TILE-4);ctx.stroke();
+        // Manija
+        ctx.fillStyle='rgba(200,180,100,.2)';ctx.beginPath();ctx.arc(px+TILE*.55,py+TILE/2,2,0,Math.PI*2);ctx.fill();
+        // Cruz roja desteñida
+        ctx.globalAlpha=.07;ctx.fillStyle='#cc3333';
+        ctx.fillRect(px+TILE/2-1,py+6,2,8);ctx.fillRect(px+TILE/2-4,py+9,8,2);
+        ctx.globalAlpha=1;
+      });
+    });
+    // Ventanas con barrotes en paredes
+    [[13,5],[51,5],[13,7],[51,7]].forEach(([wx,wy])=>{
       if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
         drawProp(wx,wy,(px,py)=>{
-          ctx.fillStyle='rgba(10,15,8,.7)';ctx.fillRect(px+6,py+6,TILE-12,TILE-12);
-          ctx.strokeStyle='#3a3a28';ctx.lineWidth=1.5;ctx.strokeRect(px+6,py+6,TILE-12,TILE-12);
+          ctx.fillStyle='rgba(10,15,18,.75)';ctx.fillRect(px+5,py+5,TILE-10,TILE-10);
+          ctx.strokeStyle='#3a3a4a';ctx.lineWidth=1.5;ctx.strokeRect(px+5,py+5,TILE-10,TILE-10);
           for(let b=0;b<3;b++){
-            const bx=px+8+b*((TILE-16)/2);
-            ctx.strokeStyle='#2a2a20';ctx.lineWidth=1.8;
-            ctx.beginPath();ctx.moveTo(bx,py+6);ctx.lineTo(bx,py+TILE-6);ctx.stroke();
+            const bx=px+7+b*((TILE-14)/2);
+            ctx.strokeStyle='#2a2a38';ctx.lineWidth=2;
+            ctx.beginPath();ctx.moveTo(bx,py+5);ctx.lineTo(bx,py+TILE-5);ctx.stroke();
           }
         });
       }
     });
-    // Lockers / cabinets
-    [[21,24],[21,25],[43,24],[43,25]].forEach(([wx,wy])=>{
+    // Papeles clínicos en el suelo
+    [[8,12],[12,8],[22,3],[42,3],[55,12],[52,8]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
-        ctx.fillStyle='#141420';ctx.fillRect(px+5,py+3,TILE-10,TILE-6);
-        ctx.strokeStyle='#2a2a38';ctx.lineWidth=1.2;ctx.strokeRect(px+5,py+3,TILE-10,TILE-6);
-        ctx.fillStyle='rgba(255,255,255,.06)';ctx.beginPath();ctx.arc(px+TILE/2,py+TILE/2,2,0,Math.PI*2);ctx.fill();
-      });
-    });
-    // Floor drain / vent grate (center area)
-    [[32,16],[32,28],[20,22],[44,22]].forEach(([wx,wy])=>{
-      drawProp(wx,wy,(px,py)=>{
-        ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(px+9,py+9,TILE-18,TILE-18);
-        ctx.strokeStyle='#1a1a28';ctx.lineWidth=1;ctx.strokeRect(px+9,py+9,TILE-18,TILE-18);
-        for(let g=0;g<3;g++){
-          ctx.strokeStyle='rgba(30,30,45,.8)';ctx.lineWidth=1;
-          ctx.beginPath();ctx.moveTo(px+10,py+11+g*4);ctx.lineTo(px+TILE-10,py+11+g*4);ctx.stroke();
-        }
-      });
-    });
-    // Scattered papers on floor
-    [[8,12],[55,12],[8,30],[55,30],[25,18],[39,18],[25,26],[39,26]].forEach(([wx,wy])=>{
-      drawProp(wx,wy,(px,py)=>{
-        ctx.save();ctx.globalAlpha=.2;
-        ctx.fillStyle='#ded8c8';
+        ctx.save();ctx.globalAlpha=.22;ctx.fillStyle='#d8d2c0';
         ctx.save();ctx.translate(px+TILE*.3,py+TILE*.4);ctx.rotate(.3);ctx.fillRect(-6,-4,12,8);ctx.restore();
-        ctx.save();ctx.translate(px+TILE*.6,py+TILE*.6);ctx.rotate(-.5);ctx.fillRect(-5,-3,10,7);ctx.restore();
+        ctx.save();ctx.translate(px+TILE*.65,py+TILE*.6);ctx.rotate(-.45);ctx.fillRect(-5,-3,10,7);ctx.restore();
         ctx.restore();
       });
     });
-
-    // ── EXTRA PROPS: chains on walls ──
-    [[14,5],[50,5],[14,16],[50,16],[14,28],[50,28]].forEach(([wx,wy])=>{
-      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
-        drawProp(wx,wy,(px,py)=>{
-          ctx.strokeStyle='rgba(80,70,50,.65)';ctx.lineWidth=1.5;ctx.lineCap='round';
-          for(let c=0;c<4;c++){
-            const cy=py+6+c*7;
-            ctx.beginPath();ctx.arc(px+TILE/2,cy,3.5,0,Math.PI*2);ctx.stroke();
-            if(c<3){ctx.beginPath();ctx.moveTo(px+TILE/2,cy+3.5);ctx.lineTo(px+TILE/2,cy+3.5);ctx.stroke();}
-          }
-        });
-      }
+    // Sueros (IV stands)
+    [[15,8],[49,8],[33,5],[31,12],[33,13]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+        ctx.strokeStyle='#252535';ctx.lineWidth=2;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(0,TILE*.38);ctx.lineTo(0,-TILE*.42);ctx.stroke();
+        ctx.strokeStyle='#303045';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(-5,-TILE*.38);ctx.lineTo(0,-TILE*.42);ctx.lineTo(5,-TILE*.38);ctx.stroke();
+        ctx.fillStyle='rgba(200,225,200,.07)';ctx.strokeStyle='rgba(150,185,150,.18)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.ellipse(-4,-TILE*.28,4,6,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+        ctx.strokeStyle='rgba(150,205,150,.16)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(-4,-TILE*.22);ctx.bezierCurveTo(-6,-TILE*.1,3,0,2,TILE*.2);ctx.stroke();
+        ctx.strokeStyle='#252535';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(-8,TILE*.38);ctx.lineTo(8,TILE*.38);ctx.stroke();
+        ctx.restore();
+      });
     });
-
-    // ── EXTRA PROPS: overturned wheelchairs ──
-    [[10,14],[53,14],[10,30],[53,30]].forEach(([wx,wy])=>{
+    // Camillas
+    [[5,13],[58,13]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='#0e0e1e';ctx.fillRect(px+3,py+6,TILE-6,TILE-12);
+        ctx.strokeStyle='#22223a';ctx.lineWidth=1.5;ctx.strokeRect(px+3,py+6,TILE-6,TILE-12);
+        ctx.strokeStyle='#1a1a2e';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(px+5,py+TILE-6);ctx.lineTo(px+5,py+TILE-2);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(px+TILE-5,py+TILE-6);ctx.lineTo(px+TILE-5,py+TILE-2);ctx.stroke();
+        ctx.fillStyle='rgba(180,175,165,.04)';ctx.fillRect(px+4,py+7,TILE-8,TILE-14);
+      });
+    });
+    // Sillas de ruedas volcadas
+    [[10,14],[53,14]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
         ctx.save();ctx.translate(px+TILE/2,py+TILE/2);ctx.rotate(.4);
-        // Frame
-        ctx.strokeStyle='#282830';ctx.lineWidth=2;ctx.lineCap='round';
+        ctx.strokeStyle='#282838';ctx.lineWidth=2;ctx.lineCap='round';
         ctx.beginPath();ctx.moveTo(-10,-8);ctx.lineTo(10,-8);ctx.moveTo(-10,-8);ctx.lineTo(-12,8);ctx.moveTo(10,-8);ctx.lineTo(12,8);ctx.stroke();
-        // Seat
-        ctx.fillStyle='#1a1820';ctx.fillRect(-10,-8,20,4);
-        // Wheels
-        ctx.strokeStyle='#302830';ctx.lineWidth=2;
+        ctx.fillStyle='#1a1828';ctx.fillRect(-10,-8,20,4);
+        ctx.strokeStyle='#302840';ctx.lineWidth=2;
         ctx.beginPath();ctx.arc(-11,9,5,0,Math.PI*2);ctx.stroke();
         ctx.beginPath();ctx.arc(11,9,5,0,Math.PI*2);ctx.stroke();
         ctx.restore();
       });
     });
-
-    // ── EXTRA PROPS: IV stands ──
-    [[15,8],[49,8],[15,36],[49,36],[33,5]].forEach(([wx,wy])=>{
+    // Charcos de sangre (quirófano)
+    [[6,8],[57,8],[24,5],[40,5],[28,3],[36,3]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
-        ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
-        // Pole
-        ctx.strokeStyle='#252530';ctx.lineWidth=2;ctx.lineCap='round';
-        ctx.beginPath();ctx.moveTo(0,TILE*.38);ctx.lineTo(0,-TILE*.42);ctx.stroke();
-        // Top hook
-        ctx.strokeStyle='#303040';ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.moveTo(-5,-TILE*.38);ctx.lineTo(0,-TILE*.42);ctx.lineTo(5,-TILE*.38);ctx.stroke();
-        // Bag
-        ctx.fillStyle='rgba(200,220,200,.08)';ctx.strokeStyle='rgba(150,180,150,.2)';ctx.lineWidth=1;
-        ctx.beginPath();ctx.ellipse(-4,-TILE*.28,4,6,0,0,Math.PI*2);ctx.fill();ctx.stroke();
-        // Tube
-        ctx.strokeStyle='rgba(150,200,150,.18)';ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(-4,-TILE*.22);ctx.bezierCurveTo(-6,-TILE*.1,3,0,2,TILE*.2);ctx.stroke();
-        // Base
-        ctx.strokeStyle='#252530';ctx.lineWidth=2;
-        ctx.beginPath();ctx.moveTo(-8,TILE*.38);ctx.lineTo(8,TILE*.38);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(-8,TILE*.34);ctx.lineTo(8,TILE*.34);ctx.stroke();
+        ctx.save();ctx.globalAlpha=.22;ctx.fillStyle='#6a0505';
+        ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.52,TILE*.28,TILE*.15,.2,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(px+TILE*.68,py+TILE*.4,TILE*.11,TILE*.06,-.4,0,Math.PI*2);ctx.fill();
         ctx.restore();
       });
     });
+    // Cadenas en paredes (quirófano)
+    [[14,5],[50,5],[14,10],[50,10]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          ctx.strokeStyle='rgba(80,70,50,.6)';ctx.lineWidth=1.5;ctx.lineCap='round';
+          for(let c=0;c<4;c++){
+            const cy=py+6+c*7;
+            ctx.beginPath();ctx.arc(px+TILE/2,cy,3.5,0,Math.PI*2);ctx.stroke();
+          }
+        });
+      }
+    });
 
-    // ── EXTRA PROPS: floor blood pools (extra) ──
-    [[6,8],[57,8],[6,36],[57,36],[24,5],[40,5]].forEach(([wx,wy])=>{
+    // ══ ZONA SOTANO (abajo y>35) ══
+    // Barriles oxidados
+    [[4,38],[5,38],[4,39],[60,38],[60,39],[59,38]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
-        ctx.save();ctx.globalAlpha=.22;
-        ctx.fillStyle='#6a0505';
-        ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.52,TILE*.3,TILE*.18,.2,0,Math.PI*2);ctx.fill();
-        ctx.beginPath();ctx.ellipse(px+TILE*.68,py+TILE*.42,TILE*.12,TILE*.07,-.4,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#1a0e08';ctx.fillRect(px+5,py+5,TILE-10,TILE-10);
+        // Aros del barril
+        ctx.strokeStyle='#2a1808';ctx.lineWidth=1.5;
+        ctx.strokeRect(px+5,py+5,TILE-10,TILE-10);
+        ctx.beginPath();ctx.moveTo(px+5,py+TILE*.38);ctx.lineTo(px+TILE-5,py+TILE*.38);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(px+5,py+TILE*.62);ctx.lineTo(px+TILE-5,py+TILE*.62);ctx.stroke();
+        // Óxido
+        ctx.fillStyle='rgba(100,40,5,.4)';ctx.fillRect(px+6,py+6,6,5);
+        ctx.fillRect(px+TILE-12,py+TILE-11,5,5);
+      });
+    });
+    // Cajas de madera rotas
+    [[23,39],[24,39],[40,39],[41,39],[29,40],[35,40]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='#1a0e06';ctx.fillRect(px+4,py+4,TILE-8,TILE-8);
+        ctx.strokeStyle='#2a1808';ctx.lineWidth=1.2;ctx.strokeRect(px+4,py+4,TILE-8,TILE-8);
+        // Listones de madera
+        ctx.beginPath();ctx.moveTo(px+4,py+4);ctx.lineTo(px+TILE-4,py+TILE-4);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(px+TILE-4,py+4);ctx.lineTo(px+4,py+TILE-4);ctx.stroke();
+        // Astilla rota
+        if((wx+wy)%2===0){
+          ctx.fillStyle='rgba(80,40,10,.3)';ctx.fillRect(px+4,py+4,TILE*.3,3);
+        }
+      });
+    });
+    // Huesos / calaveras en el sótano
+    [[7,40],[56,40],[31,42],[33,42]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.save();ctx.globalAlpha=.35;ctx.font=`${TILE*.5}px monospace`;
+        ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#9a9080';
+        ctx.fillText('💀',px+TILE/2,py+TILE/2);ctx.restore();
+      });
+    });
+    // Antorchas apagadas en paredes del sótano
+    [[13,38],[51,38],[13,42],[51,42]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          // Palo
+          ctx.strokeStyle='#241408';ctx.lineWidth=2.5;ctx.lineCap='round';
+          ctx.beginPath();ctx.moveTo(px+TILE/2,py+TILE-6);ctx.lineTo(px+TILE/2,py+8);ctx.stroke();
+          // Soporte
+          ctx.beginPath();ctx.moveTo(px+TILE/2-5,py+TILE-7);ctx.lineTo(px+TILE/2+5,py+TILE-7);ctx.stroke();
+          // Cuenco
+          ctx.fillStyle='#1e1208';ctx.beginPath();ctx.ellipse(px+TILE/2,py+9,5,3.5,0,0,Math.PI*2);ctx.fill();
+          ctx.strokeStyle='#2a1a0a';ctx.lineWidth=1;ctx.stroke();
+          // Brasas apagadas
+          ctx.fillStyle='rgba(60,20,5,.5)';ctx.beginPath();ctx.ellipse(px+TILE/2,py+9,3,2,0,0,Math.PI*2);ctx.fill();
+        });
+      }
+    });
+    // Rejas de ventana rotas (sótano)
+    [[32,36],[32,43]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          ctx.fillStyle='rgba(8,5,5,.8)';ctx.fillRect(px+5,py+6,TILE-10,TILE-12);
+          ctx.strokeStyle='#201008';ctx.lineWidth=2;ctx.strokeRect(px+5,py+6,TILE-10,TILE-12);
+          for(let b=0;b<3;b++){
+            ctx.strokeStyle='#181008';ctx.lineWidth=2.2;
+            ctx.beginPath();ctx.moveTo(px+7+b*((TILE-14)/2),py+6);ctx.lineTo(px+7+b*((TILE-14)/2)+(b===1?2:0),py+TILE-6);ctx.stroke();
+          }
+        });
+      }
+    });
+    // Charcos de sangre (sótano)
+    [[6,37],[57,37],[28,41],[36,41]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.save();ctx.globalAlpha=.25;ctx.fillStyle='#5a0505';
+        ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.52,TILE*.28,TILE*.15,.15,0,Math.PI*2);ctx.fill();
         ctx.restore();
       });
     });
-
-    // ── EXTRA PROPS: gurneys ──
-    [[5,13],[58,13],[5,31],[58,31]].forEach(([wx,wy])=>{
+    // Sillas de operaciones (sótano — espejo de arriba)
+    [[29,39],[35,39]].forEach(([wx,wy])=>{
       drawProp(wx,wy,(px,py)=>{
-        ctx.fillStyle='#0e0e1a';ctx.fillRect(px+3,py+6,TILE-6,TILE-12);
-        ctx.strokeStyle='#222234';ctx.lineWidth=1.5;ctx.strokeRect(px+3,py+6,TILE-6,TILE-12);
-        // Legs
-        ctx.strokeStyle='#1a1a2a';ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(px+5,py+TILE-6);ctx.lineTo(px+5,py+TILE-2);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(px+TILE-5,py+TILE-6);ctx.lineTo(px+TILE-5,py+TILE-2);ctx.stroke();
-        // Sheet
-        ctx.fillStyle='rgba(180,175,165,.05)';ctx.fillRect(px+4,py+7,TILE-8,TILE-14);
+        ctx.fillStyle='#0e0e18';ctx.fillRect(px+8,py+6,TILE-16,TILE-12);
+        ctx.strokeStyle='#2a2a38';ctx.lineWidth=1.5;ctx.strokeRect(px+8,py+6,TILE-16,TILE-12);
+        ctx.strokeStyle='rgba(80,60,20,.7)';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(px+8,py+12);ctx.lineTo(px+TILE-8,py+12);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(px+8,py+20);ctx.lineTo(px+TILE-8,py+20);ctx.stroke();
       });
+    });
+
+    // ══ ZONA TUBERIAS (flancos) ══
+    // Tuberías horizontales en paredes de flancos
+    [[0,18],[0,22],[0,26],[64,18],[64,22],[64,26]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          // Tubo principal
+          ctx.strokeStyle='#1a100a';ctx.lineWidth=8;ctx.lineCap='round';
+          ctx.beginPath();ctx.moveTo(px,py+TILE/2);ctx.lineTo(px+TILE,py+TILE/2);ctx.stroke();
+          ctx.strokeStyle='rgba(255,150,50,.07)';ctx.lineWidth=4;
+          ctx.beginPath();ctx.moveTo(px,py+TILE/2-1);ctx.lineTo(px+TILE,py+TILE/2-1);ctx.stroke();
+          // Sombra debajo
+          ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=3;
+          ctx.beginPath();ctx.moveTo(px,py+TILE/2+5);ctx.lineTo(px+TILE,py+TILE/2+5);ctx.stroke();
+        });
+      }
+    });
+    // Válvulas en paredes laterales
+    [[1,20],[63,20],[1,24],[63,24]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+          // Cuerpo de la válvula
+          ctx.fillStyle='#1a1008';ctx.beginPath();ctx.arc(0,0,7,0,Math.PI*2);ctx.fill();
+          ctx.strokeStyle='#2a1a0a';ctx.lineWidth=2;ctx.stroke();
+          // Rueda de la válvula
+          ctx.strokeStyle='#241408';ctx.lineWidth=2;
+          ctx.beginPath();ctx.arc(0,0,10,0,Math.PI*2);ctx.stroke();
+          for(let s=0;s<4;s++){
+            const ang=s*Math.PI/2;
+            ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(ang)*9,Math.sin(ang)*9);ctx.stroke();
+          }
+          ctx.restore();
+        });
+      }
+    });
+    // Manchas de aceite/grasa en paredes de tuberías
+    [[2,17],[62,17],[2,21],[62,21],[2,25],[62,25]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          ctx.save();ctx.globalAlpha=.4;ctx.fillStyle='#060402';
+          ctx.beginPath();ctx.ellipse(px+TILE/2,py+TILE*.7,TILE*.25,TILE*.18,.1,0,Math.PI*2);ctx.fill();
+          ctx.restore();
+        });
+      }
+    });
+    // Cajas metálicas en flancos
+    [[2,17],[2,27],[62,17],[62,27],[3,22],[61,22]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='#121008';ctx.fillRect(px+4,py+5,TILE-8,TILE-10);
+        ctx.strokeStyle='#1e1808';ctx.lineWidth=1.2;ctx.strokeRect(px+4,py+5,TILE-8,TILE-10);
+        // Óxido
+        ctx.fillStyle='rgba(80,30,5,.3)';ctx.fillRect(px+5,py+6,6,4);
+        // Bisagra
+        ctx.fillStyle='rgba(255,200,80,.1)';ctx.fillRect(px+TILE-9,py+8,2,5);
+      });
+    });
+    // Cadenas colgantes en flancos
+    [[13,21],[51,21],[13,25],[51,25]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          ctx.strokeStyle='rgba(80,65,40,.6)';ctx.lineWidth=1.5;ctx.lineCap='round';
+          for(let c=0;c<5;c++){
+            const cy=py+4+c*7;
+            ctx.beginPath();ctx.arc(px+TILE/2,cy,3,0,Math.PI*2);ctx.stroke();
+          }
+        });
+      }
+    });
+
+    // ══ ZONA MORGUE (centro) ══
+    // Casilleros / armarios de morgue
+    [[21,24],[21,25],[43,24],[43,25],[20,19],[44,19]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='#0e1410';ctx.fillRect(px+3,py+3,TILE-6,TILE-6);
+        ctx.strokeStyle='#182018';ctx.lineWidth=1.2;ctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
+        ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(px+TILE/2,py+4);ctx.lineTo(px+TILE/2,py+TILE-4);ctx.stroke();
+        ctx.fillStyle='rgba(150,200,130,.08)';ctx.beginPath();ctx.arc(px+TILE*.55,py+TILE/2,2,0,Math.PI*2);ctx.fill();
+      });
+    });
+    // Rejillas de ventilación / desagüe (centro)
+    [[32,16],[32,28],[20,22],[44,22],[26,20],[38,20],[26,24],[38,24]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(px+9,py+9,TILE-18,TILE-18);
+        ctx.strokeStyle='#0e180e';ctx.lineWidth=1;ctx.strokeRect(px+9,py+9,TILE-18,TILE-18);
+        for(let g=0;g<3;g++){
+          ctx.strokeStyle='rgba(20,35,15,.8)';ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(px+10,py+11+g*4);ctx.lineTo(px+TILE-10,py+11+g*4);ctx.stroke();
+        }
+      });
+    });
+    // Hongos/musgo luminiscente en pilares centrales
+    [[27,19],[28,19],[36,19],[35,19],[27,25],[28,25],[36,25],[35,25]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          const t2=Date.now()/2000;
+          const glow=0.35+Math.sin(t2+wx*0.8)*0.15;
+          ctx.save();ctx.globalAlpha=glow;
+          // Manchas de musgo bioluminiscente
+          ctx.fillStyle='rgba(40,90,25,.8)';
+          ctx.beginPath();ctx.ellipse(px+TILE*.3,py+TILE*.6,5,3,.2,0,Math.PI*2);ctx.fill();
+          ctx.beginPath();ctx.ellipse(px+TILE*.7,py+TILE*.3,4,2.5,-.3,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='rgba(60,120,35,.4)';
+          ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.7,3,2,0,0,Math.PI*2);ctx.fill();
+          ctx.restore();
+        });
+      }
+    });
+    // Charcos de morgue (verdosos)
+    [[24,20],[40,20],[24,24],[40,24],[31,22],[33,22]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.save();ctx.globalAlpha=.2;ctx.fillStyle='#0a1a08';
+        ctx.beginPath();ctx.ellipse(px+TILE*.5,py+TILE*.5,TILE*.28,TILE*.14,.1,0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=.07;ctx.fillStyle='rgba(50,100,30,.5)';
+        ctx.beginPath();ctx.ellipse(px+TILE*.47,py+TILE*.48,TILE*.16,TILE*.08,0,0,Math.PI*2);ctx.fill();
+        ctx.restore();
+      });
+    });
+    // Papeles y escombros en la morgue
+    [[23,17],[41,17],[23,27],[41,27],[30,18],[34,18],[30,26],[34,26]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.save();ctx.globalAlpha=.18;ctx.fillStyle='#c8c0a8';
+        ctx.save();ctx.translate(px+TILE*.3,py+TILE*.4);ctx.rotate(.35);ctx.fillRect(-5,-3,10,7);ctx.restore();
+        ctx.save();ctx.translate(px+TILE*.65,py+TILE*.6);ctx.rotate(-.5);ctx.fillRect(-4,-3,9,6);ctx.restore();
+        ctx.restore();
+      });
+    });
+    // Mesón de autopsia
+    [[30,22],[34,22]].forEach(([wx,wy])=>{
+      drawProp(wx,wy,(px,py)=>{
+        ctx.fillStyle='#0c1210';ctx.fillRect(px+2,py+5,TILE-4,TILE-10);
+        ctx.strokeStyle='#182018';ctx.lineWidth=1.5;ctx.strokeRect(px+2,py+5,TILE-4,TILE-10);
+        // Desagüe central
+        ctx.fillStyle='rgba(0,0,0,.45)';ctx.beginPath();ctx.arc(px+TILE/2,py+TILE/2,3,0,Math.PI*2);ctx.fill();
+        // Reflejo metálico
+        ctx.fillStyle='rgba(80,120,70,.05)';ctx.fillRect(px+3,py+6,TILE*.35,2);
+      });
+    });
+
+    // ── EXTRA PROPS: Cadenas en paredes de morgue ──
+    [[14,17],[50,17],[14,27],[50,27]].forEach(([wx,wy])=>{
+      if(BASE_MAP[wy]&&BASE_MAP[wy][wx]===1){
+        drawProp(wx,wy,(px,py)=>{
+          ctx.strokeStyle='rgba(60,80,45,.6)';ctx.lineWidth=1.5;ctx.lineCap='round';
+          for(let c=0;c<4;c++){
+            const cy=py+6+c*7;
+            ctx.beginPath();ctx.arc(px+TILE/2,cy,3.5,0,Math.PI*2);ctx.stroke();
+          }
+        });
+      }
     });
 
     // Generators — máquinas de electroshock abandonadas
