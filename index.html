@@ -3184,6 +3184,9 @@ function fskWireConn(conn){
 }
 
 function fskHandleClose(conn){
+  // If we are the host, client disconnections are handled by Net.onDisc — nothing else needed here
+  if(S.isHost){ Net.onDisc(conn); return; }
+  // We are a client — this means our connection to the host dropped
   if(!PeerRT.roomConn || conn.peer!==PeerRT.roomConn.peer) return;
   fskStopHB(); PeerRT.connStatus='disconnected';
   // Guest intenta reconectar automáticamente
@@ -3243,7 +3246,7 @@ function fskHandleMsg(msg, conn){
         malicia:msg.malicia||0,
       });
     }
-    PeerRT.roomConn=conn;
+    // NOTE: Do NOT overwrite PeerRT.roomConn here — host manages multiple conns via S.conns[]
     conn.send({t:'lobby', players:S.players, code:PeerRT.roomMeta?PeerRT.roomMeta.roomCode:''});
     Net.broadcast({t:'list', players:S.players, code:''});
     UI.renderLobbyPlayers(); Net.checkCd();
@@ -3292,10 +3295,7 @@ async function fskJoinRapida(num){
     PeerRT.roomMeta={ roomId:peerId, roomCode:`RÁPIDA-${num}`, isRapida:true, players:1 };
     MP.setStatus(`✓ Sala ${num} — esperando jugadores...`, '#2ecc71');
     UI.showLobby();
-    PeerRT.peer.on('connection', conn=>{
-      fskWireConn(conn);
-      // Esperar el join request
-    });
+    // fskWirePeer already wires peer.on('connection') → fskWireConn; no extra handler needed here
   } else {
     // Guest
     await new Promise((resolve, reject)=>{
@@ -3308,7 +3308,8 @@ async function fskJoinRapida(num){
     PeerRT.connStatus='joining';
     const conn = PeerRT.peer.connect(peerId, {reliable:true, serialization:'json'});
     S.conns=[conn]; PeerRT.roomConn=conn;
-    fskWireConn(conn);
+    // NOTE: Do NOT call fskWireConn here — it would register a duplicate 'data' handler.
+    // Wire the conn AFTER the handshake promise resolves.
     await new Promise((resolve, reject)=>{
       let done=false;
       conn.on('open', ()=>{
@@ -3328,6 +3329,8 @@ async function fskJoinRapida(num){
       conn.on('close', ()=>{ if(!done){done=true; MP.setStatus('Sala no responde.','#f39c12'); reject(new Error('close'));} });
       setTimeout(()=>{ if(!done){done=true; MP.setStatus('Tiempo de espera agotado.','#f39c12'); reject(new Error('timeout'));} }, 12000);
     });
+    // Now wire permanent handlers (single 'data' listener from this point on)
+    conn.on('data', msg=>Net.onClient(msg));
     conn.on('close', ()=>fskHandleClose(conn));
     conn.on('error', ()=>fskHandleClose(conn));
   }
@@ -3368,7 +3371,8 @@ async function fskJoinRoom(rawId, isReconnect){
     PeerRT.connStatus=isReconnect?'reconnecting':'joining';
     const conn = PeerRT.peer.connect(roomId, {reliable:true, serialization:'json'});
     S.conns=[conn]; PeerRT.roomConn=conn;
-    fskWireConn(conn);
+    // NOTE: Do NOT call fskWireConn here — it would register a duplicate 'data' handler.
+    // Wire the conn AFTER the handshake promise resolves.
     await new Promise((resolve,reject)=>{
       let done=false;
       conn.on('open',()=>{
@@ -3393,6 +3397,8 @@ async function fskJoinRoom(rawId, isReconnect){
       conn.on('close',()=>{if(!done){done=true;MP.setStatus('Sala no responde.','#f39c12');reject(new Error('close'));}});
       setTimeout(()=>{if(!done){done=true;MP.setStatus('Tiempo de espera agotado.','#f39c12');reject(new Error('timeout'));}},12000);
     });
+    // Now wire permanent handlers (single 'data' listener from this point on)
+    conn.on('data', msg=>Net.onClient(msg));
     conn.on('close', ()=>fskHandleClose(conn));
     conn.on('error', ()=>fskHandleClose(conn));
     MP.setStatus('','');
