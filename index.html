@@ -1908,7 +1908,7 @@ const NICO_WALK = KW * 0.97;
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
 const NICO_M1_DMG_NO_KNIFE = 19;
-const NICO_NO_KNIFE_SPEED = 1.20;
+const NICO_NO_KNIFE_SPEED = 1.10;
 const NICO_M1_CD = 1.9;
 const NICO_Q_CD = 25;
 const NICO_Q_STAM_DRAIN = 15;
@@ -2349,6 +2349,7 @@ const UI={
       if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN '+(me.amaxHealHps||2.4).toFixed(1)+'/s',timer:me.amaxHealTimer,type:'positive'});
       if(me.amaxRevealed&&me.amaxRevealTimer>0)effects.push({icon:'👁',name:'REVELADO',timer:me.amaxRevealTimer,type:'neutral'});
       if(me.amaxPeaSlow&&me.amaxPeaSlowTimer>0)effects.push({icon:'🫛',name:'LENTITUD II',timer:me.amaxPeaSlowTimer,type:'debuff'});
+      if((me.amaxSlowTimer||0)>0)effects.push({icon:'🐢',name:'LENTITUD III',timer:me.amaxSlowTimer,type:'debuff'});
       if(me.enraged&&me.enrageTimer>0)effects.push({icon:'😡',name:'ENRAGED',timer:me.enrageTimer,type:'positive'});
       efPanel.innerHTML=effects.map(e=>`<div class="effect-pill ${e.type}"><span class="effect-icon">${e.icon}</span><span class="effect-name">${e.name}</span><span class="effect-timer">${e.timer>0?Math.ceil(e.timer)+'s':''}</span></div>`).join('');
     }
@@ -4458,7 +4459,7 @@ const Game={
               if(p.amaxShieldTimer<=0&&!p.amaxShieldHit){
                 // No attack came — apply Slow II + dizziness
                 p.amaxShielding=false;
-                p.speedBuff=(p.speedBuff||1)*0.5; // Lentitud II
+                p.speedBuff=(p.speedBuff||1)*0.33; // Lentitud III
                 p.amaxSlowTimer=AMAX_R_SLOW_DUR;
                 p.amaxDizzy=true;p.amaxDizzyTimer=AMAX_R_DIZZINESS_DUR;
               }
