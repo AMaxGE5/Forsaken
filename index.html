@@ -2128,8 +2128,6 @@ const S={
   // lobby world player state (position persists while spectating)
   lobbyP:{x:32*TILE,y:22*TILE,facing:0},
   inLobbyWorld:false,  // currently in lobby world view
-  // heartbeat tracking
-  hbLastPong:0,
 };
 let W={};
 
@@ -2245,7 +2243,6 @@ const UI={
     document.getElementById('lobbyCDBox').style.display='flex';
     UI.show('s-lobby');
     LobbyWorld.init();
-    Net._startHeartbeat();
     UI.renderLobbyPlayers();
     Economy.updateDisplays();
     LobbySettings.loadHitbox();
@@ -3137,8 +3134,6 @@ const LobbyWorld={
 const QM_COUNT  = 7;                      // número de salas rápidas
 const QM_PREFIX = 'fsk26-rapida-';        // prefijo único para salas rápidas
 const MP_CAP    = 9;                       // máx jugadores por sala
-const HB_INTERVAL = 5000;
-const HB_TIMEOUT = 15000;
 
 // ── Peer config ────────────────────────────────────────────────────────────────
 function fskPeerOpts(){
@@ -3254,7 +3249,6 @@ function fskSend(msg){
 // ── HOST: manejar mensajes entrantes ──────────────────────────────────────────
 function fskHandleMsg(msg, conn){
   if(!msg||typeof msg!=='object') return;
-  if(conn)conn._lastPong=Date.now();
 
   // Heartbeat
   if(msg.t==='hb'){ try{conn.send({t:'hb-ack'});}catch(e){} return; }
@@ -3472,7 +3466,6 @@ function mpCleanState(){
   if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
   if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
   if(Net._hbInt){clearInterval(Net._hbInt);Net._hbInt=null;}
-  if(Net._hbHostInt){clearInterval(Net._hbHostInt);Net._hbHostInt=null;}
   S.running=false; S.isDeadSpec=false; S.inLobbyWorld=false;
   S.isAfk=false;
   LobbyWorld.stop();
@@ -3618,7 +3611,6 @@ const Net={
 
   // ── Heartbeat vars ───────────────────────────────────────────────────────────
   _hbInt:null,
-  _hbHostInt:null,
 
   // ── Limpia todo estado de red ────────────────────────────────────────────────
   cleanup(){
@@ -3626,7 +3618,6 @@ const Net={
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
     if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
     if(this._hbInt){clearInterval(this._hbInt);this._hbInt=null;}
-    if(this._hbHostInt){clearInterval(this._hbHostInt);this._hbHostInt=null;}
     S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
     LobbyWorld.stop();
     fskCleanup(false);
@@ -3637,27 +3628,12 @@ const Net={
   // ── Heartbeat: el cliente le manda ping al host cada 5s ──────────────────────
   _startHeartbeat(){
     if(this._hbInt)clearInterval(this._hbInt);
-    if(this._hbHostInt)clearInterval(this._hbHostInt);
-    if(S.isHost){
-      this._hbHostInt=setInterval(()=>{
-        const now=Date.now();
-        [...S.conns].forEach(c=>{
-          if(!c)return;
-          if(!c._lastPong)c._lastPong=now;
-          if(now-c._lastPong>HB_TIMEOUT){Net.onDisc(c);return;}
-          try{if(c.open)c.send({t:'ping'});}catch(e){}
-        });
-      },HB_INTERVAL);
-      return;
-    }
-    S.hbLastPong=Date.now();
     this._hbInt=setInterval(()=>{
-      const c=S.conns[0];
-      if(c&&c.open){try{c.send({t:'ping'});}catch(e){}}
-      if(Date.now()-S.hbLastPong>HB_TIMEOUT){
-        if(c)fskHandleClose(c);
+      if(!S.isHost){
+        const c=S.conns[0];
+        if(c&&c.open){try{c.send({t:'ping'});}catch(e){}}
       }
-    },HB_INTERVAL);
+    },5000);
   },
 
   // ── Enviar a todos los clientes (host→clientes) ──────────────────────────────
@@ -3692,7 +3668,6 @@ const Net={
   onHost(conn,d){
     // Ping/pong para heartbeat
     if(d.t==='ping'){try{conn.send({t:'pong'});}catch(e){}return;}
-    if(d.t==='pong'){conn._lastPong=Date.now();return;}
     // probe y join son manejados en MP.handleIncoming antes de llegar aquí
     if(d.t==='probe'||d.t==='join')return;
 
@@ -3749,7 +3724,7 @@ const Net={
   //  CLIENTE: PROCESA MENSAJES ENTRANTES
   // ══════════════════════════════════════════════════════════════════
   onClient(d){
-    if(d.t==='pong'){S.hbLastPong=Date.now();return;} // heartbeat response
+    if(d.t==='pong')return; // heartbeat response
 
     if(d.t==='lobby'){
       S.players=d.players;S.code=d.code||'';
