@@ -929,7 +929,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="lobbyCDBox">
       <div id="lobbyCDLabel">ESPERANDO JUGADORES</div>
       <div id="lobbyCDBig"></div>
-      <div id="lobbyWaitMsg">necesitas al menos 2 jugadores</div>
+      <div id="lobbyWaitMsg">necesitas al menos 2 jugadores activos</div>
     </div>
     <div id="lobbyBottomBar">
       <div id="lobbyPlayerList"></div>
@@ -973,6 +973,14 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <!-- Settings panel (appears to the right of gear btn) -->
     <div id="lobbySettingsPanel">
       <div class="lsp-title">AJUSTES</div>
+      <div class="lsp-option">
+        <span class="lsp-option-lbl">AFK</span>
+        <label class="lsp-toggle">
+          <input type="checkbox" id="lobbyAfkToggle" onchange="MP.setAfk(this.checked,false)">
+          <span class="lsp-toggle-track"></span>
+          <span class="lsp-toggle-thumb"></span>
+        </label>
+      </div>
       <div class="lsp-option">
         <span class="lsp-option-lbl">HITBOXES</span>
         <label class="lsp-toggle">
@@ -1907,8 +1915,8 @@ const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar E
 const NICO_WALK = KW * 0.97;
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
-const NICO_M1_DMG_NO_KNIFE = 19;
-const NICO_NO_KNIFE_SPEED = 1.20;
+const NICO_M1_DMG_NO_KNIFE = 10;
+const NICO_NO_KNIFE_SPEED = 1.0;
 const NICO_M1_CD = 1.9;
 const NICO_Q_CD = 25;
 const NICO_Q_STAM_DRAIN = 15;
@@ -1930,7 +1938,7 @@ const NICO_R_REVIVE_DUR = 0.5;
 const NICO_T_KILLS_REQ = 2;
 const NICO_T_DUR = 20;
 const NICO_T_STAM_REGEN = 35;
-const NICO_T_STAM_MAX = 85;
+const NICO_T_STAM_MAX = 80;
 const NICO_T_DETECT_BONUS = 1.10;
 
 // ── Habilidad E del Killer: COMBO (2 tajos + motosierra) ──
@@ -2109,6 +2117,7 @@ function safeTileSpawn(tx,ty){
 const S={
   peer:null,conns:[],isHost:false,code:'',myId:'',
   players:[],myRole:'',running:false,raf:null,cdInt:null,cdVal:30,
+  isAfk:false,
   // spectate
   isDeadSpec:false,  // local player died and chose spectate
   specTarget:null,
@@ -2119,6 +2128,8 @@ const S={
   // lobby world player state (position persists while spectating)
   lobbyP:{x:32*TILE,y:22*TILE,facing:0},
   inLobbyWorld:false,  // currently in lobby world view
+  // heartbeat tracking
+  hbLastPong:0,
 };
 let W={};
 
@@ -2223,6 +2234,7 @@ const UI={
 
   showLobby(){
     S.inLobbyWorld=true;
+    UI.resetRoundHUD();
     Stats.startSession();
     GameAudio.playLobby();
     const badge=document.getElementById('lobbyCodeBadge');
@@ -2233,6 +2245,7 @@ const UI={
     document.getElementById('lobbyCDBox').style.display='flex';
     UI.show('s-lobby');
     LobbyWorld.init();
+    Net._startHeartbeat();
     UI.renderLobbyPlayers();
     Economy.updateDisplays();
     LobbySettings.loadHitbox();
@@ -2247,9 +2260,12 @@ const UI={
       const div=document.createElement('div');
       div.className='lp-entry'+(p.id===S.myId?' me':'');
       const mal=p.id===S.myId?Stats.malicia||0:p.malicia||0;
-      div.innerHTML=`${p.host?'👑 ':'🎮 '}${p.username||p.name}<span class="lp-mal">⚡${mal}</span>`;
+      const afkTxt=p.afk?' <span style="color:#f39c12">[AFK]</span>':'';
+      div.innerHTML=`${p.host?'👑 ':'🎮 '}${p.username||p.name}${afkTxt}<span class="lp-mal">⚡${mal}</span>`;
       list.appendChild(div);
     });
+    const afkToggle=document.getElementById('lobbyAfkToggle');
+    if(afkToggle)afkToggle.checked=!!S.isAfk;
     UI.renderStatsPanel();
   },
 
@@ -2257,14 +2273,14 @@ const UI={
     const panel=document.getElementById('lobbyStatsPanel');
     if(!panel)return;
     panel.innerHTML='';
-    const self={id:S.myId,username:Stats.username,timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,malicia:Stats.malicia||0,isMe:true};
+    const self={id:S.myId,username:Stats.username,timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,malicia:Stats.malicia||0,afk:S.isAfk,isMe:true};
     const others=Object.values(LobbyWorld.lobbyPlayers||{}).filter(p=>p.id!==S.myId);
     [self,...others].forEach(p=>{
       const pill=document.createElement('div');
       pill.className='lsp-pill'+(p.isMe?' me':'');
       const uname=p.isMe?Stats.username:(p.username||p.name||'?');
       const mal=p.isMe?Stats.malicia||0:p.malicia||0;
-      pill.innerHTML=`<div class="lsp-pill-dot${p.isMe?' me':''}"></div>${p.isMe?'▶ ':''}${uname}<span class="mal-badge">⚡${mal}</span>`;
+      pill.innerHTML=`<div class="lsp-pill-dot${p.isMe?' me':''}"></div>${p.isMe?'▶ ':''}${uname}${p.afk?' <span style="color:#f39c12">[AFK]</span>':''}<span class="mal-badge">⚡${mal}</span>`;
       pill.onclick=()=>LobbyWorld.showProfile(p);
       panel.appendChild(pill);
     });
@@ -2285,6 +2301,13 @@ const UI={
     document.getElementById('lobbyCDBig').textContent='';
     document.getElementById('lobbyCDLabel').textContent='ESPERANDO JUGADORES';
     document.getElementById('lobbyWaitMsg').style.display='block';
+  },
+  resetRoundHUD(){
+    ['amaxQSlot','amaxESlot','amaxRSlot','nicoM1Slot','nicoQSlot','nicoESlot','nicoRSlot','nicoTSlot','abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot','abilityBloxySlot','abilitySSSlot','abilityGBSlot']
+      .forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    const ef=document.getElementById('effectsPanel');if(ef)ef.innerHTML='';
+    const bb=document.getElementById('bloxyBuffBar');if(bb)bb.classList.remove('show');
+    const gb=document.getElementById('gbBuffBar');if(gb)gb.classList.remove('show');
   },
   tickCd(v=S.cdVal){
     const el=document.getElementById('lobbyCDBig');
@@ -2386,6 +2409,7 @@ const UI={
     const m1Slot=document.getElementById('abilityM1Slot');
     const beheadSlot=document.getElementById('abilityBeheadSlot');
     if(me.role==='killer'){
+      ['amaxQSlot','amaxESlot','amaxRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
       const nicoMode=isNicostos(me);
       // Hide/show Slasher vs Nicostos slots
       ['abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot'].forEach(id=>{
@@ -2835,6 +2859,7 @@ const LobbyWorld={
     if(Inp.k['d']||Inp.k['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     if(dx||dy){
+      if(S.isAfk)MP.setAfk(false,true);
       const spd=LOBBY_SPEED*dt;
       const r=TILE*.28;
       const nx=p.x+dx*spd,ny=p.y+dy*spd;
@@ -3112,6 +3137,8 @@ const LobbyWorld={
 const QM_COUNT  = 7;                      // número de salas rápidas
 const QM_PREFIX = 'fsk26-rapida-';        // prefijo único para salas rápidas
 const MP_CAP    = 9;                       // máx jugadores por sala
+const HB_INTERVAL = 5000;
+const HB_TIMEOUT = 15000;
 
 // ── Peer config ────────────────────────────────────────────────────────────────
 function fskPeerOpts(){
@@ -3227,6 +3254,7 @@ function fskSend(msg){
 // ── HOST: manejar mensajes entrantes ──────────────────────────────────────────
 function fskHandleMsg(msg, conn){
   if(!msg||typeof msg!=='object') return;
+  if(conn)conn._lastPong=Date.now();
 
   // Heartbeat
   if(msg.t==='hb'){ try{conn.send({t:'hb-ack'});}catch(e){} return; }
@@ -3248,6 +3276,7 @@ function fskHandleMsg(msg, conn){
         host:false, connId:conn.peer,
         color:PCOLORS[S.players.length%PCOLORS.length],
         malicia:msg.malicia||0,
+        afk:!!msg.afk,
         equippedKiller:msg.equippedKiller||'',
         equippedSurvivor:msg.equippedSurvivor||'',
       });
@@ -3296,7 +3325,7 @@ async function fskJoinRapida(num){
 
   if(becameHost){
     S.isHost=true; S.myId=Net.uid();
-    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, afk:false, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId:peerId, roomCode:`RÁPIDA-${num}`, isRapida:true, players:1 };
     MP.setStatus(`✓ Sala ${num} — esperando jugadores...`, '#2ecc71');
@@ -3319,7 +3348,7 @@ async function fskJoinRapida(num){
     await new Promise((resolve, reject)=>{
       let done=false;
       conn.on('open', ()=>{
-        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, afk:S.isAfk, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
       });
       conn.on('data', msg=>{
         if(done) return;
@@ -3351,7 +3380,7 @@ async function fskCreatePrivate(){
   try{
     await fskEnsurePeer('room', roomId);
     S.isHost=true; S.myId=Net.uid();
-    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, afk:false, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
     PeerRT.peer.on('connection', conn=>fskWireConn(conn));
@@ -3382,7 +3411,7 @@ async function fskJoinRoom(rawId, isReconnect){
     await new Promise((resolve,reject)=>{
       let done=false;
       conn.on('open',()=>{
-        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, reconnect:!!isReconnect, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, afk:S.isAfk, reconnect:!!isReconnect, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
       });
       conn.on('data', msg=>{
         if(done) return;
@@ -3443,7 +3472,9 @@ function mpCleanState(){
   if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
   if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
   if(Net._hbInt){clearInterval(Net._hbInt);Net._hbInt=null;}
+  if(Net._hbHostInt){clearInterval(Net._hbHostInt);Net._hbHostInt=null;}
   S.running=false; S.isDeadSpec=false; S.inLobbyWorld=false;
+  S.isAfk=false;
   LobbyWorld.stop();
   S.conns=[]; S.players=[]; Inp.clear();
 }
@@ -3553,8 +3584,25 @@ const MP={
       const el=document.getElementById(id); if(el){ el.textContent=msg; el.style.color=col||'var(--dim)'; }
     });
   },
+  toggleAfk(){MP.setAfk(!S.isAfk,false);},
+  setAfk(v,isAuto){
+    S.isAfk=!!v;
+    const me=S.players.find(p=>p.id===S.myId);
+    if(me)me.afk=S.isAfk;
+    if(!isAuto||S.isAfk===false){
+      if(S.isHost){
+        Net.broadcast({t:'afk',id:S.myId,afk:S.isAfk});
+        Net.broadcast({t:'list',players:S.players,code:S.code||''});
+        Net.checkCd();
+      } else {
+        Net.sendHost({t:'afk',id:S.myId,afk:S.isAfk});
+      }
+    }
+    UI.renderLobbyPlayers();
+  },
 
   leaveRoom(){
+    if(S.isAfk)S.isAfk=false;
     fskSend({t:'leave'});
     fskCleanup(false);
     mpCleanState();
@@ -3570,6 +3618,7 @@ const Net={
 
   // ── Heartbeat vars ───────────────────────────────────────────────────────────
   _hbInt:null,
+  _hbHostInt:null,
 
   // ── Limpia todo estado de red ────────────────────────────────────────────────
   cleanup(){
@@ -3577,6 +3626,7 @@ const Net={
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
     if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
     if(this._hbInt){clearInterval(this._hbInt);this._hbInt=null;}
+    if(this._hbHostInt){clearInterval(this._hbHostInt);this._hbHostInt=null;}
     S.running=false;S.isDeadSpec=false;S.inLobbyWorld=false;
     LobbyWorld.stop();
     fskCleanup(false);
@@ -3587,12 +3637,27 @@ const Net={
   // ── Heartbeat: el cliente le manda ping al host cada 5s ──────────────────────
   _startHeartbeat(){
     if(this._hbInt)clearInterval(this._hbInt);
+    if(this._hbHostInt)clearInterval(this._hbHostInt);
+    if(S.isHost){
+      this._hbHostInt=setInterval(()=>{
+        const now=Date.now();
+        [...S.conns].forEach(c=>{
+          if(!c)return;
+          if(!c._lastPong)c._lastPong=now;
+          if(now-c._lastPong>HB_TIMEOUT){Net.onDisc(c);return;}
+          try{if(c.open)c.send({t:'ping'});}catch(e){}
+        });
+      },HB_INTERVAL);
+      return;
+    }
+    S.hbLastPong=Date.now();
     this._hbInt=setInterval(()=>{
-      if(!S.isHost){
-        const c=S.conns[0];
-        if(c&&c.open){try{c.send({t:'ping'});}catch(e){}}
+      const c=S.conns[0];
+      if(c&&c.open){try{c.send({t:'ping'});}catch(e){}}
+      if(Date.now()-S.hbLastPong>HB_TIMEOUT){
+        if(c)fskHandleClose(c);
       }
-    },5000);
+    },HB_INTERVAL);
   },
 
   // ── Enviar a todos los clientes (host→clientes) ──────────────────────────────
@@ -3614,6 +3679,7 @@ const Net={
       username:Stats.username||'?',
       timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,
       malicia:Stats.malicia||0,
+      afk:S.isAfk,
       equippedKiller:Stats.equippedKiller||'',
       equippedSurvivor:Stats.equippedSurvivor||''};
     if(S.isHost)Net.broadcast(msg);
@@ -3626,6 +3692,7 @@ const Net={
   onHost(conn,d){
     // Ping/pong para heartbeat
     if(d.t==='ping'){try{conn.send({t:'pong'});}catch(e){}return;}
+    if(d.t==='pong'){conn._lastPong=Date.now();return;}
     // probe y join son manejados en MP.handleIncoming antes de llegar aquí
     if(d.t==='probe'||d.t==='join')return;
 
@@ -3652,11 +3719,29 @@ const Net={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
         survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
-        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',
+        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',afk:!!d.afk,
       };
       // Sync malicia into S.players so hostStart picks correct killer
-      const sp=S.players.find(x=>x.id===d.id);if(sp)sp.malicia=d.malicia||0;
+      const sp=S.players.find(x=>x.id===d.id);
+      if(sp){
+        sp.malicia=d.malicia||0;
+        if(d.equippedKiller!==undefined)sp.equippedKiller=d.equippedKiller||'';
+        if(d.equippedSurvivor!==undefined)sp.equippedSurvivor=d.equippedSurvivor||'';
+        if(d.afk!==undefined)sp.afk=!!d.afk;
+      }
       Net.broadcast(d);
+    } else if(d.t==='afk'){
+      const sp=S.players.find(x=>x.id===d.id);
+      if(sp){
+        sp.afk=!!d.afk;
+        Net.broadcast({t:'afk',id:d.id,afk:sp.afk});
+        Net.broadcast({t:'list',players:S.players,code:S.code||''});
+        UI.renderLobbyPlayers();
+        Net.checkCd();
+      }
+    } else if(d.t==='leaveLobbyWorld'){
+      if(d.id&&LobbyWorld.lobbyPlayers[d.id])delete LobbyWorld.lobbyPlayers[d.id];
+      Net.broadcast({t:'leaveLobbyWorld',id:d.id});
     }
   },
 
@@ -3664,7 +3749,7 @@ const Net={
   //  CLIENTE: PROCESA MENSAJES ENTRANTES
   // ══════════════════════════════════════════════════════════════════
   onClient(d){
-    if(d.t==='pong')return; // heartbeat response
+    if(d.t==='pong'){S.hbLastPong=Date.now();return;} // heartbeat response
 
     if(d.t==='lobby'){
       S.players=d.players;S.code=d.code||'';
@@ -3672,6 +3757,8 @@ const Net={
 
     } else if(d.t==='list'){
       S.players=d.players;
+      const me=S.players.find(p=>p.id===S.myId);
+      if(me)S.isAfk=!!me.afk;
       UI.renderLobbyPlayers();
       Net.checkCd();
 
@@ -3701,8 +3788,16 @@ const Net={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
         survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
-        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',
+        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',afk:!!d.afk,
       };
+    } else if(d.t==='afk'){
+      const sp=S.players.find(x=>x.id===d.id);
+      if(sp)sp.afk=!!d.afk;
+      if(d.id===S.myId)S.isAfk=!!d.afk;
+      UI.renderLobbyPlayers();
+    } else if(d.t==='leaveLobbyWorld'){
+      if(d.id&&LobbyWorld.lobbyPlayers[d.id])delete LobbyWorld.lobbyPlayers[d.id];
+      UI.renderStatsPanel();
 
     } else if(d.t==='spectate'){
       S.isDeadSpec=true;S.players=d.players;S.lateJoin=true; // joined mid-game — no stats
@@ -3738,11 +3833,13 @@ const Net={
     const idx=S.players.findIndex(p=>p.connId===conn.peer);
     const discId=idx!==-1?S.players[idx].id:null;
     if(idx!==-1)S.players.splice(idx,1);
+    if(discId&&LobbyWorld.lobbyPlayers[discId])delete LobbyWorld.lobbyPlayers[discId];
     // Si el juego está corriendo, marcar al jugador como muerto
     if(S.running&&S.isHost&&discId&&W.players&&W.players[discId]){
       const dp=W.players[discId];
       dp.alive=false;dp.escaped=false;
     }
+    if(discId)Net.broadcast({t:'leaveLobbyWorld',id:discId});
     Net.broadcast({t:'list',players:S.players,code:S.code||''});
     UI.renderLobbyPlayers();
     if(!S.running)Net.checkCd();
@@ -3752,7 +3849,8 @@ const Net={
   // ── Decide si arrancar la cuenta regresiva ───────────────────────────────────
   checkCd(){
     if(!S.isHost)return;
-    if(S.players.length>=2){
+    const active=S.players.filter(p=>!p.afk).length;
+    if(active>=2){
       UI.startCd();
     } else {
       UI.stopCd();
@@ -3854,7 +3952,8 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
 // ══════════════════════════════════════════
 const Game={
   hostStart(){
-    const plist=[...S.players];
+    const plist=S.players.filter(p=>!p.afk);
+    if(plist.length<2){Net.checkCd();return;}
     // Sync own malicia into S.players before picking
     const myEntry=plist.find(p=>p.id===S.myId);
     if(myEntry)myEntry.malicia=Stats.malicia||0;
@@ -3881,7 +3980,7 @@ const Game={
       }
     });
     S.myRole=roles[S.myId];
-    const d={roles,spawns,players:S.players};
+    const d={roles,spawns,players:plist};
     Net.broadcast({t:'start',...d});
     Game.clientStart(d);
   },
@@ -3889,6 +3988,7 @@ const Game={
   clientStart(d){
     S.inLobbyWorld=false;
     S.isDeadSpec=false;
+    UI.resetRoundHUD();
     S.players=d.players||S.players;S.myRole=d.roles[S.myId];
     Game.initWorld(d.roles,d.spawns);
     Game.setupCanvas();
@@ -3942,15 +4042,15 @@ const Game={
       // Detect which killer char to use based on equipped killer
       let killerChar='slasher';
       if(role==='killer'){
-        // Use p.equippedKiller if available, only fall back to Stats for own player
-        const equipped=p.equippedKiller!==undefined?p.equippedKiller:(p.id===S.myId?Stats.equippedKiller||'':'');
-        if(equipped==='nicostos')killerChar='nicostos';
+        // Use synced lobby equip, fallback to local stats only for self
+        const equippedRaw=p.equippedKiller!==undefined?p.equippedKiller:(p.id===S.myId?Stats.equippedKiller||'':'');
+        killerChar=equippedRaw==='nicostos'?'nicostos':'slasher';
       }
       // Detect which survivor char to use
       let survivorChar='noob';
       if(role==='survivor'){
-        const eqSurv=p.equippedSurvivor!==undefined?p.equippedSurvivor:(p.id===S.myId?Stats.equippedSurvivor||'':'');
-        if(eqSurv==='amaxge5')survivorChar='amaxge5';
+        const eqSurvRaw=p.equippedSurvivor!==undefined?p.equippedSurvivor:(p.id===S.myId?Stats.equippedSurvivor||'':'');
+        survivorChar=eqSurvRaw==='amaxge5'?'amaxge5':'noob';
       }
       W.players[p.id]={
         id:p.id,name:p.name,username:p.username||p.name,role,alive:true,escaped:false,
@@ -4632,7 +4732,7 @@ const Game={
   tryM1(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer'||p.m1Cd>0)return;
-    if(p.nicoBerserk||p.nicoCharge)return; // block M1 during berserk charge? no — allow
+    if(p.nicoCharge)return;
     if(isNicostos(p))Game.nicoFireM1(pid);
     else fireM1(pid);
   },
@@ -5020,6 +5120,7 @@ const Game={
   doReturnToLobby(){
     S.running=false;
     S.isDeadSpec=false;
+    UI.resetRoundHUD();
     GameAudio.stopAll();
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
@@ -7317,6 +7418,23 @@ const Inventory={
       Stats.equippedSurvivor=isEquipped?'':c.id;
     }
     Stats.save();
+    const me=S.players.find(p=>p.id===S.myId);
+    if(me){
+      me.equippedKiller=Stats.equippedKiller||'';
+      me.equippedSurvivor=Stats.equippedSurvivor||'';
+    }
+    if(S.isHost){
+      Net.broadcast({t:'list',players:S.players,code:S.code||''});
+    }else{
+      Net.sendHost({t:'lobbyPos',id:S.myId,
+        x:S.lobbyP.x,y:S.lobbyP.y,facing:S.lobbyP.facing,
+        name:(me||{}).name||Stats.username||'?',username:Stats.username||'?',
+        timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,
+        malicia:Stats.malicia||0,afk:S.isAfk,
+        equippedKiller:Stats.equippedKiller||'',equippedSurvivor:Stats.equippedSurvivor||''});
+    }
+    UI.renderLobbyPlayers();
+    UI.renderStatsPanel();
     this._select(c.id);
     this._renderGrid();
   },
