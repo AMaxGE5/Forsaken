@@ -5720,9 +5720,9 @@ const Game={
         nicoAlphaSaved=nicoVisibleAlpha<1;
         if(nicoAlphaSaved){ctx.save();ctx.globalAlpha=nicoVisibleAlpha;}
 
+        const t2=Date.now()/1000;
         if(isNicostos(p)){
           // ── NICOSTOS — hoodie guy with knife ──
-          const t2=Date.now()/1000;
           ctx.shadowColor='rgba(80,0,160,0.5)';ctx.shadowBlur=12;
 
           // Berserk glow
