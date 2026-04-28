@@ -1958,11 +1958,15 @@ const AMAX_Q_FIRE_INTERVAL = 5; // fire every 5s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
 const AMAX_Q_BLINDNESS_DUR = 0.8; // blindness I duration
 const AMAX_Q_REVEAL_DUR = 5;    // revealed duration
+const AMAX_Q_PEA_SPEED = 8;     // pea projectile speed in tiles/s
+const AMAX_Q_PEA_SLOW_DUR = 3.0; // Slow II duration on killer
+const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
+const AMAX_Q_HP = 40;           // lanzaguisantes hitpoints
 const AMAX_E_CD = 20;
-const AMAX_E_HEAL_RATE = 1.5;   // HP per second
+const AMAX_E_HEAL_RATE = 2.4;   // HP per second (60% more than original 1.5)
 const AMAX_E_MAX_DUR = 5;       // max heal duration per use
 const AMAX_E_UNLOCK_DUR = 3;    // must heal 3s to unlock R
-const AMAX_R_CD = 45;
+const AMAX_R_CD = 36;
 const AMAX_R_SHIELD_DUR = 2.5;
 const AMAX_R_SHIELD_DUR_LMS = 1.0;
 const AMAX_R_PUSH_DIST = 5;     // studs
@@ -2342,8 +2346,9 @@ const UI={
       }
       // AMaxGE5 effects
       if(me.amaxShielding&&me.amaxShieldTimer>0)effects.push({icon:'🔨',name:'ESCUDITO',timer:me.amaxShieldTimer,type:'positive'});
-      if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN '+(me.amaxHealHps||1.5).toFixed(1)+'/s',timer:me.amaxHealTimer,type:'positive'});
+      if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN '+(me.amaxHealHps||2.4).toFixed(1)+'/s',timer:me.amaxHealTimer,type:'positive'});
       if(me.amaxRevealed&&me.amaxRevealTimer>0)effects.push({icon:'👁',name:'REVELADO',timer:me.amaxRevealTimer,type:'neutral'});
+      if(me.amaxPeaSlow&&me.amaxPeaSlowTimer>0)effects.push({icon:'🫛',name:'LENTITUD II',timer:me.amaxPeaSlowTimer,type:'debuff'});
       if(me.enraged&&me.enrageTimer>0)effects.push({icon:'😡',name:'ENRAGED',timer:me.enrageTimer,type:'positive'});
       efPanel.innerHTML=effects.map(e=>`<div class="effect-pill ${e.type}"><span class="effect-icon">${e.icon}</span><span class="effect-name">${e.name}</span><span class="effect-timer">${e.timer>0?Math.ceil(e.timer)+'s':''}</span></div>`).join('');
     }
@@ -2658,8 +2663,8 @@ const LobbyWorld={
     document.getElementById('pcKillWins').textContent=kw;
     document.getElementById('pcSurvWins').textContent=sw;
     // Update equip badges dynamically
-    const eqK=isMe?(Stats.equippedKiller||'slasher'):'slasher';
-    const eqS=isMe?(Stats.equippedSurvivor||'noob'):'noob';
+    const eqK=isMe?(Stats.equippedKiller||'slasher'):(p.equippedKiller||'slasher');
+    const eqS=isMe?(Stats.equippedSurvivor||'noob'):(p.equippedSurvivor||'noob');
     const killerLabel=eqK==='nicostos'?'⚔ NICOSTOS':'⚔ SLASHER';
     const survLabel=eqS==='amaxge5'?'🔨 AMAXGE5':'🏃 NOOB';
     document.getElementById('pcEquipRow').innerHTML=
@@ -2695,9 +2700,8 @@ const LobbyWorld={
 
     // Determine equipped characters
     const isMe=playerData&&(playerData.isMe||(playerData.id===S.myId));
-    // For now we only have local player equipped data
-    const eqKiller=isMe?(Stats.equippedKiller||'slasher'):'slasher';
-    const eqSurv=isMe?(Stats.equippedSurvivor||'noob'):'noob';
+    const eqKiller=isMe?(Stats.equippedKiller||'slasher'):(playerData&&playerData.equippedKiller||'slasher');
+    const eqSurv=isMe?(Stats.equippedSurvivor||'noob'):(playerData&&playerData.equippedSurvivor||'noob');
 
     // ── KILLER portrait (left-center) ──
     const bx=36,by=68;
@@ -3244,6 +3248,8 @@ function fskHandleMsg(msg, conn){
         host:false, connId:conn.peer,
         color:PCOLORS[S.players.length%PCOLORS.length],
         malicia:msg.malicia||0,
+        equippedKiller:msg.equippedKiller||'',
+        equippedSurvivor:msg.equippedSurvivor||'',
       });
     }
     // NOTE: Do NOT overwrite PeerRT.roomConn here — host manages multiple conns via S.conns[]
@@ -3290,7 +3296,7 @@ async function fskJoinRapida(num){
 
   if(becameHost){
     S.isHost=true; S.myId=Net.uid();
-    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0}];
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId:peerId, roomCode:`RÁPIDA-${num}`, isRapida:true, players:1 };
     MP.setStatus(`✓ Sala ${num} — esperando jugadores...`, '#2ecc71');
@@ -3313,7 +3319,7 @@ async function fskJoinRapida(num){
     await new Promise((resolve, reject)=>{
       let done=false;
       conn.on('open', ()=>{
-        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0});
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
       });
       conn.on('data', msg=>{
         if(done) return;
@@ -3345,7 +3351,7 @@ async function fskCreatePrivate(){
   try{
     await fskEnsurePeer('room', roomId);
     S.isHost=true; S.myId=Net.uid();
-    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0}];
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
     PeerRT.peer.on('connection', conn=>fskWireConn(conn));
@@ -3376,7 +3382,7 @@ async function fskJoinRoom(rawId, isReconnect){
     await new Promise((resolve,reject)=>{
       let done=false;
       conn.on('open',()=>{
-        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, reconnect:!!isReconnect});
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, reconnect:!!isReconnect, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
       });
       conn.on('data', msg=>{
         if(done) return;
@@ -3607,7 +3613,9 @@ const Net={
       name:(S.players.find(p=>p.id===S.myId)||{}).name||Stats.username||'?',
       username:Stats.username||'?',
       timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,
-      malicia:Stats.malicia||0};
+      malicia:Stats.malicia||0,
+      equippedKiller:Stats.equippedKiller||'',
+      equippedSurvivor:Stats.equippedSurvivor||''};
     if(S.isHost)Net.broadcast(msg);
     else Net.sendHost(msg);
   },
@@ -3644,6 +3652,7 @@ const Net={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
         survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
+        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',
       };
       // Sync malicia into S.players so hostStart picks correct killer
       const sp=S.players.find(x=>x.id===d.id);if(sp)sp.malicia=d.malicia||0;
@@ -3692,6 +3701,7 @@ const Net={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
         survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
+        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',
       };
 
     } else if(d.t==='spectate'){
@@ -3932,13 +3942,14 @@ const Game={
       // Detect which killer char to use based on equipped killer
       let killerChar='slasher';
       if(role==='killer'){
-        const equipped=p.equippedKiller||Stats.equippedKiller||'';
+        // Use p.equippedKiller if available, only fall back to Stats for own player
+        const equipped=p.equippedKiller!==undefined?p.equippedKiller:(p.id===S.myId?Stats.equippedKiller||'':'');
         if(equipped==='nicostos')killerChar='nicostos';
       }
       // Detect which survivor char to use
       let survivorChar='noob';
       if(role==='survivor'){
-        const eqSurv=p.equippedSurvivor||Stats.equippedSurvivor||'';
+        const eqSurv=p.equippedSurvivor!==undefined?p.equippedSurvivor:(p.id===S.myId?Stats.equippedSurvivor||'':'');
         if(eqSurv==='amaxge5')survivorChar='amaxge5';
       }
       W.players[p.id]={
@@ -3958,7 +3969,8 @@ const Game={
         killerChar,
         survivorChar,
         // AMaxGE5 state
-        amaxPeaX:0,amaxPeaY:0,amaxPeaActive:false,amaxPeaFireTimer:AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:AMAX_Q_TURN_INTERVAL,amaxPeaAng:0,amaxQCd:0,
+        amaxPeaX:0,amaxPeaY:0,amaxPeaActive:false,amaxPeaFireTimer:AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:AMAX_Q_TURN_INTERVAL,amaxPeaAng:0,amaxQCd:0,amaxPeaHp:AMAX_Q_HP,
+        amaxPeaProjs:[],  // [{x,y,vx,vy,life}] traveling pea projectiles
         amaxHealing:false,amaxHealTimer:0,amaxHealAccum:0,amaxECd:0,amaxRUnlocked:false,amaxRUses:0,
         amaxShielding:false,amaxShieldTimer:0,amaxRCd:0,amaxShieldHit:false,
         amaxRevealed:false,amaxRevealTimer:0,
@@ -4243,8 +4255,12 @@ const Game={
               const spd=NICO_Q_SPEED*dt;
               const nx2=p.x+Math.cos(p.nicoChargeAng)*spd;
               const ny2=p.y+Math.sin(p.nicoChargeAng)*spd;
-              if(!wallAt(nx2,p.y,TILE*.28,'killer'))p.x=nx2;
-              if(!wallAt(p.x,ny2,TILE*.28,'killer'))p.y=ny2;
+              const hitWallX=wallAt(nx2,p.y,TILE*.28,'killer');
+              const hitWallY=wallAt(p.x,ny2,TILE*.28,'killer');
+              if(!hitWallX)p.x=nx2;
+              if(!hitWallY)p.y=ny2;
+              // Cancel charge on wall collision
+              if((hitWallX||hitWallY)&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
               // Hit check during charge
               if(!p.nicoChargeHit){
                 Object.values(W.players).forEach(s=>{
@@ -4252,9 +4268,9 @@ const Game={
                   if(Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.3){
                     p.nicoChargeHit=true;
                     p.nicoCharge=false;
-                    // Grab: 10 dmg + 20 slam = 30 total
+                    // Grab: 10 dmg + 20 slam = 30 total (no bleed on charge)
                     applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
-                    s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+                    // No bleed on charge attack
                     if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
                     // Slam FX — knock survivor back
                     const kbDist=TILE*2.8;
@@ -4366,25 +4382,48 @@ const Game={
             if(p.amaxQCd>0)p.amaxQCd=Math.max(0,p.amaxQCd-dt);
             // Pea shooter ticks
             if(p.amaxPeaActive){
-              p.amaxPeaTurnTimer=Math.max(0,(p.amaxPeaTurnTimer||0)-dt);
-              if(p.amaxPeaTurnTimer<=0){
-                p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
-                const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-                if(kk)p.amaxPeaAng=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
+              // Check if killer destroys the lanzaguisantes (melee range attack)
+              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+              if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<TILE*1.1&&kk.m1Cd>0){
+                p.amaxPeaHp=(p.amaxPeaHp||AMAX_Q_HP)-20;
+                if(p.amaxPeaHp<=0){p.amaxPeaActive=false;p.amaxPeaProjs=[];p.amaxPeaHp=0;}
               }
-              p.amaxPeaFireTimer=Math.max(0,(p.amaxPeaFireTimer||0)-dt);
-              if(p.amaxPeaFireTimer<=0){
-                p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
-                // Check if killer in range
-                const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
-                const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-                if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<=range){
-                  // Hit! apply blindness + revealed
-                  if(!kk.amaxBlind){kk.amaxBlind=true;kk.amaxBlindTimer=AMAX_Q_BLINDNESS_DUR;}
-                  kk.amaxRevealed=true;kk.amaxRevealTimer=AMAX_Q_REVEAL_DUR;
+              if(p.amaxPeaActive){
+                // Re-aim toward killer
+                p.amaxPeaTurnTimer=Math.max(0,(p.amaxPeaTurnTimer||0)-dt);
+                if(p.amaxPeaTurnTimer<=0){
+                  p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
+                  if(kk)p.amaxPeaAng=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
+                }
+                // Fire pea projectile every interval
+                p.amaxPeaFireTimer=Math.max(0,(p.amaxPeaFireTimer||0)-dt);
+                if(p.amaxPeaFireTimer<=0){
+                  p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
+                  const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
+                  if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<=range){
+                    const ang=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
+                    const spd=AMAX_Q_PEA_SPEED*TILE;
+                    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
+                    p.amaxPeaProjs.push({x:p.amaxPeaX,y:p.amaxPeaY,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:3.5});
+                  }
                 }
               }
             }
+            // Tick pea projectiles
+            if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
+            p.amaxPeaProjs=p.amaxPeaProjs.filter(pj=>{
+              pj.x+=pj.vx*dt; pj.y+=pj.vy*dt; pj.life-=dt;
+              if(pj.life<=0||wallAt(pj.x,pj.y,4))return false;
+              // Hit killer?
+              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+              if(kk&&Math.hypot(kk.x-pj.x,kk.y-pj.y)<TILE*0.7){
+                // Slow II on killer
+                kk.amaxPeaSlow=true;kk.amaxPeaSlowTimer=AMAX_Q_PEA_SLOW_DUR;
+                kk.amaxRevealed=true;kk.amaxRevealTimer=AMAX_Q_REVEAL_DUR;
+                return false; // destroy projectile
+              }
+              return true;
+            });
             // Healing zone
             if(p.amaxHealing){
               p.amaxHealTimer=Math.max(0,(p.amaxHealTimer||0)-dt);
@@ -4437,6 +4476,8 @@ const Game={
             if((p.amaxBlindTimer||0)>0){p.amaxBlindTimer=Math.max(0,p.amaxBlindTimer-dt);if(p.amaxBlindTimer<=0)p.amaxBlind=false;}
             if((p.amaxRevealTimer||0)>0){p.amaxRevealTimer=Math.max(0,p.amaxRevealTimer-dt);if(p.amaxRevealTimer<=0)p.amaxRevealed=false;}
             if((p.amaxStunTimer||0)>0){p.amaxStunTimer=Math.max(0,p.amaxStunTimer-dt);if(p.amaxStunTimer<=0)p.amaxStunned=false;}
+            // Pea slow II on killer
+            if((p.amaxPeaSlowTimer||0)>0){p.amaxPeaSlowTimer=Math.max(0,p.amaxPeaSlowTimer-dt);if(p.amaxPeaSlowTimer<=0)p.amaxPeaSlow=false;}
           }
         }); // end forEach players (timers)
 
@@ -4559,7 +4600,8 @@ const Game={
     const nicoNoKnifeBonus=isNicostos(p)&&!p.nicoHasKnife&&!p.nicoCharge?NICO_NO_KNIFE_SPEED:1;
     const nicoSlow=isNicostos(p)&&p.nicoSlow?0.6:1; // Lentitud I tras embestida
     const nicoInvisSpeed=isNicostos(p)&&p.nicoInvisSpeedActive?1.15:1; // Speed I mientras invisible
-    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1)*nicoNoKnifeBonus*nicoSlow*nicoInvisSpeed;
+    const peaSlowII=p.role==='killer'&&p.amaxPeaSlow?AMAX_Q_PEA_SLOW_VAL:1; // Lentitud II from pea hit
+    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1)*nicoNoKnifeBonus*nicoSlow*nicoInvisSpeed*peaSlowII;
     // During behead dash phase: force Speed III (×2.0 of run) in locked direction
     let spd,r=TILE*.28;
     if(p.beheadDashing){
@@ -4609,7 +4651,7 @@ const Game={
       if(s.role!=='survivor'||!s.alive)return;
       if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
         applyShieldDamage(s,dmg);
-        s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
+        // Nicostos does NOT apply bleed on M1
         if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
           W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
           // Track kill for berserk unlock
@@ -4691,6 +4733,8 @@ const Game={
     p.amaxPeaRange=effectiveRange;
     p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
     p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
+    p.amaxPeaHp=AMAX_Q_HP;
+    p.amaxPeaProjs=[];
     // Aim toward killer
     const killer=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
     p.amaxPeaAng=killer?Math.atan2(killer.y-p.amaxPeaY,killer.x-p.amaxPeaX):p.facing;
@@ -5076,10 +5120,11 @@ const Game={
         gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
         killerChar:p.killerChar||'slasher',
         survivorChar:p.survivorChar||'noob',
-        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,
+        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],
         amaxHealing:p.amaxHealing||false,amaxHealTimer:p.amaxHealTimer||0,amaxHealAccum:p.amaxHealAccum||0,amaxECd:p.amaxECd||0,amaxRUnlocked:p.amaxRUnlocked||false,amaxRUses:p.amaxRUses||0,
         amaxShielding:p.amaxShielding||false,amaxShieldTimer:p.amaxShieldTimer||0,amaxRCd:p.amaxRCd||0,amaxShieldHit:p.amaxShieldHit||false,
         amaxRevealed:p.amaxRevealed||false,amaxRevealTimer:p.amaxRevealTimer||0,
+        amaxPeaSlow:p.amaxPeaSlow||false,amaxPeaSlowTimer:p.amaxPeaSlowTimer||0,
         nicoHasKnife:p.nicoHasKnife!==undefined?p.nicoHasKnife:true,
         nicoKnifeFlying:p.nicoKnifeFlying||false,nicoKnifeProjX:p.nicoKnifeProjX||0,nicoKnifeProjY:p.nicoKnifeProjY||0,
         nicoCharge:p.nicoCharge||false,nicoChargeAng:p.nicoChargeAng||0,
@@ -5154,10 +5199,12 @@ const Game={
           p.amaxQCd=d.amaxQCd||0;p.amaxPeaX=d.amaxPeaX||0;p.amaxPeaY=d.amaxPeaY||0;
           p.amaxPeaActive=d.amaxPeaActive||false;p.amaxPeaFireTimer=d.amaxPeaFireTimer||0;
           p.amaxPeaTurnTimer=d.amaxPeaTurnTimer||0;p.amaxPeaAng=d.amaxPeaAng||0;
+          p.amaxPeaHp=d.amaxPeaHp||0;p.amaxPeaProjs=d.amaxPeaProjs||[];
           p.amaxHealing=d.amaxHealing||false;p.amaxHealTimer=d.amaxHealTimer||0;p.amaxHealAccum=d.amaxHealAccum||0;
           p.amaxECd=d.amaxECd||0;p.amaxRUnlocked=d.amaxRUnlocked||false;p.amaxRUses=d.amaxRUses||0;
           p.amaxShielding=d.amaxShielding||false;p.amaxShieldTimer=d.amaxShieldTimer||0;p.amaxRCd=d.amaxRCd||0;
           p.amaxShieldHit=d.amaxShieldHit||false;p.amaxRevealed=d.amaxRevealed||false;p.amaxRevealTimer=d.amaxRevealTimer||0;
+          p.amaxPeaSlow=d.amaxPeaSlow||false;p.amaxPeaSlowTimer=d.amaxPeaSlowTimer||0;
         }
         if(d.nicoHasKnife!==undefined){
           p.nicoHasKnife=d.nicoHasKnife;p.nicoKnifeFlying=d.nicoKnifeFlying||false;
@@ -5980,17 +6027,31 @@ const Game={
       ctx.font=`${TILE*.4}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText('🌱',px,py);
       ctx.shadowBlur=0;
+      // HP bar above plant
+      const hpPct=Math.max(0,(p.amaxPeaHp||0)/AMAX_Q_HP);
+      const bw=TILE*.7,bh=4,bx2=px-bw/2,by2=py-TILE*.5;
+      ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx2,by2,bw,bh);
+      ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
+      ctx.fillRect(bx2,by2,bw*hpPct,bh);
+      ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
       // Range ring
       const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
       ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
       ctx.strokeStyle=`rgba(0,200,80,${0.12+pulse*0.1})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
-      // Aim line toward killer
-      ctx.beginPath();ctx.moveTo(px,py);
-      const aimX=px+Math.cos(p.amaxPeaAng)*range;
-      const aimY=py+Math.sin(p.amaxPeaAng)*range;
-      ctx.lineTo(aimX,aimY);
-      ctx.strokeStyle=`rgba(0,255,80,${pulse*0.3})`;ctx.lineWidth=1;ctx.stroke();
       ctx.restore();
+    });
+    // ── AMaxGE5: traveling pea projectiles ──
+    Object.values(W.players).forEach(p=>{
+      if(!isAMaxGE5(p)||!p.amaxPeaProjs||!p.amaxPeaProjs.length)return;
+      p.amaxPeaProjs.forEach(pj=>{
+        const ag=pj.life/3.5; // alpha based on remaining life
+        ctx.save();
+        ctx.shadowColor='rgba(60,255,60,.9)';ctx.shadowBlur=10;
+        ctx.beginPath();ctx.arc(pj.x,pj.y,5,0,Math.PI*2);
+        ctx.fillStyle=`rgba(40,220,40,${Math.min(1,ag+0.3)})`;ctx.fill();
+        ctx.strokeStyle='rgba(180,255,180,.8)';ctx.lineWidth=1.5;ctx.stroke();
+        ctx.shadowBlur=0;ctx.restore();
+      });
     });
 
     // ── AMaxGE5: heal zone visual ──
