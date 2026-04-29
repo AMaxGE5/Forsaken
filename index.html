@@ -1867,8 +1867,8 @@ const SaveFile = {
 const TILE = 36;
 const MAP_W = 65, MAP_H = 45;
 const VP_TILES_W = 14;
-const SW = 80, SR = 140;   // Survivor: walk 80, run 140
-const KW = 90, KR = 150;   // Killer:   walk 90, run 150
+const SW = 75, SR = 140;   // Survivor: walk 75, run 140
+const KW = 80, KR = 150;   // Killer:   walk 80, run 150
 const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
 const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
@@ -1915,11 +1915,11 @@ const ENRAGE_STAM_CAP_DUR = 6.5; // tiempo para alcanzar el cap
 const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar ENRAGED
 
 // ── NICOSTOS — constantes ──
-const NICO_WALK = KW * 0.97;
+const NICO_WALK = 78;       // walk fijo 78 px/s
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
 const NICO_M1_DMG_NO_KNIFE = 10;
-const NICO_NO_KNIFE_SPEED = 1.20; // +20% speed when knife is thrown (as stated in ability description)
+const NICO_NO_KNIFE_SPEED = 1.10; // +10% speed when knife is thrown
 const NICO_M1_CD = 1.9;
 const NICO_Q_CD = 25;
 const NICO_Q_STAM_DRAIN = 15;
@@ -1929,7 +1929,7 @@ const NICO_Q_SLOW_DUR = 1.0;
 const NICO_Q_SPEED = KR * 2.0;
 const NICO_Q_MAX_TURN = 0.6;
 const NICO_E_CD = 10;
-const NICO_E_KNIFE_RECOVER = 20;
+const NICO_E_KNIFE_RECOVER = 30;
 const NICO_E_DMG = 1;
 const NICO_E_MARK_DUR = 10;
 const NICO_E_KNIFE_SPEED = KR * 3.2;
@@ -4436,6 +4436,14 @@ const Game={
                 p.nicoInvisSpeedActive=false;
               }
             }
+            // Stamina cap: while invisible AND knife is gone, max stamina capped at 80
+            const nicoInvisActive=p.nicoInvis||p.nicoInvisStill;
+            if(nicoInvisActive&&!p.nicoHasKnife){
+              p.maxStamina=Math.min(p.maxStamina||KSMAX,80);
+              p.stamina=Math.min(p.stamina,80);
+            } else if(!p.nicoBerserk){
+              p.maxStamina=KSMAX;
+            }
             // Post-invis speed timer from nicoBreakInvis
             if(p.nicoPostInvisSpeedTimer>0){
               p.nicoPostInvisSpeedTimer=Math.max(0,(p.nicoPostInvisSpeedTimer||0)-dt);
@@ -4449,14 +4457,10 @@ const Game={
             // T — Berserk
             if(p.nicoBerserk){
               p.nicoBerserkTimer=Math.max(0,p.nicoBerserkTimer-dt);
-              // Stamina regen
-              const canGain=(p.nicoBerserkStamGained||0)<NICO_T_STAM_MAX;
-              if(canGain){
-                const gain=Math.min(NICO_T_STAM_REGEN*dt,NICO_T_STAM_MAX-(p.nicoBerserkStamGained||0));
-                p.stamina=Math.min(KSMAX,p.stamina+gain);
-                p.nicoBerserkStamGained=(p.nicoBerserkStamGained||0)+gain;
-              }
-              if(p.nicoBerserkTimer<=0){p.nicoBerserk=false;p.nicoBerserkStamGained=0;}
+              // Stamina regen: +5% of max stamina per second
+              const berserkRegen=KSMAX*0.05;
+              p.stamina=Math.min(KSMAX,p.stamina+berserkRegen*dt);
+              if(p.nicoBerserkTimer<=0){p.nicoBerserk=false;p.nicoBerserkStamGained=0;p.maxStamina=KSMAX;}
             }
           }
           // ── AMAXGE5 ticks ──
@@ -4725,27 +4729,43 @@ const Game={
     nicoBreakInvis(p); // first attack breaks invisibility
     p.m1Cd=NICO_M1_CD;
     const dmg=p.nicoHasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
-    const ang=p.facing;
-    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
-    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2,maxLife:.2,idx:0,nicoSlash:true,hasKnife:p.nicoHasKnife});
-    Object.values(W.players).forEach(s=>{
-      if(s.role!=='survivor'||!s.alive)return;
-      if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
-        applyShieldDamage(s,dmg);
-        // Nicostos does NOT apply bleed on M1
-        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
-          W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-          // Track kill for berserk unlock
-          p.nicoKillCount=(p.nicoKillCount||0)+1;
-          if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
-        } else {
-          // Passive: blood trail to nearest survivor from hit
-          p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
-        }
-        Game.checkWin();
-      }
-    });
+    // Nicostos M1: 3 sequential hitboxes like Slasher, but 2% smaller in width and height
+    const NICO_HB_W=HB_W*0.98;
+    const NICO_HB_H=HB_H*0.98;
+    const hasKnife=p.nicoHasKnife;
+    if(!p.m1HitSet)p.m1HitSet=new Set();
+    p.m1HitSet=new Set();
+    for(let i=0;i<M1_SLASHES;i++){
+      setTimeout(()=>{
+        if(!S.running)return;
+        const fp=W.players[pid];if(!fp||!fp.alive)return;
+        const ang=fp.facing;
+        const cx=fp.x+Math.cos(ang)*(HB_OFFSET+NICO_HB_H/2);
+        const cy=fp.y+Math.sin(ang)*(HB_OFFSET+NICO_HB_H/2);
+        slashFX.push({x:cx,y:cy,ang,hw:NICO_HB_W/2,hh:NICO_HB_H/2,life:.2,maxLife:.2,idx:i,nicoSlash:true,hasKnife});
+        if(i===0)fp.m1HitSet=new Set();
+        if(!fp.m1HitSet)fp.m1HitSet=new Set();
+        Object.values(W.players).forEach(s=>{
+          if(s.role!=='survivor'||!s.alive)return;
+          if(fp.m1HitSet.has(s.id))return;
+          if(pointInRotRect(s.x,s.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)||Math.hypot(s.x-fp.x,s.y-fp.y)<TILE*.9){
+            fp.m1HitSet.add(s.id);
+            applyShieldDamage(s,dmg);
+            // Nicostos does NOT apply bleed on M1
+            if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+              W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+              // Track kill for berserk unlock
+              fp.nicoKillCount=(fp.nicoKillCount||0)+1;
+              if(fp.nicoKillCount>0&&fp.nicoKillCount%NICO_T_KILLS_REQ===0){fp.nicoBerserkReady=Math.min((fp.nicoBerserkReady||0)+1,1);}
+            } else {
+              // Passive: blood trail to nearest survivor from hit
+              fp.nicoBloodTrailTarget=s.id;fp.nicoBloodTrailTimer=6;
+            }
+            Game.checkWin();
+          }
+        });
+      },i*M1_DELAY*1000);
+    }
   },
 
   doQ(pid){
