@@ -1678,7 +1678,10 @@ const Stats={
   save(){
     if(!this._key)return;
     const db=Auth._db();
-    if(!db[this._key])return;
+    // Ensure the cache entry exists before writing; if missing, rebuild it
+    if(!db[this._key]){
+      db[this._key]={user:this.username||this._key,pass:''};
+    }
     db[this._key].timePlayed=this.timePlayed;
     db[this._key].survWins=this.survWins;
     db[this._key].killWins=this.killWins;
@@ -1916,7 +1919,7 @@ const NICO_WALK = KW * 0.97;
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
 const NICO_M1_DMG_NO_KNIFE = 10;
-const NICO_NO_KNIFE_SPEED = 1.0;
+const NICO_NO_KNIFE_SPEED = 1.20; // +20% speed when knife is thrown (as stated in ability description)
 const NICO_M1_CD = 1.9;
 const NICO_Q_CD = 25;
 const NICO_Q_STAM_DRAIN = 15;
@@ -4346,7 +4349,11 @@ const Game={
                     // Grab: 10 dmg + 20 slam = 30 total (no bleed on charge)
                     applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
                     // No bleed on charge attack
-                    if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
+                    if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                      // Track kill for berserk unlock (same as M1 kills)
+                      p.nicoKillCount=(p.nicoKillCount||0)+1;
+                      if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+                    }
                     // Slam FX — knock survivor back
                     const kbDist=TILE*2.8;
                     s.comboKbVx=Math.cos(p.nicoChargeAng)*kbDist;
@@ -5797,7 +5804,7 @@ const Game={
             // Guard
             ctx.fillStyle='#888';ctx.fillRect(-s*.1,s*.14,s*.2,s*.04);
             // Blade
-            const bladeG=ctx.createLinearGradient(-s*.035,s*.18,s*.035,s*.18);
+            const bladeG=ctx.createLinearGradient(0,s*.18,0,s*.18+s*.65);
             bladeG.addColorStop(0,'#c0c0c0');bladeG.addColorStop(1,'#777');
             ctx.fillStyle=bladeG;
             ctx.beginPath();ctx.moveTo(-s*.04,s*.18);ctx.lineTo(s*.04,s*.18);
@@ -5908,7 +5915,7 @@ const Game={
         ctx.fillRect(-s*.18,s*.22,s*.36,s*.05);
         ctx.strokeStyle='#888';ctx.lineWidth=s*.01;ctx.strokeRect(-s*.18,s*.22,s*.36,s*.05);
         // Blade
-        const bladeGrad=ctx.createLinearGradient(-s*.06,s*.27,s*.06,s*.27);
+        const bladeGrad=ctx.createLinearGradient(0,s*.27,0,s*.27+s*1.05);
         bladeGrad.addColorStop(0,'#a0a0a0');bladeGrad.addColorStop(0.4,'#ddd');bladeGrad.addColorStop(1,'#888');
         ctx.fillStyle=bladeGrad;
         ctx.beginPath();
