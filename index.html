@@ -3924,6 +3924,18 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
       if(S.isHost)Game.checkWin();
     }
   });
+  // ── AMaxGE5 turret damage — only ONE hitbox per swing combo ──
+  Object.values(W.players).forEach(owner=>{
+    if(!isAMaxGE5(owner)||!owner.amaxTorretas||owner.amaxTorretas.length===0)return;
+    owner.amaxTorretas.forEach((t,ti)=>{
+      const tKey='turret_'+owner.id+'_'+ti;
+      if(k.m1HitSet.has(tKey))return;
+      if(pointInRotRect(t.x,t.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(t.x-k.x,t.y-k.y)<TILE*1.1){
+        k.m1HitSet.add(tKey);
+        t.hp-=20;
+      }
+    });
+  });
 }
 
 // ══════════════════════════════════════════
@@ -4466,15 +4478,8 @@ const Game={
             if(!p.amaxTorretas)p.amaxTorretas=[];
             const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
             p.amaxTorretas=p.amaxTorretas.filter(t=>{
-              // Killer destroys torreta with M1 (only 1 hit from a combo, not all 3)
-              if(kk&&Math.hypot(kk.x-t.x,kk.y-t.y)<TILE*1.1&&kk.m1Cd>0){
-                if(!t.hitThisSwing){
-                  t.hitThisSwing=true;
-                  t.hp-=20;
-                }
-              } else {
-                t.hitThisSwing=false; // reset when killer moves away or cd resets
-              }
+              // Killer M1 turret damage is now applied directly in doSlashHit / nicoFireM1
+              // (single hit per swing-combo, not multi-hitbox)
               if(t.hp<=0)return false;
               // Re-aim
               t.turnTimer=Math.max(0,(t.turnTimer||0)-dt);
@@ -4749,6 +4754,20 @@ const Game={
         }
         Game.checkWin();
       }
+    });
+    // ── AMaxGE5 turret damage — only ONE hit per swing ──
+    if(!p.m1HitSet)p.m1HitSet=new Set();
+    p.m1HitSet=new Set();
+    Object.values(W.players).forEach(owner=>{
+      if(!isAMaxGE5(owner)||!owner.amaxTorretas||owner.amaxTorretas.length===0)return;
+      owner.amaxTorretas.forEach((t,ti)=>{
+        const tKey='turret_'+owner.id+'_'+ti;
+        if(p.m1HitSet.has(tKey))return;
+        if(pointInRotRect(t.x,t.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(t.x-p.x,t.y-p.y)<TILE*1.1){
+          p.m1HitSet.add(tKey);
+          t.hp-=20;
+        }
+      });
     });
   },
 
@@ -7048,8 +7067,8 @@ const STORE_SURVIVORS=[
       {lbl:'Stamina total',val:'igual a NOOB'}
     ],
     abilities:[
-      {key:'Q',desc:'Referencia?????!!!!! — Planta un guisante que dispara cada 5s a 40 studs. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
-      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 1.5 HP/seg. Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
+      {key:'Q',desc:'Referencia?????!!!!! — Planta un guisante que dispara cada 3s a 40 studs (proyectil a velocidad 15). Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Lentitud II por 2s + efecto "Revelado" (supervivientes lo ven) por 5s. Puedes tener hasta 2 torretas activas; al colocar una tercera, una de las anteriores se destruye aleatoriamente. Solo tú ves el rango (los supervivientes ven la torreta marcada). Sólo recibe daño de 1 hitbox por combo del M1. CD entre torretas: 35s.'},
+      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 7 HP/seg. Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
       {key:'R',desc:'Escudito para siempre — Solo disponible tras usar Lore de Fnaf con éxito. Usa el martillo como escudo: invulnerable 2.5s. Si el asesino golpea durante el escudo: contraataque automático que aleja 5 studs y stunea 2s. Si nadie ataca durante el escudo: Lentitud II por 3s y Mareo I por 2s. En LMS: invulnerabilidad reducida a 1s. CD: 45s.'}
     ],
     lore:'Alejandro estaba en su casa después de la piscina, listo para estudiar francés para su examen. De pronto, un fuerte dolor de cabeza lo interrumpió y no lo dejó concentrarse. Cansado, decidió recostarse y se quedó dormido. Al despertar, sintió que algo no estaba bien, como si el ambiente hubiera cambiado. Se levantó lentamente y, sin saber por qué, tomó un martillo cerca de su cuarto. Al salir, ya no estaba en su mundo, sino en un lugar extraño y oscuro. Allí encontró a otros supervivientes igual de confundidos. A pesar del miedo, Alejandro se mantuvo positivo y animó al grupo. Desde ese momento, decidió proteger a los demás y no rendirse.',
