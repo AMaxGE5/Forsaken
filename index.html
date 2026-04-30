@@ -2535,7 +2535,7 @@ const UI={
         ['abilityBloxySlot','abilitySSSlot','abilityGBSlot'].forEach(id=>{
           const el=document.getElementById(id);if(el)el.style.display='none';
         });
-        // ── AMaxGE5 Q: Peashooter (hasta 2 torretas) ──
+        // ── AMaxGE5 Q: Peashooter (1 torreta) ──
         const aqSlot=document.getElementById('amaxQSlot');if(aqSlot)aqSlot.style.display='flex';
         const aqPct=me.amaxQCd>0?me.amaxQCd/AMAX_Q_CD:0;
         const aqCount=(me.amaxTorretas||[]).length;
@@ -2545,8 +2545,8 @@ const UI={
         const aqNum=document.getElementById('amaxQNum');
         if(aqNum){
           aqNum.style.display='flex';
-          if(aqActive&&aqPct>0)aqNum.textContent=`🌱×${aqCount} ${Math.ceil(me.amaxQCd)}s`;
-          else if(aqActive)aqNum.textContent=`🌱×${aqCount}`;
+          if(aqActive&&aqPct>0)aqNum.textContent=`🌱 ${Math.ceil(me.amaxQCd)}s`;
+          else if(aqActive)aqNum.textContent='🌱';
           else if(aqPct>0)aqNum.textContent=Math.ceil(me.amaxQCd)+'s';
           else aqNum.textContent='LISTO';
         }
@@ -4509,8 +4509,9 @@ const Game={
               }
               return true;
             });
-            // Tick pea projectiles
+            // Tick pea projectiles (cap at 20 to prevent runaway growth)
             if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
+            if(p.amaxPeaProjs.length>20)p.amaxPeaProjs=p.amaxPeaProjs.slice(-20);
             p.amaxPeaProjs=p.amaxPeaProjs.filter(pj=>{
               pj.x+=pj.vx*dt; pj.y+=pj.vy*dt; pj.life-=dt;
               if(pj.life<=0||wallAt(pj.x,pj.y,4))return false;
@@ -4847,27 +4848,20 @@ const Game={
     if(!p||!p.alive||!isAMaxGE5(p))return;
     if(p.amaxQCd>0)return;
     if(!p.amaxTorretas)p.amaxTorretas=[];
-    // If already at max, destroy a random existing torreta
-    if(p.amaxTorretas.length>=AMAX_Q_MAX_TORRETAS){
-      const idx=Math.floor(Math.random()*p.amaxTorretas.length);
-      p.amaxTorretas.splice(idx,1);
-    }
-    // Count other AMaxGE5 in the round (range reduction mechanic)
-    const amaxCount=Object.values(W.players).filter(x=>x.role==='survivor'&&x.alive&&isAMaxGE5(x)).length;
-    const rangeReduction=Math.max(0,(amaxCount-1)*0.20);
-    const effectiveRange=AMAX_Q_RANGE*(1-rangeReduction);
+    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
+    // Max 1 torreta — destroy existing one if present
+    p.amaxTorretas=[];
+    p.amaxPeaProjs=[];
     const killer=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
     const ang=killer?Math.atan2(killer.y-p.y,killer.x-p.x):p.facing;
     p.amaxTorretas.push({
       x:p.x,y:p.y,
-      ang,
+      ang:ang,
       hp:AMAX_Q_HP,
       fireTimer:AMAX_Q_FIRE_INTERVAL,
       turnTimer:AMAX_Q_TURN_INTERVAL,
-      range:effectiveRange,
-      hitThisSwing:false
+      range:AMAX_Q_RANGE
     });
-    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
     p.amaxQCd=AMAX_Q_CD;
   },
 
