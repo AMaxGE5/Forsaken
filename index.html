@@ -1915,7 +1915,7 @@ const ENRAGE_STAM_CAP_DUR = 6.5; // tiempo para alcanzar el cap
 const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar ENRAGED
 
 // ── NICOSTOS — constantes ──
-const NICO_WALK = 78;       // walk fijo 78 px/s
+const NICO_WALK = 78;
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
 const NICO_M1_DMG_NO_KNIFE = 10;
@@ -1963,18 +1963,19 @@ const LOBBY_SPEED = 160; // px/s movement in lobby world
 
 // ── AMAXGE5 CONSTANTS ──
 const AMAX_HP = 90;
-const AMAX_Q_CD = 40;        // pea shooter cooldown
+const AMAX_Q_CD = 35;        // cooldown between placing torretas
+const AMAX_Q_MAX_TORRETAS = 2; // max active torretas at once
 const AMAX_Q_RANGE = 40;     // in studs (tiles)
-const AMAX_Q_FIRE_INTERVAL = 5; // fire every 5s
+const AMAX_Q_FIRE_INTERVAL = 3; // fire every 3s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
 const AMAX_Q_BLINDNESS_DUR = 0.8; // blindness I duration
 const AMAX_Q_REVEAL_DUR = 5;    // revealed duration
-const AMAX_Q_PEA_SPEED = 8;     // pea projectile speed in tiles/s
-const AMAX_Q_PEA_SLOW_DUR = 3.0; // Slow II duration on killer
+const AMAX_Q_PEA_SPEED = 15;    // pea projectile speed in tiles/s
+const AMAX_Q_PEA_SLOW_DUR = 2.0; // Slow II duration on killer
 const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
 const AMAX_Q_HP = 40;           // lanzaguisantes hitpoints
 const AMAX_E_CD = 20;
-const AMAX_E_HEAL_RATE = 2.4;   // HP per second (60% more than original 1.5)
+const AMAX_E_HEAL_RATE = 7.0;   // HP per second
 const AMAX_E_MAX_DUR = 5;       // max heal duration per use
 const AMAX_E_UNLOCK_DUR = 3;    // must heal 3s to unlock R
 const AMAX_R_CD = 36;
@@ -2534,14 +2535,21 @@ const UI={
         ['abilityBloxySlot','abilitySSSlot','abilityGBSlot'].forEach(id=>{
           const el=document.getElementById(id);if(el)el.style.display='none';
         });
-        // ── AMaxGE5 Q: Guisante ──
+        // ── AMaxGE5 Q: Peashooter (hasta 2 torretas) ──
         const aqSlot=document.getElementById('amaxQSlot');if(aqSlot)aqSlot.style.display='flex';
         const aqPct=me.amaxQCd>0?me.amaxQCd/AMAX_Q_CD:0;
-        const aqActive=me.amaxPeaActive||false;
-        const aqOv=document.getElementById('amaxQOverlay');if(aqOv)aqOv.style.transform=`scaleY(${aqActive?0:aqPct})`;
-        const aqWrap=document.getElementById('amaxQWrap');if(aqWrap)aqWrap.className='ability-icon-wrap'+(aqActive?' ready':aqPct>0?' on-cd':' ready');
+        const aqCount=(me.amaxTorretas||[]).length;
+        const aqActive=aqCount>0;
+        const aqOv=document.getElementById('amaxQOverlay');if(aqOv)aqOv.style.transform=`scaleY(${aqPct})`;
+        const aqWrap=document.getElementById('amaxQWrap');if(aqWrap)aqWrap.className='ability-icon-wrap'+(aqPct>0?' on-cd':' ready');
         const aqNum=document.getElementById('amaxQNum');
-        if(aqNum){aqNum.style.display=(aqActive||aqPct>0)?'flex':'none';aqNum.textContent=aqActive?'🌱':(aqPct>0?Math.ceil(me.amaxQCd)+'s':'');}
+        if(aqNum){
+          aqNum.style.display='flex';
+          if(aqActive&&aqPct>0)aqNum.textContent=`🌱×${aqCount} ${Math.ceil(me.amaxQCd)}s`;
+          else if(aqActive)aqNum.textContent=`🌱×${aqCount}`;
+          else if(aqPct>0)aqNum.textContent=Math.ceil(me.amaxQCd)+'s';
+          else aqNum.textContent='LISTO';
+        }
         // ── AMaxGE5 E: Lore de Fnaf ──
         const aeSlot=document.getElementById('amaxESlot');if(aeSlot)aeSlot.style.display='flex';
         const aePct=me.amaxECd>0?me.amaxECd/AMAX_E_CD:0;
@@ -3909,7 +3917,8 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
   const cy=k.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
   slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.15,maxLife:.15,idx:slashIdx});
   if(!k.m1HitSet)k.m1HitSet=new Set();
-  if(slashIdx===0)k.m1HitSet=new Set();
+  if(slashIdx===0){k.m1HitSet=new Set();k.m1TorretaHitSet=new Set();}
+  if(!k.m1TorretaHitSet)k.m1TorretaHitSet=new Set();
   Object.values(W.players).forEach(s=>{
     if(s.role!=='survivor'||!s.alive)return;
     if(k.m1HitSet.has(s.id))return;
@@ -3921,6 +3930,18 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
       }
       else{s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;}
       if(S.isHost)Game.checkWin();
+    }
+    // Hit torreta — solo 1 hitbox de las 3 puede golpear por swing (m1TorretaHitSet por torreta index)
+    if(isAMaxGE5(s)&&(s.amaxTorretas||[]).length>0){
+      s.amaxTorretas.forEach((t,ti)=>{
+        const torretaKey=s.id+'_'+ti;
+        if(k.m1TorretaHitSet.has(torretaKey))return;
+        if(Math.hypot(k.x-t.x,k.y-t.y)<TILE*1.3&&pointInRotRect(t.x,t.y,cx,cy,HB_W/2,HB_H/2,ang)){
+          k.m1TorretaHitSet.add(torretaKey);
+          t.hp-=20;
+        }
+      });
+      s.amaxTorretas=s.amaxTorretas.filter(t=>t.hp>0);
     }
   });
 }
@@ -4047,8 +4068,7 @@ const Game={
         killerChar,
         survivorChar,
         // AMaxGE5 state
-        amaxPeaX:0,amaxPeaY:0,amaxPeaActive:false,amaxPeaFireTimer:AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:AMAX_Q_TURN_INTERVAL,amaxPeaAng:0,amaxQCd:0,amaxPeaHp:AMAX_Q_HP,
-        amaxPeaProjs:[],  // [{x,y,vx,vy,life}] traveling pea projectiles
+        amaxTorretas:[],amaxPeaProjs:[],amaxQCd:0,  // torretas array [{x,y,ang,hp,fireTimer,turnTimer,range}], shared projs
         amaxHealing:false,amaxHealTimer:0,amaxHealAccum:0,amaxECd:0,amaxRUnlocked:false,amaxRUses:0,
         amaxShielding:false,amaxShieldTimer:0,amaxRCd:0,amaxShieldHit:false,
         amaxRevealed:false,amaxRevealTimer:0,
@@ -4423,7 +4443,6 @@ const Game={
             // Speed I buff while fully invisible
             const wasInvis=p.nicoInvis;
             if(p.nicoInvis){
-              // Apply Speed I (1.15) while invisible — don't override other speed buffs multiplicatively
               if(!(p.nicoInvisSpeedActive)){p.nicoInvisSpeedActive=true;}
             } else if(p.nicoInvisSpeedActive){
               p.nicoInvisSpeedActive=false;
@@ -4436,7 +4455,7 @@ const Game={
                 p.nicoInvisSpeedActive=false;
               }
             }
-            // Stamina cap: while invisible AND knife is gone, max stamina capped at 80
+            // Stamina cap: invisible AND no knife → maxStamina 80
             const nicoInvisActive=p.nicoInvis||p.nicoInvisStill;
             if(nicoInvisActive&&!p.nicoHasKnife){
               p.maxStamina=Math.min(p.maxStamina||KSMAX,80);
@@ -4454,10 +4473,9 @@ const Game={
             }
             // Blood trail timer
             if(p.nicoBloodTrailTimer>0){p.nicoBloodTrailTimer=Math.max(0,p.nicoBloodTrailTimer-dt);if(p.nicoBloodTrailTimer<=0)p.nicoBloodTrailTarget=null;}
-            // T — Berserk
+            // T — Berserk: +5% maxStamina/s regen, reset maxStamina on end
             if(p.nicoBerserk){
               p.nicoBerserkTimer=Math.max(0,p.nicoBerserkTimer-dt);
-              // Stamina regen: +5% of max stamina per second
               const berserkRegen=KSMAX*0.05;
               p.stamina=Math.min(KSMAX,p.stamina+berserkRegen*dt);
               if(p.nicoBerserkTimer<=0){p.nicoBerserk=false;p.nicoBerserkStamGained=0;p.maxStamina=KSMAX;}
@@ -4466,42 +4484,37 @@ const Game={
           // ── AMAXGE5 ticks ──
           if(isAMaxGE5(p)&&p.role==='survivor'){
             if(p.amaxQCd>0)p.amaxQCd=Math.max(0,p.amaxQCd-dt);
-            // Pea shooter ticks
-            if(p.amaxPeaActive){
-              // Check if killer destroys the lanzaguisantes (melee range attack)
-              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-              if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<TILE*1.1&&kk.m1Cd>0){
-                p.amaxPeaHp=(p.amaxPeaHp||AMAX_Q_HP)-20;
-                if(p.amaxPeaHp<=0){p.amaxPeaActive=false;p.amaxPeaProjs=[];p.amaxPeaHp=0;}
+            // Torretas array tick
+            if(!p.amaxTorretas)p.amaxTorretas=[];
+            const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+            p.amaxTorretas=p.amaxTorretas.filter(t=>{
+              if(t.hp<=0)return false;
+              // Re-aim
+              t.turnTimer=Math.max(0,(t.turnTimer||0)-dt);
+              if(t.turnTimer<=0){
+                t.turnTimer=AMAX_Q_TURN_INTERVAL;
+                if(kk)t.ang=Math.atan2(kk.y-t.y,kk.x-t.x);
               }
-              if(p.amaxPeaActive){
-                // Re-aim toward killer
-                p.amaxPeaTurnTimer=Math.max(0,(p.amaxPeaTurnTimer||0)-dt);
-                if(p.amaxPeaTurnTimer<=0){
-                  p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
-                  if(kk)p.amaxPeaAng=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
-                }
-                // Fire pea projectile every interval
-                p.amaxPeaFireTimer=Math.max(0,(p.amaxPeaFireTimer||0)-dt);
-                if(p.amaxPeaFireTimer<=0){
-                  p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
-                  const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
-                  if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<=range){
-                    const ang=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
-                    const spd=AMAX_Q_PEA_SPEED*TILE;
-                    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
-                    p.amaxPeaProjs.push({x:p.amaxPeaX,y:p.amaxPeaY,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:3.5});
-                  }
+              // Fire
+              t.fireTimer=Math.max(0,(t.fireTimer||0)-dt);
+              if(t.fireTimer<=0){
+                t.fireTimer=AMAX_Q_FIRE_INTERVAL;
+                const range=(t.range||AMAX_Q_RANGE)*TILE;
+                if(kk&&Math.hypot(kk.x-t.x,kk.y-t.y)<=range){
+                  const ang=Math.atan2(kk.y-t.y,kk.x-t.x);
+                  const spd=AMAX_Q_PEA_SPEED*TILE;
+                  if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
+                  p.amaxPeaProjs.push({x:t.x,y:t.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:5.0});
                 }
               }
-            }
+              return true;
+            });
             // Tick pea projectiles
             if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
             p.amaxPeaProjs=p.amaxPeaProjs.filter(pj=>{
               pj.x+=pj.vx*dt; pj.y+=pj.vy*dt; pj.life-=dt;
               if(pj.life<=0||wallAt(pj.x,pj.y,4))return false;
               // Hit killer?
-              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
               if(kk&&Math.hypot(kk.x-pj.x,kk.y-pj.y)<TILE*0.7){
                 // Slow II on killer
                 kk.amaxPeaSlow=true;kk.amaxPeaSlowTimer=AMAX_Q_PEA_SLOW_DUR;
@@ -4726,15 +4739,13 @@ const Game={
   nicoFireM1(pid){
     const p=W.players[pid];
     if(!p||!p.alive)return;
-    nicoBreakInvis(p); // first attack breaks invisibility
+    nicoBreakInvis(p);
     p.m1Cd=NICO_M1_CD;
     const dmg=p.nicoHasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
-    // Nicostos M1: 3 sequential hitboxes like Slasher, but 2% smaller in width and height
     const NICO_HB_W=HB_W*0.98;
     const NICO_HB_H=HB_H*0.98;
-    const hasKnife=p.nicoHasKnife;
-    if(!p.m1HitSet)p.m1HitSet=new Set();
     p.m1HitSet=new Set();
+    p.m1TorretaHitSet=new Set();
     for(let i=0;i<M1_SLASHES;i++){
       setTimeout(()=>{
         if(!S.running)return;
@@ -4742,26 +4753,35 @@ const Game={
         const ang=fp.facing;
         const cx=fp.x+Math.cos(ang)*(HB_OFFSET+NICO_HB_H/2);
         const cy=fp.y+Math.sin(ang)*(HB_OFFSET+NICO_HB_H/2);
-        slashFX.push({x:cx,y:cy,ang,hw:NICO_HB_W/2,hh:NICO_HB_H/2,life:.2,maxLife:.2,idx:i,nicoSlash:true,hasKnife});
-        if(i===0)fp.m1HitSet=new Set();
+        slashFX.push({x:cx,y:cy,ang,hw:NICO_HB_W/2,hh:NICO_HB_H/2,life:.2,maxLife:.2,idx:i,nicoSlash:true,hasKnife:fp.nicoHasKnife});
+        if(i===0){fp.m1HitSet=new Set();fp.m1TorretaHitSet=new Set();}
         if(!fp.m1HitSet)fp.m1HitSet=new Set();
+        if(!fp.m1TorretaHitSet)fp.m1TorretaHitSet=new Set();
         Object.values(W.players).forEach(s=>{
           if(s.role!=='survivor'||!s.alive)return;
-          if(fp.m1HitSet.has(s.id))return;
-          if(pointInRotRect(s.x,s.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)||Math.hypot(s.x-fp.x,s.y-fp.y)<TILE*.9){
+          if(!fp.m1HitSet.has(s.id)&&(pointInRotRect(s.x,s.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)||Math.hypot(s.x-fp.x,s.y-fp.y)<TILE*.9)){
             fp.m1HitSet.add(s.id);
             applyShieldDamage(s,dmg);
-            // Nicostos does NOT apply bleed on M1
             if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
               W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-              // Track kill for berserk unlock
               fp.nicoKillCount=(fp.nicoKillCount||0)+1;
               if(fp.nicoKillCount>0&&fp.nicoKillCount%NICO_T_KILLS_REQ===0){fp.nicoBerserkReady=Math.min((fp.nicoBerserkReady||0)+1,1);}
             } else {
-              // Passive: blood trail to nearest survivor from hit
               fp.nicoBloodTrailTarget=s.id;fp.nicoBloodTrailTimer=6;
             }
             Game.checkWin();
+          }
+          // Torreta — solo 1 de 3 hitboxes golpea por swing
+          if(isAMaxGE5(s)&&(s.amaxTorretas||[]).length>0){
+            s.amaxTorretas.forEach((t,ti)=>{
+              const key=s.id+'_'+ti;
+              if(fp.m1TorretaHitSet.has(key))return;
+              if(Math.hypot(fp.x-t.x,fp.y-t.y)<TILE*1.3&&pointInRotRect(t.x,t.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)){
+                fp.m1TorretaHitSet.add(key);
+                t.hp-=20;
+              }
+            });
+            s.amaxTorretas=s.amaxTorretas.filter(t=>t.hp>0);
           }
         });
       },i*M1_DELAY*1000);
@@ -4825,21 +4845,29 @@ const Game={
   amaxDoQ(pid){
     const p=W.players[pid];
     if(!p||!p.alive||!isAMaxGE5(p))return;
-    if(p.amaxQCd>0||p.amaxPeaActive)return;
-    // Count other AMaxGE5 in the round
+    if(p.amaxQCd>0)return;
+    if(!p.amaxTorretas)p.amaxTorretas=[];
+    // If already at max, destroy a random existing torreta
+    if(p.amaxTorretas.length>=AMAX_Q_MAX_TORRETAS){
+      const idx=Math.floor(Math.random()*p.amaxTorretas.length);
+      p.amaxTorretas.splice(idx,1);
+    }
+    // Count other AMaxGE5 in the round (range reduction mechanic)
     const amaxCount=Object.values(W.players).filter(x=>x.role==='survivor'&&x.alive&&isAMaxGE5(x)).length;
     const rangeReduction=Math.max(0,(amaxCount-1)*0.20);
     const effectiveRange=AMAX_Q_RANGE*(1-rangeReduction);
-    p.amaxPeaActive=true;
-    p.amaxPeaX=p.x;p.amaxPeaY=p.y;
-    p.amaxPeaRange=effectiveRange;
-    p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
-    p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
-    p.amaxPeaHp=AMAX_Q_HP;
-    p.amaxPeaProjs=[];
-    // Aim toward killer
     const killer=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    p.amaxPeaAng=killer?Math.atan2(killer.y-p.amaxPeaY,killer.x-p.amaxPeaX):p.facing;
+    const ang=killer?Math.atan2(killer.y-p.y,killer.x-p.x):p.facing;
+    p.amaxTorretas.push({
+      x:p.x,y:p.y,
+      ang,
+      hp:AMAX_Q_HP,
+      fireTimer:AMAX_Q_FIRE_INTERVAL,
+      turnTimer:AMAX_Q_TURN_INTERVAL,
+      range:effectiveRange,
+      hitThisSwing:false
+    });
+    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
     p.amaxQCd=AMAX_Q_CD;
   },
 
@@ -5223,7 +5251,7 @@ const Game={
         gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
         killerChar:p.killerChar||'slasher',
         survivorChar:p.survivorChar||'noob',
-        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],
+        amaxTorretas:p.amaxTorretas||[],amaxPeaProjs:p.amaxPeaProjs||[],amaxQCd:p.amaxQCd||0,
         amaxHealing:p.amaxHealing||false,amaxHealTimer:p.amaxHealTimer||0,amaxHealAccum:p.amaxHealAccum||0,amaxECd:p.amaxECd||0,amaxRUnlocked:p.amaxRUnlocked||false,amaxRUses:p.amaxRUses||0,
         amaxShielding:p.amaxShielding||false,amaxShieldTimer:p.amaxShieldTimer||0,amaxRCd:p.amaxRCd||0,amaxShieldHit:p.amaxShieldHit||false,
         amaxRevealed:p.amaxRevealed||false,amaxRevealTimer:p.amaxRevealTimer||0,
@@ -5299,10 +5327,7 @@ const Game={
         if(d.killerChar)p.killerChar=d.killerChar;
         if(d.survivorChar)p.survivorChar=d.survivorChar;
         if(d.amaxQCd!==undefined){
-          p.amaxQCd=d.amaxQCd||0;p.amaxPeaX=d.amaxPeaX||0;p.amaxPeaY=d.amaxPeaY||0;
-          p.amaxPeaActive=d.amaxPeaActive||false;p.amaxPeaFireTimer=d.amaxPeaFireTimer||0;
-          p.amaxPeaTurnTimer=d.amaxPeaTurnTimer||0;p.amaxPeaAng=d.amaxPeaAng||0;
-          p.amaxPeaHp=d.amaxPeaHp||0;p.amaxPeaProjs=d.amaxPeaProjs||[];
+          p.amaxQCd=d.amaxQCd||0;p.amaxTorretas=d.amaxTorretas||[];p.amaxPeaProjs=d.amaxPeaProjs||[];
           p.amaxHealing=d.amaxHealing||false;p.amaxHealTimer=d.amaxHealTimer||0;p.amaxHealAccum=d.amaxHealAccum||0;
           p.amaxECd=d.amaxECd||0;p.amaxRUnlocked=d.amaxRUnlocked||false;p.amaxRUses=d.amaxRUses||0;
           p.amaxShielding=d.amaxShielding||false;p.amaxShieldTimer=d.amaxShieldTimer||0;p.amaxRCd=d.amaxRCd||0;
@@ -6115,39 +6140,54 @@ const Game={
       if(gbAlpha<1)ctx.restore();
     });
 
-    // ── AMaxGE5: pea shooter visual ──
+    // ── AMaxGE5: pea shooter visual (torretas) ──
     Object.values(W.players).forEach(p=>{
-      if(!p.alive||!isAMaxGE5(p)||!p.amaxPeaActive)return;
-      const px=p.amaxPeaX,py=p.amaxPeaY;
+      if(!isAMaxGE5(p)||(p.amaxTorretas||[]).length===0)return;
+      const isOwner=p.id===myPid&&p.role==='survivor';
       const t2=Date.now()/400;
       const pulse=0.5+Math.sin(t2)*0.4;
-      // Plant base
-      ctx.save();
-      ctx.beginPath();ctx.arc(px,py,TILE*.28,0,Math.PI*2);
-      ctx.fillStyle=`rgba(0,180,60,${0.55+pulse*.3})`;ctx.fill();
-      ctx.strokeStyle=`rgba(0,255,80,${0.5+pulse*.4})`;ctx.lineWidth=2;ctx.stroke();
-      ctx.shadowColor='rgba(0,200,60,.7)';ctx.shadowBlur=10*pulse;
-      ctx.font=`${TILE*.4}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText('🌱',px,py);
-      ctx.shadowBlur=0;
-      // HP bar above plant
-      const hpPct=Math.max(0,(p.amaxPeaHp||0)/AMAX_Q_HP);
-      const bw=TILE*.7,bh=4,bx2=px-bw/2,by2=py-TILE*.5;
-      ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx2,by2,bw,bh);
-      ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
-      ctx.fillRect(bx2,by2,bw*hpPct,bh);
-      ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
-      // Range ring
-      const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
-      ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
-      ctx.strokeStyle=`rgba(0,200,80,${0.12+pulse*0.1})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
-      ctx.restore();
+      (p.amaxTorretas||[]).forEach(t=>{
+        ctx.save();
+        // Plant base
+        ctx.beginPath();ctx.arc(t.x,t.y,TILE*.28,0,Math.PI*2);
+        ctx.fillStyle=`rgba(0,180,60,${0.55+pulse*.3})`;ctx.fill();
+        ctx.strokeStyle=`rgba(0,255,80,${0.5+pulse*.4})`;ctx.lineWidth=2;ctx.stroke();
+        ctx.shadowColor='rgba(0,200,60,.7)';ctx.shadowBlur=10*pulse;
+        ctx.font=`${TILE*.4}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('🌱',t.x,t.y);
+        ctx.shadowBlur=0;
+        // HP bar above plant
+        const hpPct=Math.max(0,(t.hp||0)/AMAX_Q_HP);
+        const bw=TILE*.7,bh=4,bx2=t.x-bw/2,by2=t.y-TILE*.5;
+        ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx2,by2,bw,bh);
+        ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
+        ctx.fillRect(bx2,by2,bw*hpPct,bh);
+        ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
+        // Range ring — solo visible para la AMaxGE5 dueña
+        if(isOwner){
+          const range=(t.range||AMAX_Q_RANGE)*TILE;
+          ctx.beginPath();ctx.arc(t.x,t.y,range,0,Math.PI*2);
+          ctx.strokeStyle=`rgba(0,200,80,${0.10+pulse*0.08})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
+          // Fill semitransparente muy suave
+          ctx.fillStyle=`rgba(0,200,80,0.03)`;ctx.fill();
+        }
+        // Marker para todos los supervivientes (triángulo verde encima)
+        if(W.players[myPid]&&W.players[myPid].role==='survivor'){
+          ctx.fillStyle=`rgba(0,255,80,${0.6+pulse*0.3})`;
+          ctx.beginPath();
+          ctx.moveTo(t.x,t.y-TILE*.65);
+          ctx.lineTo(t.x-TILE*.18,t.y-TILE*.38);
+          ctx.lineTo(t.x+TILE*.18,t.y-TILE*.38);
+          ctx.closePath();ctx.fill();
+        }
+        ctx.restore();
+      });
     });
     // ── AMaxGE5: traveling pea projectiles ──
     Object.values(W.players).forEach(p=>{
       if(!isAMaxGE5(p)||!p.amaxPeaProjs||!p.amaxPeaProjs.length)return;
       p.amaxPeaProjs.forEach(pj=>{
-        const ag=pj.life/3.5; // alpha based on remaining life
+        const ag=Math.min(1,pj.life/5.0); // alpha based on remaining life
         ctx.save();
         ctx.shadowColor='rgba(60,255,60,.9)';ctx.shadowBlur=10;
         ctx.beginPath();ctx.arc(pj.x,pj.y,5,0,Math.PI*2);
