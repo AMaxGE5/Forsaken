@@ -929,7 +929,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="lobbyCDBox">
       <div id="lobbyCDLabel">ESPERANDO JUGADORES</div>
       <div id="lobbyCDBig"></div>
-      <div id="lobbyWaitMsg">necesitas al menos 2 jugadores activos</div>
+      <div id="lobbyWaitMsg">necesitas al menos 2 jugadores</div>
     </div>
     <div id="lobbyBottomBar">
       <div id="lobbyPlayerList"></div>
@@ -973,14 +973,6 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <!-- Settings panel (appears to the right of gear btn) -->
     <div id="lobbySettingsPanel">
       <div class="lsp-title">AJUSTES</div>
-      <div class="lsp-option">
-        <span class="lsp-option-lbl">AFK</span>
-        <label class="lsp-toggle">
-          <input type="checkbox" id="lobbyAfkToggle" onchange="MP.setAfk(this.checked,false)">
-          <span class="lsp-toggle-track"></span>
-          <span class="lsp-toggle-thumb"></span>
-        </label>
-      </div>
       <div class="lsp-option">
         <span class="lsp-option-lbl">HITBOXES</span>
         <label class="lsp-toggle">
@@ -1678,10 +1670,7 @@ const Stats={
   save(){
     if(!this._key)return;
     const db=Auth._db();
-    // Ensure the cache entry exists before writing; if missing, rebuild it
-    if(!db[this._key]){
-      db[this._key]={user:this.username||this._key,pass:''};
-    }
+    if(!db[this._key])return;
     db[this._key].timePlayed=this.timePlayed;
     db[this._key].survWins=this.survWins;
     db[this._key].killWins=this.killWins;
@@ -1918,8 +1907,8 @@ const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar E
 const NICO_WALK = 78;
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
-const NICO_M1_DMG_NO_KNIFE = 10;
-const NICO_NO_KNIFE_SPEED = 1.10; // +10% speed when knife is thrown
+const NICO_M1_DMG_NO_KNIFE = 19;
+const NICO_NO_KNIFE_SPEED = 1.10;
 const NICO_M1_CD = 1.9;
 const NICO_Q_CD = 25;
 const NICO_Q_STAM_DRAIN = 15;
@@ -1941,7 +1930,7 @@ const NICO_R_REVIVE_DUR = 0.5;
 const NICO_T_KILLS_REQ = 2;
 const NICO_T_DUR = 20;
 const NICO_T_STAM_REGEN = 35;
-const NICO_T_STAM_MAX = 80;
+const NICO_T_STAM_MAX = 85;
 const NICO_T_DETECT_BONUS = 1.10;
 
 // ── Habilidad E del Killer: COMBO (2 tajos + motosierra) ──
@@ -1963,8 +1952,7 @@ const LOBBY_SPEED = 160; // px/s movement in lobby world
 
 // ── AMAXGE5 CONSTANTS ──
 const AMAX_HP = 90;
-const AMAX_Q_CD = 35;        // cooldown between placing torretas
-const AMAX_Q_MAX_TORRETAS = 2; // max active torretas at once
+const AMAX_Q_CD = 35;        // pea shooter cooldown
 const AMAX_Q_RANGE = 40;     // in studs (tiles)
 const AMAX_Q_FIRE_INTERVAL = 3; // fire every 3s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
@@ -2121,7 +2109,6 @@ function safeTileSpawn(tx,ty){
 const S={
   peer:null,conns:[],isHost:false,code:'',myId:'',
   players:[],myRole:'',running:false,raf:null,cdInt:null,cdVal:30,
-  isAfk:false,
   // spectate
   isDeadSpec:false,  // local player died and chose spectate
   specTarget:null,
@@ -2236,7 +2223,6 @@ const UI={
 
   showLobby(){
     S.inLobbyWorld=true;
-    UI.resetRoundHUD();
     Stats.startSession();
     GameAudio.playLobby();
     const badge=document.getElementById('lobbyCodeBadge');
@@ -2261,12 +2247,9 @@ const UI={
       const div=document.createElement('div');
       div.className='lp-entry'+(p.id===S.myId?' me':'');
       const mal=p.id===S.myId?Stats.malicia||0:p.malicia||0;
-      const afkTxt=p.afk?' <span style="color:#f39c12">[AFK]</span>':'';
-      div.innerHTML=`${p.host?'👑 ':'🎮 '}${p.username||p.name}${afkTxt}<span class="lp-mal">⚡${mal}</span>`;
+      div.innerHTML=`${p.host?'👑 ':'🎮 '}${p.username||p.name}<span class="lp-mal">⚡${mal}</span>`;
       list.appendChild(div);
     });
-    const afkToggle=document.getElementById('lobbyAfkToggle');
-    if(afkToggle)afkToggle.checked=!!S.isAfk;
     UI.renderStatsPanel();
   },
 
@@ -2274,14 +2257,14 @@ const UI={
     const panel=document.getElementById('lobbyStatsPanel');
     if(!panel)return;
     panel.innerHTML='';
-    const self={id:S.myId,username:Stats.username,timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,malicia:Stats.malicia||0,afk:S.isAfk,isMe:true};
+    const self={id:S.myId,username:Stats.username,timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,malicia:Stats.malicia||0,isMe:true};
     const others=Object.values(LobbyWorld.lobbyPlayers||{}).filter(p=>p.id!==S.myId);
     [self,...others].forEach(p=>{
       const pill=document.createElement('div');
       pill.className='lsp-pill'+(p.isMe?' me':'');
       const uname=p.isMe?Stats.username:(p.username||p.name||'?');
       const mal=p.isMe?Stats.malicia||0:p.malicia||0;
-      pill.innerHTML=`<div class="lsp-pill-dot${p.isMe?' me':''}"></div>${p.isMe?'▶ ':''}${uname}${p.afk?' <span style="color:#f39c12">[AFK]</span>':''}<span class="mal-badge">⚡${mal}</span>`;
+      pill.innerHTML=`<div class="lsp-pill-dot${p.isMe?' me':''}"></div>${p.isMe?'▶ ':''}${uname}<span class="mal-badge">⚡${mal}</span>`;
       pill.onclick=()=>LobbyWorld.showProfile(p);
       panel.appendChild(pill);
     });
@@ -2302,13 +2285,6 @@ const UI={
     document.getElementById('lobbyCDBig').textContent='';
     document.getElementById('lobbyCDLabel').textContent='ESPERANDO JUGADORES';
     document.getElementById('lobbyWaitMsg').style.display='block';
-  },
-  resetRoundHUD(){
-    ['amaxQSlot','amaxESlot','amaxRSlot','nicoM1Slot','nicoQSlot','nicoESlot','nicoRSlot','nicoTSlot','abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot','abilityBloxySlot','abilitySSSlot','abilityGBSlot']
-      .forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
-    const ef=document.getElementById('effectsPanel');if(ef)ef.innerHTML='';
-    const bb=document.getElementById('bloxyBuffBar');if(bb)bb.classList.remove('show');
-    const gb=document.getElementById('gbBuffBar');if(gb)gb.classList.remove('show');
   },
   tickCd(v=S.cdVal){
     const el=document.getElementById('lobbyCDBig');
@@ -2410,7 +2386,6 @@ const UI={
     const m1Slot=document.getElementById('abilityM1Slot');
     const beheadSlot=document.getElementById('abilityBeheadSlot');
     if(me.role==='killer'){
-      ['amaxQSlot','amaxESlot','amaxRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
       const nicoMode=isNicostos(me);
       // Hide/show Slasher vs Nicostos slots
       ['abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot'].forEach(id=>{
@@ -2535,11 +2510,10 @@ const UI={
         ['abilityBloxySlot','abilitySSSlot','abilityGBSlot'].forEach(id=>{
           const el=document.getElementById(id);if(el)el.style.display='none';
         });
-        // ── AMaxGE5 Q: Peashooter (1 torreta) ──
+        // ── AMaxGE5 Q: Peashooter ──
         const aqSlot=document.getElementById('amaxQSlot');if(aqSlot)aqSlot.style.display='flex';
         const aqPct=me.amaxQCd>0?me.amaxQCd/AMAX_Q_CD:0;
-        const aqCount=(me.amaxTorretas||[]).length;
-        const aqActive=aqCount>0;
+        const aqActive=me.amaxPeaActive||false;
         const aqOv=document.getElementById('amaxQOverlay');if(aqOv)aqOv.style.transform=`scaleY(${aqPct})`;
         const aqWrap=document.getElementById('amaxQWrap');if(aqWrap)aqWrap.className='ability-icon-wrap'+(aqPct>0?' on-cd':' ready');
         const aqNum=document.getElementById('amaxQNum');
@@ -2867,7 +2841,6 @@ const LobbyWorld={
     if(Inp.k['d']||Inp.k['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     if(dx||dy){
-      if(S.isAfk)MP.setAfk(false,true);
       const spd=LOBBY_SPEED*dt;
       const r=TILE*.28;
       const nx=p.x+dx*spd,ny=p.y+dy*spd;
@@ -3281,7 +3254,6 @@ function fskHandleMsg(msg, conn){
         host:false, connId:conn.peer,
         color:PCOLORS[S.players.length%PCOLORS.length],
         malicia:msg.malicia||0,
-        afk:!!msg.afk,
         equippedKiller:msg.equippedKiller||'',
         equippedSurvivor:msg.equippedSurvivor||'',
       });
@@ -3330,7 +3302,7 @@ async function fskJoinRapida(num){
 
   if(becameHost){
     S.isHost=true; S.myId=Net.uid();
-    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, afk:false, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId:peerId, roomCode:`RÁPIDA-${num}`, isRapida:true, players:1 };
     MP.setStatus(`✓ Sala ${num} — esperando jugadores...`, '#2ecc71');
@@ -3353,7 +3325,7 @@ async function fskJoinRapida(num){
     await new Promise((resolve, reject)=>{
       let done=false;
       conn.on('open', ()=>{
-        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, afk:S.isAfk, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
       });
       conn.on('data', msg=>{
         if(done) return;
@@ -3385,7 +3357,7 @@ async function fskCreatePrivate(){
   try{
     await fskEnsurePeer('room', roomId);
     S.isHost=true; S.myId=Net.uid();
-    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, afk:false, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
+    S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
     PeerRT.peer.on('connection', conn=>fskWireConn(conn));
@@ -3416,7 +3388,7 @@ async function fskJoinRoom(rawId, isReconnect){
     await new Promise((resolve,reject)=>{
       let done=false;
       conn.on('open',()=>{
-        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, afk:S.isAfk, reconnect:!!isReconnect, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
+        conn.send({t:'join', id:S.myId, name:Stats.username||'JUGADOR', username:Stats.username||'?', malicia:Stats.malicia||0, reconnect:!!isReconnect, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''});
       });
       conn.on('data', msg=>{
         if(done) return;
@@ -3478,7 +3450,6 @@ function mpCleanState(){
   if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
   if(Net._hbInt){clearInterval(Net._hbInt);Net._hbInt=null;}
   S.running=false; S.isDeadSpec=false; S.inLobbyWorld=false;
-  S.isAfk=false;
   LobbyWorld.stop();
   S.conns=[]; S.players=[]; Inp.clear();
 }
@@ -3588,25 +3559,8 @@ const MP={
       const el=document.getElementById(id); if(el){ el.textContent=msg; el.style.color=col||'var(--dim)'; }
     });
   },
-  toggleAfk(){MP.setAfk(!S.isAfk,false);},
-  setAfk(v,isAuto){
-    S.isAfk=!!v;
-    const me=S.players.find(p=>p.id===S.myId);
-    if(me)me.afk=S.isAfk;
-    if(!isAuto||S.isAfk===false){
-      if(S.isHost){
-        Net.broadcast({t:'afk',id:S.myId,afk:S.isAfk});
-        Net.broadcast({t:'list',players:S.players,code:S.code||''});
-        Net.checkCd();
-      } else {
-        Net.sendHost({t:'afk',id:S.myId,afk:S.isAfk});
-      }
-    }
-    UI.renderLobbyPlayers();
-  },
 
   leaveRoom(){
-    if(S.isAfk)S.isAfk=false;
     fskSend({t:'leave'});
     fskCleanup(false);
     mpCleanState();
@@ -3666,7 +3620,6 @@ const Net={
       username:Stats.username||'?',
       timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,
       malicia:Stats.malicia||0,
-      afk:S.isAfk,
       equippedKiller:Stats.equippedKiller||'',
       equippedSurvivor:Stats.equippedSurvivor||''};
     if(S.isHost)Net.broadcast(msg);
@@ -3705,29 +3658,11 @@ const Net={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
         survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
-        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',afk:!!d.afk,
+        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',
       };
       // Sync malicia into S.players so hostStart picks correct killer
-      const sp=S.players.find(x=>x.id===d.id);
-      if(sp){
-        sp.malicia=d.malicia||0;
-        if(d.equippedKiller!==undefined)sp.equippedKiller=d.equippedKiller||'';
-        if(d.equippedSurvivor!==undefined)sp.equippedSurvivor=d.equippedSurvivor||'';
-        if(d.afk!==undefined)sp.afk=!!d.afk;
-      }
+      const sp=S.players.find(x=>x.id===d.id);if(sp)sp.malicia=d.malicia||0;
       Net.broadcast(d);
-    } else if(d.t==='afk'){
-      const sp=S.players.find(x=>x.id===d.id);
-      if(sp){
-        sp.afk=!!d.afk;
-        Net.broadcast({t:'afk',id:d.id,afk:sp.afk});
-        Net.broadcast({t:'list',players:S.players,code:S.code||''});
-        UI.renderLobbyPlayers();
-        Net.checkCd();
-      }
-    } else if(d.t==='leaveLobbyWorld'){
-      if(d.id&&LobbyWorld.lobbyPlayers[d.id])delete LobbyWorld.lobbyPlayers[d.id];
-      Net.broadcast({t:'leaveLobbyWorld',id:d.id});
     }
   },
 
@@ -3743,8 +3678,6 @@ const Net={
 
     } else if(d.t==='list'){
       S.players=d.players;
-      const me=S.players.find(p=>p.id===S.myId);
-      if(me)S.isAfk=!!me.afk;
       UI.renderLobbyPlayers();
       Net.checkCd();
 
@@ -3774,16 +3707,8 @@ const Net={
         id:d.id,x:d.x,y:d.y,facing:d.facing,name:d.name,
         username:d.username,timePlayed:d.timePlayed||0,
         survWins:d.survWins||0,killWins:d.killWins||0,malicia:d.malicia||0,
-        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',afk:!!d.afk,
+        equippedKiller:d.equippedKiller||'',equippedSurvivor:d.equippedSurvivor||'',
       };
-    } else if(d.t==='afk'){
-      const sp=S.players.find(x=>x.id===d.id);
-      if(sp)sp.afk=!!d.afk;
-      if(d.id===S.myId)S.isAfk=!!d.afk;
-      UI.renderLobbyPlayers();
-    } else if(d.t==='leaveLobbyWorld'){
-      if(d.id&&LobbyWorld.lobbyPlayers[d.id])delete LobbyWorld.lobbyPlayers[d.id];
-      UI.renderStatsPanel();
 
     } else if(d.t==='spectate'){
       S.isDeadSpec=true;S.players=d.players;S.lateJoin=true; // joined mid-game — no stats
@@ -3819,13 +3744,11 @@ const Net={
     const idx=S.players.findIndex(p=>p.connId===conn.peer);
     const discId=idx!==-1?S.players[idx].id:null;
     if(idx!==-1)S.players.splice(idx,1);
-    if(discId&&LobbyWorld.lobbyPlayers[discId])delete LobbyWorld.lobbyPlayers[discId];
     // Si el juego está corriendo, marcar al jugador como muerto
     if(S.running&&S.isHost&&discId&&W.players&&W.players[discId]){
       const dp=W.players[discId];
       dp.alive=false;dp.escaped=false;
     }
-    if(discId)Net.broadcast({t:'leaveLobbyWorld',id:discId});
     Net.broadcast({t:'list',players:S.players,code:S.code||''});
     UI.renderLobbyPlayers();
     if(!S.running)Net.checkCd();
@@ -3835,8 +3758,7 @@ const Net={
   // ── Decide si arrancar la cuenta regresiva ───────────────────────────────────
   checkCd(){
     if(!S.isHost)return;
-    const active=S.players.filter(p=>!p.afk).length;
-    if(active>=2){
+    if(S.players.length>=2){
       UI.startCd();
     } else {
       UI.stopCd();
@@ -3931,17 +3853,14 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
       else{s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;}
       if(S.isHost)Game.checkWin();
     }
-    // Hit torreta — solo 1 hitbox de las 3 puede golpear por swing (m1TorretaHitSet por torreta index)
-    if(isAMaxGE5(s)&&(s.amaxTorretas||[]).length>0){
-      s.amaxTorretas.forEach((t,ti)=>{
-        const torretaKey=s.id+'_'+ti;
-        if(k.m1TorretaHitSet.has(torretaKey))return;
-        if(Math.hypot(k.x-t.x,k.y-t.y)<TILE*1.3&&pointInRotRect(t.x,t.y,cx,cy,HB_W/2,HB_H/2,ang)){
-          k.m1TorretaHitSet.add(torretaKey);
-          t.hp-=20;
-        }
-      });
-      s.amaxTorretas=s.amaxTorretas.filter(t=>t.hp>0);
+    // Torreta: solo 1 de las 3 hitboxes puede golpearla por swing
+    if(isAMaxGE5(s)&&s.amaxPeaActive&&!k.m1TorretaHitSet.has(s.id)){
+      if(Math.hypot(k.x-s.amaxPeaX,k.y-s.amaxPeaY)<TILE*1.3&&
+         pointInRotRect(s.amaxPeaX,s.amaxPeaY,cx,cy,HB_W/2,HB_H/2,ang)){
+        k.m1TorretaHitSet.add(s.id);
+        s.amaxPeaHp=(s.amaxPeaHp||AMAX_Q_HP)-20;
+        if(s.amaxPeaHp<=0){s.amaxPeaActive=false;s.amaxPeaProjs=[];s.amaxPeaHp=0;}
+      }
     }
   });
 }
@@ -3951,8 +3870,7 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
 // ══════════════════════════════════════════
 const Game={
   hostStart(){
-    const plist=S.players.filter(p=>!p.afk);
-    if(plist.length<2){Net.checkCd();return;}
+    const plist=[...S.players];
     // Sync own malicia into S.players before picking
     const myEntry=plist.find(p=>p.id===S.myId);
     if(myEntry)myEntry.malicia=Stats.malicia||0;
@@ -3979,7 +3897,7 @@ const Game={
       }
     });
     S.myRole=roles[S.myId];
-    const d={roles,spawns,players:plist};
+    const d={roles,spawns,players:S.players};
     Net.broadcast({t:'start',...d});
     Game.clientStart(d);
   },
@@ -3987,7 +3905,6 @@ const Game={
   clientStart(d){
     S.inLobbyWorld=false;
     S.isDeadSpec=false;
-    UI.resetRoundHUD();
     S.players=d.players||S.players;S.myRole=d.roles[S.myId];
     Game.initWorld(d.roles,d.spawns);
     Game.setupCanvas();
@@ -4041,15 +3958,15 @@ const Game={
       // Detect which killer char to use based on equipped killer
       let killerChar='slasher';
       if(role==='killer'){
-        // Use synced lobby equip, fallback to local stats only for self
-        const equippedRaw=p.equippedKiller!==undefined?p.equippedKiller:(p.id===S.myId?Stats.equippedKiller||'':'');
-        killerChar=equippedRaw==='nicostos'?'nicostos':'slasher';
+        // Use p.equippedKiller if available, only fall back to Stats for own player
+        const equipped=p.equippedKiller!==undefined?p.equippedKiller:(p.id===S.myId?Stats.equippedKiller||'':'');
+        if(equipped==='nicostos')killerChar='nicostos';
       }
       // Detect which survivor char to use
       let survivorChar='noob';
       if(role==='survivor'){
-        const eqSurvRaw=p.equippedSurvivor!==undefined?p.equippedSurvivor:(p.id===S.myId?Stats.equippedSurvivor||'':'');
-        survivorChar=eqSurvRaw==='amaxge5'?'amaxge5':'noob';
+        const eqSurv=p.equippedSurvivor!==undefined?p.equippedSurvivor:(p.id===S.myId?Stats.equippedSurvivor||'':'');
+        if(eqSurv==='amaxge5')survivorChar='amaxge5';
       }
       W.players[p.id]={
         id:p.id,name:p.name,username:p.username||p.name,role,alive:true,escaped:false,
@@ -4068,7 +3985,8 @@ const Game={
         killerChar,
         survivorChar,
         // AMaxGE5 state
-        amaxTorretas:[],amaxPeaProjs:[],amaxQCd:0,  // torretas array [{x,y,ang,hp,fireTimer,turnTimer,range}], shared projs
+        amaxPeaX:0,amaxPeaY:0,amaxPeaActive:false,amaxPeaFireTimer:AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:AMAX_Q_TURN_INTERVAL,amaxPeaAng:0,amaxQCd:0,amaxPeaHp:AMAX_Q_HP,
+        amaxPeaProjs:[],  // [{x,y,vx,vy,life}] traveling pea projectiles
         amaxHealing:false,amaxHealTimer:0,amaxHealAccum:0,amaxECd:0,amaxRUnlocked:false,amaxRUses:0,
         amaxShielding:false,amaxShieldTimer:0,amaxRCd:0,amaxShieldHit:false,
         amaxRevealed:false,amaxRevealTimer:0,
@@ -4369,11 +4287,7 @@ const Game={
                     // Grab: 10 dmg + 20 slam = 30 total (no bleed on charge)
                     applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
                     // No bleed on charge attack
-                    if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-                      // Track kill for berserk unlock (same as M1 kills)
-                      p.nicoKillCount=(p.nicoKillCount||0)+1;
-                      if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
-                    }
+                    if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
                     // Slam FX — knock survivor back
                     const kbDist=TILE*2.8;
                     s.comboKbVx=Math.cos(p.nicoChargeAng)*kbDist;
@@ -4443,6 +4357,7 @@ const Game={
             // Speed I buff while fully invisible
             const wasInvis=p.nicoInvis;
             if(p.nicoInvis){
+              // Apply Speed I (1.15) while invisible — don't override other speed buffs multiplicatively
               if(!(p.nicoInvisSpeedActive)){p.nicoInvisSpeedActive=true;}
             } else if(p.nicoInvisSpeedActive){
               p.nicoInvisSpeedActive=false;
@@ -4455,14 +4370,6 @@ const Game={
                 p.nicoInvisSpeedActive=false;
               }
             }
-            // Stamina cap: invisible AND no knife → maxStamina 80
-            const nicoInvisActive=p.nicoInvis||p.nicoInvisStill;
-            if(nicoInvisActive&&!p.nicoHasKnife){
-              p.maxStamina=Math.min(p.maxStamina||KSMAX,80);
-              p.stamina=Math.min(p.stamina,80);
-            } else if(!p.nicoBerserk){
-              p.maxStamina=KSMAX;
-            }
             // Post-invis speed timer from nicoBreakInvis
             if(p.nicoPostInvisSpeedTimer>0){
               p.nicoPostInvisSpeedTimer=Math.max(0,(p.nicoPostInvisSpeedTimer||0)-dt);
@@ -4471,9 +4378,17 @@ const Game={
               p.nicoInvisReviveTimer=Math.max(0,(p.nicoInvisReviveTimer||0)-dt);
               if(p.nicoInvisReviveTimer<=0){p.nicoInvisRevive=false;}
             }
+            // Stamina cap: invisible AND no knife → stamina capped at 80
+            const nicoInvisActive=p.nicoInvis||p.nicoInvisStill;
+            if(nicoInvisActive&&!p.nicoHasKnife){
+              p.maxStamina=Math.min(p.maxStamina||KSMAX,80);
+              p.stamina=Math.min(p.stamina,80);
+            } else if(!p.nicoBerserk){
+              p.maxStamina=KSMAX;
+            }
             // Blood trail timer
             if(p.nicoBloodTrailTimer>0){p.nicoBloodTrailTimer=Math.max(0,p.nicoBloodTrailTimer-dt);if(p.nicoBloodTrailTimer<=0)p.nicoBloodTrailTarget=null;}
-            // T — Berserk: +5% maxStamina/s regen, reset maxStamina on end
+            // T — Berserk: +5% maxStamina/s, reset maxStamina when ends
             if(p.nicoBerserk){
               p.nicoBerserkTimer=Math.max(0,p.nicoBerserkTimer-dt);
               const berserkRegen=KSMAX*0.05;
@@ -4484,38 +4399,42 @@ const Game={
           // ── AMAXGE5 ticks ──
           if(isAMaxGE5(p)&&p.role==='survivor'){
             if(p.amaxQCd>0)p.amaxQCd=Math.max(0,p.amaxQCd-dt);
-            // Torretas array tick
-            if(!p.amaxTorretas)p.amaxTorretas=[];
-            const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-            p.amaxTorretas=p.amaxTorretas.filter(t=>{
-              if(t.hp<=0)return false;
-              // Re-aim
-              t.turnTimer=Math.max(0,(t.turnTimer||0)-dt);
-              if(t.turnTimer<=0){
-                t.turnTimer=AMAX_Q_TURN_INTERVAL;
-                if(kk)t.ang=Math.atan2(kk.y-t.y,kk.x-t.x);
+            // Pea shooter ticks
+            if(p.amaxPeaActive){
+              // Check if killer destroys the lanzaguisantes (melee range attack)
+              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+              if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<TILE*1.1&&kk.m1Cd>0){
+                p.amaxPeaHp=(p.amaxPeaHp||AMAX_Q_HP)-20;
+                if(p.amaxPeaHp<=0){p.amaxPeaActive=false;p.amaxPeaProjs=[];p.amaxPeaHp=0;}
               }
-              // Fire
-              t.fireTimer=Math.max(0,(t.fireTimer||0)-dt);
-              if(t.fireTimer<=0){
-                t.fireTimer=AMAX_Q_FIRE_INTERVAL;
-                const range=(t.range||AMAX_Q_RANGE)*TILE;
-                if(kk&&Math.hypot(kk.x-t.x,kk.y-t.y)<=range){
-                  const ang=Math.atan2(kk.y-t.y,kk.x-t.x);
-                  const spd=AMAX_Q_PEA_SPEED*TILE;
-                  if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
-                  p.amaxPeaProjs.push({x:t.x,y:t.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:5.0});
+              if(p.amaxPeaActive){
+                // Re-aim toward killer
+                p.amaxPeaTurnTimer=Math.max(0,(p.amaxPeaTurnTimer||0)-dt);
+                if(p.amaxPeaTurnTimer<=0){
+                  p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
+                  if(kk)p.amaxPeaAng=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
+                }
+                // Fire pea projectile every interval
+                p.amaxPeaFireTimer=Math.max(0,(p.amaxPeaFireTimer||0)-dt);
+                if(p.amaxPeaFireTimer<=0){
+                  p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
+                  const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
+                  if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<=range){
+                    const ang=Math.atan2(kk.y-p.amaxPeaY,kk.x-p.amaxPeaX);
+                    const spd=AMAX_Q_PEA_SPEED*TILE;
+                    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
+                    p.amaxPeaProjs.push({x:p.amaxPeaX,y:p.amaxPeaY,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:3.5});
+                  }
                 }
               }
-              return true;
-            });
-            // Tick pea projectiles (cap at 20 to prevent runaway growth)
+            }
+            // Tick pea projectiles
             if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
-            if(p.amaxPeaProjs.length>20)p.amaxPeaProjs=p.amaxPeaProjs.slice(-20);
             p.amaxPeaProjs=p.amaxPeaProjs.filter(pj=>{
               pj.x+=pj.vx*dt; pj.y+=pj.vy*dt; pj.life-=dt;
               if(pj.life<=0||wallAt(pj.x,pj.y,4))return false;
               // Hit killer?
+              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
               if(kk&&Math.hypot(kk.x-pj.x,kk.y-pj.y)<TILE*0.7){
                 // Slow II on killer
                 kk.amaxPeaSlow=true;kk.amaxPeaSlowTimer=AMAX_Q_PEA_SLOW_DUR;
@@ -4732,7 +4651,7 @@ const Game={
   tryM1(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer'||p.m1Cd>0)return;
-    if(p.nicoCharge)return;
+    if(p.nicoBerserk||p.nicoCharge)return; // block M1 during berserk charge? no — allow
     if(isNicostos(p))Game.nicoFireM1(pid);
     else fireM1(pid);
   },
@@ -4746,7 +4665,6 @@ const Game={
     const NICO_HB_W=HB_W*0.98;
     const NICO_HB_H=HB_H*0.98;
     p.m1HitSet=new Set();
-    p.m1TorretaHitSet=new Set();
     for(let i=0;i<M1_SLASHES;i++){
       setTimeout(()=>{
         if(!S.running)return;
@@ -4755,12 +4673,12 @@ const Game={
         const cx=fp.x+Math.cos(ang)*(HB_OFFSET+NICO_HB_H/2);
         const cy=fp.y+Math.sin(ang)*(HB_OFFSET+NICO_HB_H/2);
         slashFX.push({x:cx,y:cy,ang,hw:NICO_HB_W/2,hh:NICO_HB_H/2,life:.2,maxLife:.2,idx:i,nicoSlash:true,hasKnife:fp.nicoHasKnife});
-        if(i===0){fp.m1HitSet=new Set();fp.m1TorretaHitSet=new Set();}
+        if(i===0)fp.m1HitSet=new Set();
         if(!fp.m1HitSet)fp.m1HitSet=new Set();
-        if(!fp.m1TorretaHitSet)fp.m1TorretaHitSet=new Set();
         Object.values(W.players).forEach(s=>{
           if(s.role!=='survivor'||!s.alive)return;
-          if(!fp.m1HitSet.has(s.id)&&(pointInRotRect(s.x,s.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)||Math.hypot(s.x-fp.x,s.y-fp.y)<TILE*.9)){
+          if(fp.m1HitSet.has(s.id))return;
+          if(pointInRotRect(s.x,s.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)||Math.hypot(s.x-fp.x,s.y-fp.y)<TILE*.9){
             fp.m1HitSet.add(s.id);
             applyShieldDamage(s,dmg);
             if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
@@ -4771,18 +4689,6 @@ const Game={
               fp.nicoBloodTrailTarget=s.id;fp.nicoBloodTrailTimer=6;
             }
             Game.checkWin();
-          }
-          // Torreta — solo 1 de 3 hitboxes golpea por swing
-          if(isAMaxGE5(s)&&(s.amaxTorretas||[]).length>0){
-            s.amaxTorretas.forEach((t,ti)=>{
-              const key=s.id+'_'+ti;
-              if(fp.m1TorretaHitSet.has(key))return;
-              if(Math.hypot(fp.x-t.x,fp.y-t.y)<TILE*1.3&&pointInRotRect(t.x,t.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)){
-                fp.m1TorretaHitSet.add(key);
-                t.hp-=20;
-              }
-            });
-            s.amaxTorretas=s.amaxTorretas.filter(t=>t.hp>0);
           }
         });
       },i*M1_DELAY*1000);
@@ -4846,22 +4752,21 @@ const Game={
   amaxDoQ(pid){
     const p=W.players[pid];
     if(!p||!p.alive||!isAMaxGE5(p))return;
-    if(p.amaxQCd>0)return;
-    if(!p.amaxTorretas)p.amaxTorretas=[];
-    if(!p.amaxPeaProjs)p.amaxPeaProjs=[];
-    // Max 1 torreta — destroy existing one if present
-    p.amaxTorretas=[];
+    if(p.amaxQCd>0||p.amaxPeaActive)return;
+    // Count other AMaxGE5 in the round
+    const amaxCount=Object.values(W.players).filter(x=>x.role==='survivor'&&x.alive&&isAMaxGE5(x)).length;
+    const rangeReduction=Math.max(0,(amaxCount-1)*0.20);
+    const effectiveRange=AMAX_Q_RANGE*(1-rangeReduction);
+    p.amaxPeaActive=true;
+    p.amaxPeaX=p.x;p.amaxPeaY=p.y;
+    p.amaxPeaRange=effectiveRange;
+    p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
+    p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
+    p.amaxPeaHp=AMAX_Q_HP;
     p.amaxPeaProjs=[];
+    // Aim toward killer
     const killer=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    const ang=killer?Math.atan2(killer.y-p.y,killer.x-p.x):p.facing;
-    p.amaxTorretas.push({
-      x:p.x,y:p.y,
-      ang:ang,
-      hp:AMAX_Q_HP,
-      fireTimer:AMAX_Q_FIRE_INTERVAL,
-      turnTimer:AMAX_Q_TURN_INTERVAL,
-      range:AMAX_Q_RANGE
-    });
+    p.amaxPeaAng=killer?Math.atan2(killer.y-p.amaxPeaY,killer.x-p.amaxPeaX):p.facing;
     p.amaxQCd=AMAX_Q_CD;
   },
 
@@ -5144,7 +5049,6 @@ const Game={
   doReturnToLobby(){
     S.running=false;
     S.isDeadSpec=false;
-    UI.resetRoundHUD();
     GameAudio.stopAll();
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
@@ -5245,7 +5149,7 @@ const Game={
         gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
         killerChar:p.killerChar||'slasher',
         survivorChar:p.survivorChar||'noob',
-        amaxTorretas:p.amaxTorretas||[],amaxPeaProjs:p.amaxPeaProjs||[],amaxQCd:p.amaxQCd||0,
+        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],
         amaxHealing:p.amaxHealing||false,amaxHealTimer:p.amaxHealTimer||0,amaxHealAccum:p.amaxHealAccum||0,amaxECd:p.amaxECd||0,amaxRUnlocked:p.amaxRUnlocked||false,amaxRUses:p.amaxRUses||0,
         amaxShielding:p.amaxShielding||false,amaxShieldTimer:p.amaxShieldTimer||0,amaxRCd:p.amaxRCd||0,amaxShieldHit:p.amaxShieldHit||false,
         amaxRevealed:p.amaxRevealed||false,amaxRevealTimer:p.amaxRevealTimer||0,
@@ -5321,7 +5225,10 @@ const Game={
         if(d.killerChar)p.killerChar=d.killerChar;
         if(d.survivorChar)p.survivorChar=d.survivorChar;
         if(d.amaxQCd!==undefined){
-          p.amaxQCd=d.amaxQCd||0;p.amaxTorretas=d.amaxTorretas||[];p.amaxPeaProjs=d.amaxPeaProjs||[];
+          p.amaxQCd=d.amaxQCd||0;p.amaxPeaX=d.amaxPeaX||0;p.amaxPeaY=d.amaxPeaY||0;
+          p.amaxPeaActive=d.amaxPeaActive||false;p.amaxPeaFireTimer=d.amaxPeaFireTimer||0;
+          p.amaxPeaTurnTimer=d.amaxPeaTurnTimer||0;p.amaxPeaAng=d.amaxPeaAng||0;
+          p.amaxPeaHp=d.amaxPeaHp||0;p.amaxPeaProjs=d.amaxPeaProjs||[];
           p.amaxHealing=d.amaxHealing||false;p.amaxHealTimer=d.amaxHealTimer||0;p.amaxHealAccum=d.amaxHealAccum||0;
           p.amaxECd=d.amaxECd||0;p.amaxRUnlocked=d.amaxRUnlocked||false;p.amaxRUses=d.amaxRUses||0;
           p.amaxShielding=d.amaxShielding||false;p.amaxShieldTimer=d.amaxShieldTimer||0;p.amaxRCd=d.amaxRCd||0;
@@ -5766,9 +5673,9 @@ const Game={
         nicoAlphaSaved=nicoVisibleAlpha<1;
         if(nicoAlphaSaved){ctx.save();ctx.globalAlpha=nicoVisibleAlpha;}
 
-        const t2=Date.now()/1000;
         if(isNicostos(p)){
           // ── NICOSTOS — hoodie guy with knife ──
+          const t2=Date.now()/1000;
           ctx.shadowColor='rgba(80,0,160,0.5)';ctx.shadowBlur=12;
 
           // Berserk glow
@@ -5843,7 +5750,7 @@ const Game={
             // Guard
             ctx.fillStyle='#888';ctx.fillRect(-s*.1,s*.14,s*.2,s*.04);
             // Blade
-            const bladeG=ctx.createLinearGradient(0,s*.18,0,s*.18+s*.65);
+            const bladeG=ctx.createLinearGradient(-s*.035,s*.18,s*.035,s*.18);
             bladeG.addColorStop(0,'#c0c0c0');bladeG.addColorStop(1,'#777');
             ctx.fillStyle=bladeG;
             ctx.beginPath();ctx.moveTo(-s*.04,s*.18);ctx.lineTo(s*.04,s*.18);
@@ -5954,7 +5861,7 @@ const Game={
         ctx.fillRect(-s*.18,s*.22,s*.36,s*.05);
         ctx.strokeStyle='#888';ctx.lineWidth=s*.01;ctx.strokeRect(-s*.18,s*.22,s*.36,s*.05);
         // Blade
-        const bladeGrad=ctx.createLinearGradient(0,s*.27,0,s*.27+s*1.05);
+        const bladeGrad=ctx.createLinearGradient(-s*.06,s*.27,s*.06,s*.27);
         bladeGrad.addColorStop(0,'#a0a0a0');bladeGrad.addColorStop(0.4,'#ddd');bladeGrad.addColorStop(1,'#888');
         ctx.fillStyle=bladeGrad;
         ctx.beginPath();
@@ -6134,54 +6041,51 @@ const Game={
       if(gbAlpha<1)ctx.restore();
     });
 
-    // ── AMaxGE5: pea shooter visual (torretas) ──
+    // ── AMaxGE5: pea shooter visual ──
     Object.values(W.players).forEach(p=>{
-      if(!isAMaxGE5(p)||(p.amaxTorretas||[]).length===0)return;
-      const isOwner=p.id===myPid&&p.role==='survivor';
+      if(!p.alive||!isAMaxGE5(p)||!p.amaxPeaActive)return;
+      const px=p.amaxPeaX,py=p.amaxPeaY;
       const t2=Date.now()/400;
       const pulse=0.5+Math.sin(t2)*0.4;
-      (p.amaxTorretas||[]).forEach(t=>{
-        ctx.save();
-        // Plant base
-        ctx.beginPath();ctx.arc(t.x,t.y,TILE*.28,0,Math.PI*2);
-        ctx.fillStyle=`rgba(0,180,60,${0.55+pulse*.3})`;ctx.fill();
-        ctx.strokeStyle=`rgba(0,255,80,${0.5+pulse*.4})`;ctx.lineWidth=2;ctx.stroke();
-        ctx.shadowColor='rgba(0,200,60,.7)';ctx.shadowBlur=10*pulse;
-        ctx.font=`${TILE*.4}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText('🌱',t.x,t.y);
-        ctx.shadowBlur=0;
-        // HP bar above plant
-        const hpPct=Math.max(0,(t.hp||0)/AMAX_Q_HP);
-        const bw=TILE*.7,bh=4,bx2=t.x-bw/2,by2=t.y-TILE*.5;
-        ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx2,by2,bw,bh);
-        ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
-        ctx.fillRect(bx2,by2,bw*hpPct,bh);
-        ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
-        // Range ring — solo visible para la AMaxGE5 dueña
-        if(isOwner){
-          const range=(t.range||AMAX_Q_RANGE)*TILE;
-          ctx.beginPath();ctx.arc(t.x,t.y,range,0,Math.PI*2);
-          ctx.strokeStyle=`rgba(0,200,80,${0.10+pulse*0.08})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
-          // Fill semitransparente muy suave
-          ctx.fillStyle=`rgba(0,200,80,0.03)`;ctx.fill();
-        }
-        // Marker para todos los supervivientes (triángulo verde encima)
-        if(W.players[myPid]&&W.players[myPid].role==='survivor'){
-          ctx.fillStyle=`rgba(0,255,80,${0.6+pulse*0.3})`;
-          ctx.beginPath();
-          ctx.moveTo(t.x,t.y-TILE*.65);
-          ctx.lineTo(t.x-TILE*.18,t.y-TILE*.38);
-          ctx.lineTo(t.x+TILE*.18,t.y-TILE*.38);
-          ctx.closePath();ctx.fill();
-        }
-        ctx.restore();
-      });
+      // Plant base
+      ctx.save();
+      ctx.beginPath();ctx.arc(px,py,TILE*.28,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,180,60,${0.55+pulse*.3})`;ctx.fill();
+      ctx.strokeStyle=`rgba(0,255,80,${0.5+pulse*.4})`;ctx.lineWidth=2;ctx.stroke();
+      ctx.shadowColor='rgba(0,200,60,.7)';ctx.shadowBlur=10*pulse;
+      ctx.font=`${TILE*.4}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('🌱',px,py);
+      ctx.shadowBlur=0;
+      // HP bar above plant
+      const hpPct=Math.max(0,(p.amaxPeaHp||0)/AMAX_Q_HP);
+      const bw=TILE*.7,bh=4,bx2=px-bw/2,by2=py-TILE*.5;
+      ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx2,by2,bw,bh);
+      ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
+      ctx.fillRect(bx2,by2,bw*hpPct,bh);
+      ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
+      // Range ring — solo visible para la AMaxGE5 dueña
+      if(W.players[myPid]&&W.players[myPid].id===p.id){
+        const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
+        ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(0,200,80,${0.10+pulse*0.08})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
+        ctx.fillStyle=`rgba(0,200,80,0.03)`;ctx.fill();
+      }
+      // Marker triangulo verde — visible para todos los supervivientes
+      if(W.players[myPid]&&W.players[myPid].role==='survivor'){
+        ctx.fillStyle=`rgba(0,255,80,${0.6+pulse*0.3})`;
+        ctx.beginPath();
+        ctx.moveTo(px,py-TILE*.65);
+        ctx.lineTo(px-TILE*.18,py-TILE*.38);
+        ctx.lineTo(px+TILE*.18,py-TILE*.38);
+        ctx.closePath();ctx.fill();
+      }
+      ctx.restore();
     });
     // ── AMaxGE5: traveling pea projectiles ──
     Object.values(W.players).forEach(p=>{
       if(!isAMaxGE5(p)||!p.amaxPeaProjs||!p.amaxPeaProjs.length)return;
       p.amaxPeaProjs.forEach(pj=>{
-        const ag=Math.min(1,pj.life/5.0); // alpha based on remaining life
+        const ag=Math.min(1,pj.life/3.5);
         ctx.save();
         ctx.shadowColor='rgba(60,255,60,.9)';ctx.shadowBlur=10;
         ctx.beginPath();ctx.arc(pj.x,pj.y,5,0,Math.PI*2);
@@ -7454,23 +7358,6 @@ const Inventory={
       Stats.equippedSurvivor=isEquipped?'':c.id;
     }
     Stats.save();
-    const me=S.players.find(p=>p.id===S.myId);
-    if(me){
-      me.equippedKiller=Stats.equippedKiller||'';
-      me.equippedSurvivor=Stats.equippedSurvivor||'';
-    }
-    if(S.isHost){
-      Net.broadcast({t:'list',players:S.players,code:S.code||''});
-    }else{
-      Net.sendHost({t:'lobbyPos',id:S.myId,
-        x:S.lobbyP.x,y:S.lobbyP.y,facing:S.lobbyP.facing,
-        name:(me||{}).name||Stats.username||'?',username:Stats.username||'?',
-        timePlayed:Stats.timePlayed,survWins:Stats.survWins,killWins:Stats.killWins,
-        malicia:Stats.malicia||0,afk:S.isAfk,
-        equippedKiller:Stats.equippedKiller||'',equippedSurvivor:Stats.equippedSurvivor||''});
-    }
-    UI.renderLobbyPlayers();
-    UI.renderStatsPanel();
     this._select(c.id);
     this._renderGrid();
   },
