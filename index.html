@@ -1867,8 +1867,8 @@ const SaveFile = {
 const TILE = 36;
 const MAP_W = 65, MAP_H = 45;
 const VP_TILES_W = 14;
-const SW = 75, SR = 140;   // Survivor: walk 75, run 140
-const KW = 80, KR = 150;   // Killer:   walk 80, run 150
+const SW = 80, SR = 140;   // Survivor: walk 80, run 140
+const KW = 90, KR = 150;   // Killer:   walk 90, run 150
 const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
 const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
@@ -1915,7 +1915,7 @@ const ENRAGE_STAM_CAP_DUR = 6.5; // tiempo para alcanzar el cap
 const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar ENRAGED
 
 // ── NICOSTOS — constantes ──
-const NICO_WALK = 78;       // walk fijo 78 px/s
+const NICO_WALK = KW * 0.97;
 const NICO_RUN  = KR * 0.97;
 const NICO_M1_DMG = 22.5;
 const NICO_M1_DMG_NO_KNIFE = 10;
@@ -1929,7 +1929,7 @@ const NICO_Q_SLOW_DUR = 1.0;
 const NICO_Q_SPEED = KR * 2.0;
 const NICO_Q_MAX_TURN = 0.6;
 const NICO_E_CD = 10;
-const NICO_E_KNIFE_RECOVER = 30;
+const NICO_E_KNIFE_RECOVER = 30; // cuchillo regresa después de 30s
 const NICO_E_DMG = 1;
 const NICO_E_MARK_DUR = 10;
 const NICO_E_KNIFE_SPEED = KR * 3.2;
@@ -1963,18 +1963,18 @@ const LOBBY_SPEED = 160; // px/s movement in lobby world
 
 // ── AMAXGE5 CONSTANTS ──
 const AMAX_HP = 90;
-const AMAX_Q_CD = 40;        // pea shooter cooldown
+const AMAX_Q_CD = 35;        // pea shooter cooldown
 const AMAX_Q_RANGE = 40;     // in studs (tiles)
-const AMAX_Q_FIRE_INTERVAL = 5; // fire every 5s
+const AMAX_Q_FIRE_INTERVAL = 2; // fire every 2s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
 const AMAX_Q_BLINDNESS_DUR = 0.8; // blindness I duration
 const AMAX_Q_REVEAL_DUR = 5;    // revealed duration
-const AMAX_Q_PEA_SPEED = 8;     // pea projectile speed in tiles/s
-const AMAX_Q_PEA_SLOW_DUR = 3.0; // Slow II duration on killer
+const AMAX_Q_PEA_SPEED = 20;    // pea projectile speed in tiles/s (más rápido)
+const AMAX_Q_PEA_SLOW_DUR = 2.5; // Slow II duration on killer
 const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
 const AMAX_Q_HP = 40;           // lanzaguisantes hitpoints
 const AMAX_E_CD = 20;
-const AMAX_E_HEAL_RATE = 2.4;   // HP per second (60% more than original 1.5)
+const AMAX_E_HEAL_RATE = 6.0;   // HP per second → 30 HP total over 5s max
 const AMAX_E_MAX_DUR = 5;       // max heal duration per use
 const AMAX_E_UNLOCK_DUR = 3;    // must heal 3s to unlock R
 const AMAX_R_CD = 36;
@@ -2369,7 +2369,7 @@ const UI={
       }
       // AMaxGE5 effects
       if(me.amaxShielding&&me.amaxShieldTimer>0)effects.push({icon:'🔨',name:'ESCUDITO',timer:me.amaxShieldTimer,type:'positive'});
-      if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN '+(me.amaxHealHps||2.4).toFixed(1)+'/s',timer:me.amaxHealTimer,type:'positive'});
+      if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN 6.0/s',timer:me.amaxHealTimer,type:'positive'});
       if(me.amaxRevealed&&me.amaxRevealTimer>0)effects.push({icon:'👁',name:'REVELADO',timer:me.amaxRevealTimer,type:'neutral'});
       if(me.amaxPeaSlow&&me.amaxPeaSlowTimer>0)effects.push({icon:'🫛',name:'LENTITUD II',timer:me.amaxPeaSlowTimer,type:'debuff'});
       if(me.enraged&&me.enrageTimer>0)effects.push({icon:'😡',name:'ENRAGED',timer:me.enrageTimer,type:'positive'});
@@ -3889,7 +3889,12 @@ function fireM1(killerPid){
   }
 }
 // ── Helper: aplica daño absorbiendo ssShield primero ──
+// Para AMaxGE5: enforce per-hit immunity of 0.18s so rapid slashes register one at a time
 function applyShieldDamage(s, dmg){
+  if(isAMaxGE5&&isAMaxGE5(s)&&s.role==='survivor'){
+    if((s.amaxHitCd||0)>0) return; // hit cooldown active — ignore this hit
+    s.amaxHitCd=0.18; // 180ms per-hit immunity
+  }
   if(!s||!s.alive)return;
   if((s.ssShield||0)>0&&s.ssActive){
     const absorbed=Math.min(s.ssShield,dmg);
@@ -4436,14 +4441,6 @@ const Game={
                 p.nicoInvisSpeedActive=false;
               }
             }
-            // Stamina cap: while invisible AND knife is gone, max stamina capped at 80
-            const nicoInvisActive=p.nicoInvis||p.nicoInvisStill;
-            if(nicoInvisActive&&!p.nicoHasKnife){
-              p.maxStamina=Math.min(p.maxStamina||KSMAX,80);
-              p.stamina=Math.min(p.stamina,80);
-            } else if(!p.nicoBerserk){
-              p.maxStamina=KSMAX;
-            }
             // Post-invis speed timer from nicoBreakInvis
             if(p.nicoPostInvisSpeedTimer>0){
               p.nicoPostInvisSpeedTimer=Math.max(0,(p.nicoPostInvisSpeedTimer||0)-dt);
@@ -4457,15 +4454,20 @@ const Game={
             // T — Berserk
             if(p.nicoBerserk){
               p.nicoBerserkTimer=Math.max(0,p.nicoBerserkTimer-dt);
-              // Stamina regen: +5% of max stamina per second
-              const berserkRegen=KSMAX*0.05;
-              p.stamina=Math.min(KSMAX,p.stamina+berserkRegen*dt);
-              if(p.nicoBerserkTimer<=0){p.nicoBerserk=false;p.nicoBerserkStamGained=0;p.maxStamina=KSMAX;}
+              // Stamina regen
+              const canGain=(p.nicoBerserkStamGained||0)<NICO_T_STAM_MAX;
+              if(canGain){
+                const gain=Math.min(NICO_T_STAM_REGEN*dt,NICO_T_STAM_MAX-(p.nicoBerserkStamGained||0));
+                p.stamina=Math.min(KSMAX,p.stamina+gain);
+                p.nicoBerserkStamGained=(p.nicoBerserkStamGained||0)+gain;
+              }
+              if(p.nicoBerserkTimer<=0){p.nicoBerserk=false;p.nicoBerserkStamGained=0;}
             }
           }
           // ── AMAXGE5 ticks ──
           if(isAMaxGE5(p)&&p.role==='survivor'){
             if(p.amaxQCd>0)p.amaxQCd=Math.max(0,p.amaxQCd-dt);
+            if((p.amaxHitCd||0)>0)p.amaxHitCd=Math.max(0,p.amaxHitCd-dt);
             // Pea shooter ticks
             if(p.amaxPeaActive){
               // Check if killer destroys the lanzaguisantes (melee range attack)
@@ -4623,11 +4625,23 @@ const Game={
       UI.updateHUD();
       if(!S.isDeadSpec)UI.showPrompts();
 
-      // Chase audio — update every tick for survivor (or spectator watching a survivor)
-      if(!S.isDeadSpec&&me&&me.role==='survivor'&&me.alive){
-        const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
-        if(killer) GameAudio.updateChase(Math.hypot(me.x-killer.x,me.y-killer.y));
-        else GameAudio.updateChase(99999);
+      // Chase audio — se actualiza cada tick para supervivientes Y para el killer
+      if(!S.isDeadSpec&&me&&me.alive){
+        if(me.role==='survivor'){
+          // Superviviente: distancia al killer
+          const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
+          if(killer) GameAudio.updateChase(Math.hypot(me.x-killer.x,me.y-killer.y));
+          else GameAudio.updateChase(99999);
+        } else if(me.role==='killer'){
+          // Killer: escucha chase según el superviviente vivo más cercano
+          const aliveSurvivors=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
+          if(aliveSurvivors.length>0){
+            const minDist=Math.min(...aliveSurvivors.map(s=>Math.hypot(me.x-s.x,me.y-s.y)));
+            GameAudio.updateChase(minDist);
+          } else {
+            GameAudio.updateChase(99999);
+          }
+        }
       }
 
       S.raf=requestAnimationFrame(tick);
@@ -4729,43 +4743,27 @@ const Game={
     nicoBreakInvis(p); // first attack breaks invisibility
     p.m1Cd=NICO_M1_CD;
     const dmg=p.nicoHasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
-    // Nicostos M1: 3 sequential hitboxes like Slasher, but 2% smaller in width and height
-    const NICO_HB_W=HB_W*0.98;
-    const NICO_HB_H=HB_H*0.98;
-    const hasKnife=p.nicoHasKnife;
-    if(!p.m1HitSet)p.m1HitSet=new Set();
-    p.m1HitSet=new Set();
-    for(let i=0;i<M1_SLASHES;i++){
-      setTimeout(()=>{
-        if(!S.running)return;
-        const fp=W.players[pid];if(!fp||!fp.alive)return;
-        const ang=fp.facing;
-        const cx=fp.x+Math.cos(ang)*(HB_OFFSET+NICO_HB_H/2);
-        const cy=fp.y+Math.sin(ang)*(HB_OFFSET+NICO_HB_H/2);
-        slashFX.push({x:cx,y:cy,ang,hw:NICO_HB_W/2,hh:NICO_HB_H/2,life:.2,maxLife:.2,idx:i,nicoSlash:true,hasKnife});
-        if(i===0)fp.m1HitSet=new Set();
-        if(!fp.m1HitSet)fp.m1HitSet=new Set();
-        Object.values(W.players).forEach(s=>{
-          if(s.role!=='survivor'||!s.alive)return;
-          if(fp.m1HitSet.has(s.id))return;
-          if(pointInRotRect(s.x,s.y,cx,cy,NICO_HB_W/2,NICO_HB_H/2,ang)||Math.hypot(s.x-fp.x,s.y-fp.y)<TILE*.9){
-            fp.m1HitSet.add(s.id);
-            applyShieldDamage(s,dmg);
-            // Nicostos does NOT apply bleed on M1
-            if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
-              W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-              // Track kill for berserk unlock
-              fp.nicoKillCount=(fp.nicoKillCount||0)+1;
-              if(fp.nicoKillCount>0&&fp.nicoKillCount%NICO_T_KILLS_REQ===0){fp.nicoBerserkReady=Math.min((fp.nicoBerserkReady||0)+1,1);}
-            } else {
-              // Passive: blood trail to nearest survivor from hit
-              fp.nicoBloodTrailTarget=s.id;fp.nicoBloodTrailTimer=6;
-            }
-            Game.checkWin();
-          }
-        });
-      },i*M1_DELAY*1000);
-    }
+    const ang=p.facing;
+    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
+    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+    slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2,maxLife:.2,idx:0,nicoSlash:true,hasKnife:p.nicoHasKnife});
+    Object.values(W.players).forEach(s=>{
+      if(s.role!=='survivor'||!s.alive)return;
+      if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
+        applyShieldDamage(s,dmg);
+        // Nicostos does NOT apply bleed on M1
+        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+          W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+          // Track kill for berserk unlock
+          p.nicoKillCount=(p.nicoKillCount||0)+1;
+          if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+        } else {
+          // Passive: blood trail to nearest survivor from hit
+          p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
+        }
+        Game.checkWin();
+      }
+    });
   },
 
   doQ(pid){
@@ -4837,6 +4835,7 @@ const Game={
     p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
     p.amaxPeaHp=AMAX_Q_HP;
     p.amaxPeaProjs=[];
+    p.amaxPeaMarked=true; // torreta marcada para todos los supervivientes
     // Aim toward killer
     const killer=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
     p.amaxPeaAng=killer?Math.atan2(killer.y-p.amaxPeaY,killer.x-p.amaxPeaX):p.facing;
@@ -5223,7 +5222,7 @@ const Game={
         gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
         killerChar:p.killerChar||'slasher',
         survivorChar:p.survivorChar||'noob',
-        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],
+        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],amaxPeaMarked:p.amaxPeaMarked||false,
         amaxHealing:p.amaxHealing||false,amaxHealTimer:p.amaxHealTimer||0,amaxHealAccum:p.amaxHealAccum||0,amaxECd:p.amaxECd||0,amaxRUnlocked:p.amaxRUnlocked||false,amaxRUses:p.amaxRUses||0,
         amaxShielding:p.amaxShielding||false,amaxShieldTimer:p.amaxShieldTimer||0,amaxRCd:p.amaxRCd||0,amaxShieldHit:p.amaxShieldHit||false,
         amaxRevealed:p.amaxRevealed||false,amaxRevealTimer:p.amaxRevealTimer||0,
@@ -5300,7 +5299,7 @@ const Game={
         if(d.survivorChar)p.survivorChar=d.survivorChar;
         if(d.amaxQCd!==undefined){
           p.amaxQCd=d.amaxQCd||0;p.amaxPeaX=d.amaxPeaX||0;p.amaxPeaY=d.amaxPeaY||0;
-          p.amaxPeaActive=d.amaxPeaActive||false;p.amaxPeaFireTimer=d.amaxPeaFireTimer||0;
+          p.amaxPeaActive=d.amaxPeaActive||false;p.amaxPeaFireTimer=d.amaxPeaFireTimer||0;p.amaxPeaMarked=d.amaxPeaMarked||false;
           p.amaxPeaTurnTimer=d.amaxPeaTurnTimer||0;p.amaxPeaAng=d.amaxPeaAng||0;
           p.amaxPeaHp=d.amaxPeaHp||0;p.amaxPeaProjs=d.amaxPeaProjs||[];
           p.amaxHealing=d.amaxHealing||false;p.amaxHealTimer=d.amaxHealTimer||0;p.amaxHealAccum=d.amaxHealAccum||0;
@@ -6137,10 +6136,21 @@ const Game={
       ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
       ctx.fillRect(bx2,by2,bw*hpPct,bh);
       ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
-      // Range ring
+      // Range ring — visible para el dueño, semi-visible para otros supervivientes
       const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
+      const isMyTurret=(p.id===S.myId);
+      const rangeAlpha=isMyTurret?(0.45+pulse*0.2):(0.10+pulse*0.08);
       ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
-      ctx.strokeStyle=`rgba(0,200,80,${0.12+pulse*0.1})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
+      ctx.strokeStyle=`rgba(0,220,80,${rangeAlpha})`;ctx.lineWidth=isMyTurret?2:1.2;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
+      // Torreta marcada: beacon visual para todos los supervivientes
+      if(p.amaxPeaMarked){
+        const beaconA=0.55+Math.sin(t2*1.8)*0.3;
+        ctx.beginPath();ctx.arc(px,py,TILE*.5,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(80,255,200,${beaconA})`;ctx.lineWidth=2;ctx.setLineDash([4,6]);ctx.stroke();ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(px,py-TILE*1.2);ctx.lineTo(px,py-TILE*.5);
+        ctx.strokeStyle=`rgba(80,255,200,${beaconA})`;ctx.lineWidth=2;ctx.stroke();
+        ctx.font=`${TILE*.35}px monospace`;ctx.textAlign='center';ctx.fillText('📍',px,py-TILE*1.45);
+      }
       ctx.restore();
     });
     // ── AMaxGE5: traveling pea projectiles ──
@@ -6731,10 +6741,15 @@ const GameAudio={
   // lobby.mp3                    — raíz
   // mapas/ronda.mp3              — música de mapa
   // lms/soul.mp3                 — último superviviente
-  // slasher/layer1.mp3           — chase layer 1 (lejos)
+  // slasher/layer1.mp3           — chase layer 1 (lejos)   ← loopea al entrar, reinicia al salir y volver
   // slasher/layer2.mp3           — chase layer 2 (cerca)
   // slasher/layer3.mp3           — chase layer 3 (muy cerca)
-  // slasher/chase theme.mp3      — chase theme (cuando llega a layer3, no para hasta salir de layer1)
+  // slasher/chase theme.mp3      — chase theme (latch: no para hasta salir de layer1)
+  //
+  // COMPORTAMIENTO:
+  //  • Cada layer reinicia desde el principio al entrar y loopea mientras el jugador esté en rango.
+  //  • El killer escucha las mismas layers/chase que el superviviente más cercano.
+  //  • En LMS también suenan layers y chase theme.
 
   // ── Distancias en píxeles (mundo) ──
   DIST_L1: TILE * 18,   // empieza layer 1
@@ -6747,8 +6762,8 @@ const GameAudio={
   _map:   null,
   _lms:   null,
   _l1:    null, _l2: null, _l3: null, _ct: null,
-  _chaseActive: false,   // chase theme está sonando
-  _currentLayer: 0,      // 0=mapa, 1, 2, 3, 4=chase
+  _chaseActive: false,   // chase theme está sonando (latch)
+  _currentLayer: 0,      // 0=mapa/lms-base, 1, 2, 3, 4=chase
   _mode: 'none',         // 'lobby' | 'map' | 'lms'
 
   _mkAudio(src, loop=true, vol=0.5){
@@ -6782,6 +6797,19 @@ const GameAudio={
     },50);
   },
 
+  // Inicia/reinicia un track de layer desde el principio y lo fadea in
+  _startLayer(a, vol, ms=300){
+    if(!a) return;
+    try{ a.pause(); a.currentTime=0; }catch(e){}
+    this._fadeIn(a, vol, ms);
+  },
+
+  // Para un track de layer con fade
+  _stopLayer(a, ms=350){
+    if(!a) return;
+    this._fadeOut(a, ms);
+  },
+
   playLobby(){
     this.stopAll();
     this._mode='lobby';
@@ -6794,14 +6822,11 @@ const GameAudio={
     this._mode='map';
     this._map=this._mkAudio('mapas/ronda.mp3',true,0.50);
     this._fadeIn(this._map,0.50,800);
-    // Pre-load chase layers silently
+    // Pre-cargar layers en silencio (no reproducir — se inician al entrar en rango)
     this._l1=this._mkAudio('slasher/layer1.mp3',true,0);
     this._l2=this._mkAudio('slasher/layer2.mp3',true,0);
     this._l3=this._mkAudio('slasher/layer3.mp3',true,0);
     this._ct=this._mkAudio('slasher/chase theme.mp3',true,0);
-    [this._l1,this._l2,this._l3,this._ct].forEach(a=>{
-      if(a){ a.play().catch(()=>{}); } // start paused-silent so they're in sync
-    });
     this._chaseActive=false;
     this._currentLayer=0;
   },
@@ -6811,51 +6836,90 @@ const GameAudio={
     this._mode='lms';
     this._lms=this._mkAudio('lms/soul.mp3',true,0.60);
     this._fadeIn(this._lms,0.60,600);
+    // En LMS no se cargan layers ni chase theme
+    this._l1=null;this._l2=null;this._l3=null;this._ct=null;
+    this._chaseActive=false;
+    this._currentLayer=0;
   },
 
-  // Called every game tick from mainLoop with survivor's distance to killer (px)
+  // Llamado cada tick desde mainLoop con la distancia al killer (px).
+  // Válido tanto para supervivientes como para el killer (distancia al superviviente más cercano).
+  // Solo funciona en modo 'map' — en LMS no suenan layers ni chase.
   updateChase(distPx){
     if(this._mode!=='map') return;
 
-    const wasChase=this._chaseActive;
     const d=distPx;
 
-    // Determine target layer
-    let targetLayer=0; // map music
+    // Determinar layer objetivo
+    let targetLayer=0;
     if(d<=this.DIST_CT)       targetLayer=4; // chase theme
     else if(d<=this.DIST_L3)  targetLayer=3;
     else if(d<=this.DIST_L2)  targetLayer=2;
     else if(d<=this.DIST_L1)  targetLayer=1;
 
-    // Chase theme latch: once activated, don't stop until outside DIST_L1
+    // Latch del chase theme: no para hasta salir de L1
     if(this._chaseActive){
       if(d>this.DIST_L1){
-        // Far enough — exit chase theme
         this._chaseActive=false;
         targetLayer= d<=this.DIST_L3?3 : d<=this.DIST_L2?2 : d<=this.DIST_L1?1 : 0;
       } else {
-        // Still inside L1 range — chase theme stays at minimum
         targetLayer=Math.max(targetLayer,4);
       }
     }
     if(targetLayer===4) this._chaseActive=true;
 
-    if(targetLayer===this._currentLayer) return; // no change
+    if(targetLayer===this._currentLayer) return; // sin cambio
+    const prevLayer=this._currentLayer;
     this._currentLayer=targetLayer;
 
-    const vols={map:0, l1:0, l2:0, l3:0, ct:0};
-    if(targetLayer===0) vols.map=0.50;
-    else if(targetLayer===1){ vols.l1=0.40; }
-    else if(targetLayer===2){ vols.l1=0.25; vols.l2=0.45; }
-    else if(targetLayer===3){ vols.l2=0.20; vols.l3=0.50; }
-    else { vols.l3=0.15; vols.ct=0.60; }
+    // ── Volúmenes de música de fondo (mapa o LMS) ──
+    const bgTrack=this._mode==='lms'?this._lms:this._map;
+    const bgVol  =this._mode==='lms'?0.60:0.50;
 
-    const ramp=(a,v)=>{ if(!a) return; const step=Math.abs(v-a.volume)/8; const iv=setInterval(()=>{ if(!a)return clearInterval(iv); if(v>a.volume) a.volume=Math.min(v,a.volume+step); else a.volume=Math.max(v,a.volume-step); if(Math.abs(a.volume-v)<0.01){a.volume=v;clearInterval(iv);} },50); };
-    ramp(this._map, vols.map);
-    ramp(this._l1,  vols.l1);
-    ramp(this._l2,  vols.l2);
-    ramp(this._l3,  vols.l3);
-    ramp(this._ct,  vols.ct);
+    // Salir del sistema de layers → volver al fondo
+    if(targetLayer===0){
+      if(bgTrack){ this._fadeIn(bgTrack, bgVol, 500); }
+      this._stopLayer(this._l1,350);
+      this._stopLayer(this._l2,350);
+      this._stopLayer(this._l3,350);
+      this._stopLayer(this._ct,350);
+      return;
+    }
+
+    // Entrar en cualquier layer → bajar fondo
+    if(prevLayer===0 && bgTrack){ this._fadeOut(bgTrack, 400); }
+
+    // ── Detener layers que ya no aplican y arrancar la nueva ──
+    // Layer 1: loopea sola mientras el jugador esté en L1 (sale al L2 o fuera)
+    if(targetLayer===1){
+      this._startLayer(this._l1, 0.42, 300);
+      this._stopLayer(this._l2, 300);
+      this._stopLayer(this._l3, 300);
+      this._stopLayer(this._ct, 400);
+    }
+    // Layer 2: L1 en bg suave + L2 protagonista
+    else if(targetLayer===2){
+      // Si veníamos de fuera (0) arrancamos L1 también como base
+      if(prevLayer===0 || prevLayer>2){ this._startLayer(this._l1, 0.18, 300); }
+      else if(prevLayer===1){ /* L1 ya suena, solo ajustar volumen */ if(this._l1) this._l1.volume=0.18; }
+      this._startLayer(this._l2, 0.47, 300);
+      this._stopLayer(this._l3, 300);
+      this._stopLayer(this._ct, 400);
+    }
+    // Layer 3: L2 en bg suave + L3 protagonista
+    else if(targetLayer===3){
+      if(prevLayer<2){ this._startLayer(this._l1, 0.10, 200); }
+      if(prevLayer<3){ this._startLayer(this._l2, 0.18, 250); }
+      else { if(this._l2) this._l2.volume=0.18; }
+      this._startLayer(this._l3, 0.52, 300);
+      this._stopLayer(this._ct, 400);
+    }
+    // Chase theme: L3 en bg + CT protagonista
+    else if(targetLayer===4){
+      if(prevLayer<3){ this._startLayer(this._l3, 0.15, 200); }
+      else { if(this._l3) this._l3.volume=0.15; }
+      this._startLayer(this._ct, 0.62, 350);
+    }
   },
 
   stopAll(){
@@ -6991,6 +7055,30 @@ const STORE_KILLERS=[
   { id:'slasher', name:'SLASHER', price:0, free:true, icon:'🗡', author:'Forsaken',
     tagline:'El asesino original. Rápido, letal y sin piedad.',
     stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
+    statsDetail:[
+      {lbl:'Dificultad',val:'2/5'},
+      {lbl:'Vida',val:'110'},
+      {lbl:'Vel. normal',val:'16.0 u/s'},
+      {lbl:'Vel. sprint',val:'26.7 u/s'},
+      {lbl:'Vel. ENRAGED',val:'19.5 u/s (sin sprint)'},
+      {lbl:'Stamina total',val:'110'},
+      {lbl:'Stamina pérd/seg',val:'9.5'},
+      {lbl:'Stamina gan/seg',val:'21'},
+      {lbl:'── M1 TAJO ──',val:''},
+      {lbl:'Daño',val:'20 (ENRAGED: 25)'},
+      {lbl:'Golpes',val:'3 seguidos'},
+      {lbl:'CD',val:'1.9s (ENRAGED: 0.8s)'},
+      {lbl:'── Q BEHEAD ──',val:''},
+      {lbl:'Daño',val:'20 (ENRAGED: 35)'},
+      {lbl:'CD',val:'18s (ENRAGED: 12s)'},
+      {lbl:'── R ENRAGED ──',val:''},
+      {lbl:'Duración',val:'14s'},
+      {lbl:'CD',val:'30s'},
+      {lbl:'── COMBO ──',val:''},
+      {lbl:'Daño total',val:'50 (ENRAGED: 70)'},
+      {lbl:'Golpes',val:'5'},
+      {lbl:'CD',val:'32s (ENRAGED: 24s)'},
+    ],
     abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas con su machete.'},{key:'Q',desc:'Behead — Dash hacia adelante + golpe devastador.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño temporalmente.'}],
     skins:[] },
   { id:'nicostos', name:'NICOSTOS', price:1200, free:false, icon:'🔪', author:'nicolaselprocrack123',
@@ -7004,12 +7092,36 @@ const STORE_KILLERS=[
     ],
     statsDetail:[
       {lbl:'Dificultad',val:'3/5'},
-      {lbl:'Vida',val:'1567'},
-      {lbl:'Velocidad normal',val:'15.51 u/s'},
-      {lbl:'Velocidad sprint',val:'21.34 u/s'},
+      {lbl:'Vida',val:'110'},
+      {lbl:'── CON CUCHILLO ──',val:''},
+      {lbl:'Vel. normal',val:'15.51 u/s'},
+      {lbl:'Vel. sprint',val:'26.65 u/s'},
+      {lbl:'M1 daño',val:'22.5'},
+      {lbl:'── SIN CUCHILLO ──',val:''},
+      {lbl:'Vel. normal',val:'17.06 u/s (+10%)'},
+      {lbl:'Vel. sprint',val:'29.32 u/s (+10%)'},
+      {lbl:'M1 daño',val:'10'},
+      {lbl:'── GENERAL ──',val:''},
       {lbl:'Stamina total',val:'110'},
-      {lbl:'Stamina pérdida/seg',val:'10'},
-      {lbl:'Stamina ganada/seg',val:'20'}
+      {lbl:'Stamina pérd/seg',val:'9.5'},
+      {lbl:'Stamina gan/seg',val:'21'},
+      {lbl:'M1 CD',val:'1.9s'},
+      {lbl:'── Q EMBESTIDA ──',val:''},
+      {lbl:'Daño agarre',val:'10'},
+      {lbl:'Daño slam',val:'20'},
+      {lbl:'CD',val:'25s'},
+      {lbl:'── E ¿QUIERES? ──',val:''},
+      {lbl:'Daño cuchillo',val:'1'},
+      {lbl:'Recupera cuchillo',val:'20s'},
+      {lbl:'CD (al recuperar)',val:'10s'},
+      {lbl:'── R ESTRÉS AGUDO ──',val:''},
+      {lbl:'Duración máx',val:'10s'},
+      {lbl:'CD',val:'30s'},
+      {lbl:'── T BERSERK ──',val:''},
+      {lbl:'Kills requeridas',val:'2'},
+      {lbl:'Duración',val:'20s'},
+      {lbl:'Stam regen berserk',val:'35/seg'},
+      {lbl:'Stam máx berserk',val:'80'},
     ],
     abilities:[
       {key:'M1',desc:'Cuchillazo — 22.5 de daño con cuchillo (19 sin él). CD: 1.9s. Sin cuchillo se mueve un 20% más veloz.'},
@@ -7044,8 +7156,8 @@ const STORE_SURVIVORS=[
       {lbl:'Stamina total',val:'igual a NOOB'}
     ],
     abilities:[
-      {key:'Q',desc:'Referencia?????!!!!! — Planta un guisante que dispara cada 5s a 40 studs. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
-      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 1.5 HP/seg. Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
+      {key:'Q',desc:'Referencia?????!!!!! — Planta un guisante que dispara cada 2s a 40 studs. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
+      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 6 HP/seg (30 HP total en 5s). Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
       {key:'R',desc:'Escudito para siempre — Solo disponible tras usar Lore de Fnaf con éxito. Usa el martillo como escudo: invulnerable 2.5s. Si el asesino golpea durante el escudo: contraataque automático que aleja 5 studs y stunea 2s. Si nadie ataca durante el escudo: Lentitud II por 3s y Mareo I por 2s. En LMS: invulnerabilidad reducida a 1s. CD: 45s.'}
     ],
     lore:'Alejandro estaba en su casa después de la piscina, listo para estudiar francés para su examen. De pronto, un fuerte dolor de cabeza lo interrumpió y no lo dejó concentrarse. Cansado, decidió recostarse y se quedó dormido. Al despertar, sintió que algo no estaba bien, como si el ambiente hubiera cambiado. Se levantó lentamente y, sin saber por qué, tomó un martillo cerca de su cuarto. Al salir, ya no estaba en su mundo, sino en un lugar extraño y oscuro. Allí encontró a otros supervivientes igual de confundidos. A pesar del miedo, Alejandro se mantuvo positivo y animó al grupo. Desde ese momento, decidió proteger a los demás y no rendirse.',
@@ -7161,6 +7273,16 @@ const Shop={
       const col=colors[Math.floor(Math.random()*colors.length)];
       sr.innerHTML+=`<div class="store-stat-row"><div class="store-stat-lbl">${s.lbl}</div><div class="store-stat-bar"><div class="store-stat-fill" style="width:${s.val}%;background:${col}"></div></div></div>`;
     });
+    if(c.statsDetail&&c.statsDetail.length){
+      sr.innerHTML+='<div style="margin-top:8px;margin-bottom:4px;font-size:.44rem;letter-spacing:.3em;color:rgba(255,255,255,.25);border-top:1px solid rgba(255,255,255,.07);padding-top:7px;">DATOS EXACTOS</div>';
+      c.statsDetail.forEach(s=>{
+        if(!s.val&&s.val!==0){
+          sr.innerHTML+=`<div style="margin:5px 0 2px;font-size:.44rem;letter-spacing:.2em;color:rgba(255,255,255,.35);">${s.lbl}</div>`;
+        } else {
+          sr.innerHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:.5rem;letter-spacing:.06em;color:rgba(255,255,255,.4);">${s.lbl}</span><span style="font-size:.52rem;letter-spacing:.06em;color:rgba(255,255,255,.75);font-family:'Oswald',sans-serif;">${s.val}</span></div>`;
+        }
+      });
+    }
     // Abilities
     const ar=document.getElementById('shopAbilityRows');
     ar.innerHTML='';
@@ -7360,6 +7482,16 @@ const Inventory={
       const col=colors[Math.floor(Math.random()*colors.length)];
       sr.innerHTML+=`<div class="store-stat-row"><div class="store-stat-lbl">${s.lbl}</div><div class="store-stat-bar"><div class="store-stat-fill" style="width:${s.val}%;background:${col}"></div></div></div>`;
     });
+    if(c.statsDetail&&c.statsDetail.length){
+      sr.innerHTML+='<div style="margin-top:8px;margin-bottom:4px;font-size:.44rem;letter-spacing:.3em;color:rgba(255,255,255,.25);border-top:1px solid rgba(255,255,255,.07);padding-top:7px;">DATOS EXACTOS</div>';
+      c.statsDetail.forEach(s=>{
+        if(!s.val&&s.val!==0){
+          sr.innerHTML+=`<div style="margin:5px 0 2px;font-size:.44rem;letter-spacing:.2em;color:rgba(255,255,255,.35);">${s.lbl}</div>`;
+        } else {
+          sr.innerHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:.5rem;letter-spacing:.06em;color:rgba(255,255,255,.4);">${s.lbl}</span><span style="font-size:.52rem;letter-spacing:.06em;color:rgba(255,255,255,.75);font-family:'Oswald',sans-serif;">${s.val}</span></div>`;
+        }
+      });
+    }
     // Abilities
     const ar=document.getElementById('invAbilityRows');ar.innerHTML='';
     (c.abilities||[]).forEach(a=>{
