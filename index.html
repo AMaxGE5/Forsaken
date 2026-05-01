@@ -1399,6 +1399,34 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           </div>
           <div class="ability-key">R</div>
         </div>
+        <!-- MANKSPE ability slots -->
+        <div class="ability-slot" id="mankQSlot" style="display:none">
+          <div class="ability-name">NO ES MI CULPA</div>
+          <div class="ability-icon-wrap" id="mankQWrap">
+            <div class="ability-cd-overlay" id="mankQOverlay"></div>
+            <div class="ability-icon-emoji">💨</div>
+            <div class="ability-cd-num" id="mankQNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">Q</div>
+        </div>
+        <div class="ability-slot" id="mankESlot" style="display:none">
+          <div class="ability-name" id="mankEName">TENIA QUE SER NEGRO</div>
+          <div class="ability-icon-wrap" id="mankEWrap">
+            <div class="ability-cd-overlay" id="mankEOverlay"></div>
+            <div class="ability-icon-emoji">⚡</div>
+            <div class="ability-cd-num" id="mankENum" style="display:none"></div>
+          </div>
+          <div class="ability-key">E</div>
+        </div>
+        <div class="ability-slot" id="mankRSlot" style="display:none">
+          <div class="ability-name">PAN CON SAL</div>
+          <div class="ability-icon-wrap" id="mankRWrap">
+            <div class="ability-cd-overlay" id="mankROverlay"></div>
+            <div class="ability-icon-emoji">🍞</div>
+            <div class="ability-cd-num" id="mankRNum" style="display:none"></div>
+          </div>
+          <div class="ability-key">R</div>
+        </div>
     </div>
   </div>
 
@@ -1890,6 +1918,18 @@ const SS_SPEED_DUR = 2;         // duración del bonus de velocidad post-efecto
 const GB_CD = 45;           // cooldown en segundos
 const GB_DUR = 10;          // duración del efecto (invisibilidad + indetectable)
 const GB_EAT_DUR = 1.2;     // duración de la animación de comer (40% lentitud, sin sprint)
+// ── MANKSPE ──
+const MANK_Q_CD = 25;       // Q: No es mi culpa
+const MANK_Q_DASH_DIST = 9; // 9 studs
+const MANK_Q_SPEED_DUR = 5; // Velocidad I por 5s tras atravesar enemigo
+const MANK_E_CD = 30;       // E: Tenia que ser negro
+const MANK_E_SPEED_DUR = 3; // Velocidad III por 3s
+const MANK_E_REST_DUR = 1;  // descanso 1s sin moverse tras el efecto
+const MANK_R_CD = 38;       // R: Pan con Sal
+const MANK_R_DUR = 6;       // duración invisibilidad
+const MANK_R_EAT_DUR = 0.8; // animación de comer el pan
+const MANK_R_INVIS_ALPHA = 0.05; // completamente invisible (casi opaco 0)
+const MANK_R_FOOTPRINT_DUR = 1.5; // cuánto duran las pisadas en el suelo
 const GB_INVIS_ALPHA = 0.28; // Invisibilidad IV — alpha visible para el killer (no completa, esa es nivel 6)
 
 // ── Habilidad Q del Killer: BEHEAD ──
@@ -2227,6 +2267,7 @@ function pointInRotRect(px,py,cx,cy,hw,hh,ang){
 }
 function isNicostos(p){return p&&p.role==='killer'&&p.killerChar==='nicostos';}
 function isAMaxGE5(p){return p&&p.role==='survivor'&&p.survivorChar==='amaxge5';}
+function isMankspe(p){return p&&p.role==='survivor'&&p.survivorChar==='mankspe';}
 
 // ══════════════════════════════════════════
 //  UI
@@ -2305,7 +2346,7 @@ const UI={
     document.getElementById('lobbyWaitMsg').style.display='block';
   },
   resetRoundHUD(){
-    ['amaxQSlot','amaxESlot','amaxRSlot','nicoM1Slot','nicoQSlot','nicoESlot','nicoRSlot','nicoTSlot','abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot','abilityBloxySlot','abilitySSSlot','abilityGBSlot']
+    ['amaxQSlot','amaxESlot','amaxRSlot','mankQSlot','mankESlot','mankRSlot','nicoM1Slot','nicoQSlot','nicoESlot','nicoRSlot','nicoTSlot','abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot','abilityBloxySlot','abilitySSSlot','abilityGBSlot']
       .forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
     const ef=document.getElementById('effectsPanel');if(ef)ef.innerHTML='';
     const bb=document.getElementById('bloxyBuffBar');if(bb)bb.classList.remove('show');
@@ -2374,6 +2415,15 @@ const UI={
       if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN 6.0/s (aliados 6 tiles)',timer:me.amaxHealTimer,type:'positive'});
       if(me.amaxRevealed&&me.amaxRevealTimer>0)effects.push({icon:'👁',name:'REVELADO',timer:me.amaxRevealTimer,type:'neutral'});
       if(me.amaxPeaSlow&&me.amaxPeaSlowTimer>0)effects.push({icon:'🫛',name:'LENTITUD II',timer:me.amaxPeaSlowTimer,type:'debuff'});
+      // Mankspe effects
+      if(isMankspe(me)){
+        if(me.mankQDashing)effects.push({icon:'💨',name:'SPRINT',timer:0,type:'positive'});
+        if(me.mankQSpeedActive&&me.mankQSpeedTimer>0)effects.push({icon:'🏃',name:'VELOCIDAD I',timer:me.mankQSpeedTimer,type:'positive'});
+        if(me.mankEActive&&me.mankETimer>0)effects.push({icon:'⚡',name:'VELOCIDAD III',timer:me.mankETimer,type:'positive'});
+        if(me.mankEResting&&me.mankERestTimer>0)effects.push({icon:'😮‍💨',name:'DESCANSANDO...',timer:me.mankERestTimer,type:'neutral'});
+        if(me.mankREating)effects.push({icon:'🍞',name:'COMIENDO...',timer:me.mankREatTimer||0,type:'neutral'});
+        if(me.mankRActive&&me.mankRTimer>0)effects.push({icon:'👻',name:'INVISIBLE',timer:me.mankRTimer,type:'positive'});
+      }
       if(me.enraged&&me.enrageTimer>0)effects.push({icon:'😡',name:'ENRAGED',timer:me.enrageTimer,type:'positive'});
       efPanel.innerHTML=effects.map(e=>`<div class="effect-pill ${e.type}"><span class="effect-icon">${e.icon}</span><span class="effect-name">${e.name}</span><span class="effect-timer">${e.timer>0?Math.ceil(e.timer)+'s':''}</span></div>`).join('');
     }
@@ -2412,6 +2462,7 @@ const UI={
     const beheadSlot=document.getElementById('abilityBeheadSlot');
     if(me.role==='killer'){
       ['amaxQSlot','amaxESlot','amaxRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+      ['mankQSlot','mankESlot','mankRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
       const nicoMode=isNicostos(me);
       // Hide/show Slasher vs Nicostos slots
       ['abilityM1Slot','abilityBeheadSlot','abilityComboSlot','abilityEnrageSlot'].forEach(id=>{
@@ -2530,6 +2581,7 @@ const UI={
       });
 
       const amaxMode=isAMaxGE5(me);
+      const mankMode=isMankspe(me);
 
       if(amaxMode){
         // ── Hide default survivor slots ──
@@ -2571,9 +2623,34 @@ const UI={
         const arNum=document.getElementById('amaxRNum');
         if(arNum){arNum.style.display=(arActive||arPct>0||!arUnlocked||arUses>0)?'flex':'none';arNum.textContent=arActive?me.amaxShieldTimer?me.amaxShieldTimer.toFixed(1)+'s':'':(!arUnlocked?'🔒':arUses>0?`×${arUses}`:(arPct>0?Math.ceil(me.amaxRCd)+'s':''));}
         const arLabel=document.getElementById('amaxRName');if(arLabel)arLabel.textContent=arUnlocked?`ESCUDITO ×${arUses}`:'ESCUDITO 🔒';
+      } else if(mankMode){
+        // ── Hide default survivor slots + AMax ──
+        ['abilityBloxySlot','abilitySSSlot','abilityGBSlot','amaxQSlot','amaxESlot','amaxRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+        // ── Mankspe Q: No es mi culpa ──
+        const mqSlot=document.getElementById('mankQSlot');if(mqSlot)mqSlot.style.display='flex';
+        const mqPct=me.mankQCd>0?me.mankQCd/MANK_Q_CD:0;
+        const mqOv=document.getElementById('mankQOverlay');if(mqOv)mqOv.style.transform=`scaleY(${mqPct})`;
+        const mqWrap=document.getElementById('mankQWrap');if(mqWrap)mqWrap.className='ability-icon-wrap'+(me.mankQDashing?' ready':mqPct>0?' on-cd':' ready');
+        const mqNum=document.getElementById('mankQNum');
+        if(mqNum){mqNum.style.display=(me.mankQDashing||mqPct>0)?'flex':'none';mqNum.textContent=me.mankQDashing?'💨':(mqPct>0?Math.ceil(me.mankQCd)+'s':'');}
+        // ── Mankspe E: Tenia que ser negro ──
+        const mkESlot=document.getElementById('mankESlot');if(mkESlot)mkESlot.style.display='flex';
+        const mkEPct=me.mankECd>0?me.mankECd/MANK_E_CD:0;
+        const mkEOv=document.getElementById('mankEOverlay');if(mkEOv)mkEOv.style.transform=`scaleY(${mkEPct})`;
+        const mkEWrap=document.getElementById('mankEWrap');if(mkEWrap)mkEWrap.className='ability-icon-wrap'+(me.mankEActive?' ready':me.mankEResting?' on-cd':mkEPct>0?' on-cd':' ready');
+        const mkENum=document.getElementById('mankENum');
+        if(mkENum){mkENum.style.display=(me.mankEActive||me.mankEResting||mkEPct>0)?'flex':'none';mkENum.textContent=me.mankEActive?(me.mankETimer?me.mankETimer.toFixed(1)+'s':''):me.mankEResting?'😮‍💨':(mkEPct>0?Math.ceil(me.mankECd)+'s':'');}
+        const mkELabel=document.getElementById('mankEName');if(mkELabel)mkELabel.textContent=me.mankEResting?'DESCANSANDO...':me.mankEActive?'⚡ VEL. III ACTIVA':'TENIA QUE SER NEGRO';
+        // ── Mankspe R: Pan con Sal ──
+        const mkRSlot=document.getElementById('mankRSlot');if(mkRSlot)mkRSlot.style.display='flex';
+        const mkRPct=me.mankRCd>0?me.mankRCd/MANK_R_CD:0;
+        const mkROv=document.getElementById('mankROverlay');if(mkROv)mkROv.style.transform=`scaleY(${mkRPct})`;
+        const mkRWrap=document.getElementById('mankRWrap');if(mkRWrap)mkRWrap.className='ability-icon-wrap'+(me.mankRActive||me.mankREating?' ready':mkRPct>0?' on-cd':' ready');
+        const mkRNum=document.getElementById('mankRNum');
+        if(mkRNum){mkRNum.style.display=(me.mankREating||me.mankRActive||mkRPct>0)?'flex':'none';mkRNum.textContent=me.mankREating?'🍞':me.mankRActive?(me.mankRTimer?me.mankRTimer.toFixed(1)+'s':''):(mkRPct>0?Math.ceil(me.mankRCd)+'s':'');}
       } else {
-        // Hide AMaxGE5 slots
-        ['amaxQSlot','amaxESlot','amaxRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+        // Hide AMaxGE5 + Mankspe slots
+        ['amaxQSlot','amaxESlot','amaxRSlot','mankQSlot','mankESlot','mankRSlot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
         // ── Bloxy Cola (Q) ──
         const bloxySlot=document.getElementById('abilityBloxySlot');
         if(bloxySlot)bloxySlot.style.display='flex';
@@ -4043,7 +4120,7 @@ const Game={
       let survivorChar='noob';
       if(role==='survivor'){
         const eqSurvRaw=p.equippedSurvivor!==undefined?p.equippedSurvivor:(p.id===S.myId?Stats.equippedSurvivor||'':'');
-        survivorChar=eqSurvRaw==='amaxge5'?'amaxge5':'noob';
+        survivorChar=eqSurvRaw==='amaxge5'?'amaxge5':eqSurvRaw==='mankspe'?'mankspe':'noob';
       }
       W.players[p.id]={
         id:p.id,name:p.name,username:p.username||p.name,role,alive:true,escaped:false,
@@ -4068,6 +4145,10 @@ const Game={
         amaxHealing:false,amaxHealTimer:0,amaxHealAccum:0,amaxECd:0,amaxRUnlocked:false,amaxRUses:0,
         amaxShielding:false,amaxShieldTimer:0,amaxRCd:0,amaxShieldHit:false,
         amaxRevealed:false,amaxRevealTimer:0,
+        // Mankspe state
+        mankQCd:0,mankQDashing:false,mankQDashTimer:0,mankQDashAng:0,mankQSpeedActive:false,mankQSpeedTimer:0,
+        mankECd:0,mankEActive:false,mankETimer:0,mankEResting:false,mankERestTimer:0,
+        mankRCd:0,mankREating:false,mankREatTimer:0,mankRActive:false,mankRTimer:0,mankFootprints:[],
         // Nicostos state
         nicoHasKnife:true,
         nicoKnifeRecoverTimer:0,
@@ -4245,7 +4326,79 @@ const Game={
           if(p.gbActive){
             p.gbTimer=Math.max(0,p.gbTimer-dt);
             if(p.gbTimer<=0){p.gbActive=false;}
-          }p.qCd=Math.max(0,p.qCd-dt);
+          }
+          // ── Mankspe ticks ──
+          if(isMankspe(p)){
+            if(p.mankQCd>0)p.mankQCd=Math.max(0,p.mankQCd-dt);
+            // Q dash movement
+            if(p.mankQDashing){
+              p.mankQDashTimer=Math.max(0,(p.mankQDashTimer||0)-dt);
+              const spd=MANK_Q_DASH_DIST*TILE/0.15; // cross 9 studs in 0.15s
+              p.x+=Math.cos(p.mankQDashAng)*spd*dt;
+              p.y+=Math.sin(p.mankQDashAng)*spd*dt;
+              // Check if dash hits killer
+              if(!p.mankQHit){
+                const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+                if(kk&&Math.hypot(kk.x-p.x,kk.y-p.y)<TILE*1.2){
+                  p.mankQHit=true;
+                  // Speed I (1.15x) to self for 5s
+                  p.mankQSpeedActive=true;p.mankQSpeedTimer=MANK_Q_SPEED_DUR;
+                }
+              }
+              if(p.mankQDashTimer<=0){p.mankQDashing=false;p.mankQHit=false;}
+            }
+            // Q speed buff
+            if(p.mankQSpeedActive){
+              p.mankQSpeedTimer=Math.max(0,(p.mankQSpeedTimer||0)-dt);
+              if(p.mankQSpeedTimer<=0){p.mankQSpeedActive=false;}
+            }
+            // E: Tenia que ser negro
+            if(p.mankECd>0)p.mankECd=Math.max(0,p.mankECd-dt);
+            if(p.mankEActive){
+              p.mankETimer=Math.max(0,(p.mankETimer||0)-dt);
+              // Block stamina regen while active (set flag checked in regen)
+              p.mankENoStam=true;
+              if(p.mankETimer<=0){
+                p.mankEActive=false;p.mankENoStam=false;
+                p.mankEResting=true;p.mankERestTimer=MANK_E_REST_DUR;
+              }
+            }
+            if(p.mankEResting){
+              p.mankERestTimer=Math.max(0,(p.mankERestTimer||0)-dt);
+              if(p.mankERestTimer<=0){p.mankEResting=false;}
+            }
+            // R: Pan con Sal
+            if(p.mankRCd>0)p.mankRCd=Math.max(0,p.mankRCd-dt);
+            if(p.mankREating){
+              p.mankREatTimer=Math.max(0,(p.mankREatTimer||0)-dt);
+              if(p.mankREatTimer<=0){
+                p.mankREating=false;
+                p.mankRActive=true;p.mankRTimer=MANK_R_DUR;
+                p.mankFootprints=p.mankFootprints||[];
+                if(S.lms&&S.lmsLastSurvivorId===p.id&&S.lmsTrackerT>0)S.lmsTrackerT=0;
+              }
+            }
+            if(p.mankRActive){
+              p.mankRTimer=Math.max(0,(p.mankRTimer||0)-dt);
+              // Spawn footprint every 0.35s of movement
+              if(!p.mankFootprintTimer)p.mankFootprintTimer=0;
+              const moving=p.inp&&(p.inp.w||p.inp.s||p.inp.a||p.inp.d);
+              if(moving){
+                p.mankFootprintTimer=Math.max(0,(p.mankFootprintTimer||0)-dt);
+                if(p.mankFootprintTimer<=0){
+                  p.mankFootprintTimer=0.35;
+                  if(!p.mankFootprints)p.mankFootprints=[];
+                  p.mankFootprints.push({x:p.x,y:p.y,life:MANK_R_FOOTPRINT_DUR,ang:p.facing});
+                }
+              }
+              if(p.mankRTimer<=0){p.mankRActive=false;p.mankFootprints=[];}
+            }
+            // Tick footprints
+            if(p.mankFootprints&&p.mankFootprints.length){
+              p.mankFootprints=p.mankFootprints.filter(fp=>{fp.life-=dt;return fp.life>0;});
+            }
+          }
+          p.qCd=Math.max(0,p.qCd-dt);
           if(p.role==='killer'&&p.comboCd>0)p.comboCd=Math.max(0,p.comboCd-dt);
           // Killer combo lock (can't move during combo)
           if(p.role==='killer'&&p.comboLocked){
@@ -4708,6 +4861,8 @@ const Game={
     if(p.comboStunned||p.comboLocked)return;
     // AMaxGE5: block movement when healing or building turret
     if(isAMaxGE5(p)&&(p.amaxHealing||p.amaxBuilding))return;
+    // Mankspe: block movement during E rest phase
+    if(isMankspe(p)&&p.mankEResting)return;
     // Block movement when AMaxGE5-stunned (killer got stunned by counterattack)
     if(p.amaxStunned)return;
     // Nicostos: charge handles its own movement; still/revive blocks
@@ -4733,7 +4888,7 @@ const Game={
       else p.staminaCd=SREGEN_DEL;
     } else {
       if(p.staminaCd>0)p.staminaCd-=dt;
-      else p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+(p.role==='killer'?KREGEN:SREGEN)*dt);
+      else if(!isMankspe(p)||!p.mankENoStam) p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+(p.role==='killer'?KREGEN:SREGEN)*dt);
     }
     if(moving)p.facing=Math.atan2(dy,dx);
     const bw=p.role==='killer'?(isNicostos(p)?NICO_WALK:KW):SW;
@@ -4743,7 +4898,9 @@ const Game={
     const nicoSlow=isNicostos(p)&&p.nicoSlow?0.6:1; // Lentitud I tras embestida
     const nicoInvisSpeed=isNicostos(p)&&p.nicoInvisSpeedActive?1.15:1; // Speed I mientras invisible
     const peaSlowII=p.role==='killer'&&p.amaxPeaSlow?AMAX_Q_PEA_SLOW_VAL:1; // Lentitud II from pea hit
-    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1)*nicoNoKnifeBonus*nicoSlow*nicoInvisSpeed*peaSlowII;
+    const mankQSpeed=isMankspe(p)&&p.mankQSpeedActive?1.15:1; // Speed I after Q dash hit
+    const mankESpeed=isMankspe(p)&&p.mankEActive?2.0:1; // Speed III (×2.0) during E
+    const buff=(p.ssDrinking?0.6:p.gbEating?0.6:1)*(p.speedBuff||1)*(p.ssActive?0.5:1)*nicoNoKnifeBonus*nicoSlow*nicoInvisSpeed*peaSlowII*mankQSpeed*mankESpeed;
     // During behead dash phase: force Speed III (×2.0 of run) in locked direction
     let spd,r=TILE*.28;
     if(p.beheadDashing){
@@ -4816,6 +4973,7 @@ const Game={
       else Game.doBehead(pid);
     } else {
       if(isAMaxGE5(p)) Game.amaxDoQ(pid);
+      else if(isMankspe(p)) Game.mankDoQ(pid);
       else Game.doBloxy(pid);
     }
   },
@@ -4848,6 +5006,7 @@ const Game={
       else Game.doEnrage(pid);
     } else {
       if(isAMaxGE5(p)) Game.amaxDoR(pid);
+      else if(isMankspe(p)) Game.mankDoR(pid);
       else Game.doGhostBurger(pid);
     }
   },
@@ -4919,7 +5078,34 @@ const Game={
     p.gbCd=GB_CD;
   },
 
-  doEnrage(pid){
+  // ── MANKSPE ABILITIES ──
+  mankDoQ(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||!isMankspe(p))return;
+    if(p.mankQCd>0||p.mankQDashing)return;
+    p.mankQCd=MANK_Q_CD;
+    p.mankQDashing=true;
+    p.mankQDashTimer=0.15; // 0.15s to cross 9 studs
+    p.mankQDashAng=p.facing;
+    p.mankQHit=false;
+  },
+  mankDoE(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||!isMankspe(p))return;
+    if(p.mankECd>0||p.mankEActive||p.mankEResting)return;
+    p.mankECd=MANK_E_CD;
+    p.mankEActive=true;
+    p.mankETimer=MANK_E_SPEED_DUR;
+    p.mankENoStam=true;
+  },
+  mankDoR(pid){
+    const p=W.players[pid];
+    if(!p||!p.alive||!isMankspe(p))return;
+    if(p.mankRCd>0||p.mankREating||p.mankRActive)return;
+    p.mankRCd=MANK_R_CD;
+    p.mankREating=true;
+    p.mankREatTimer=MANK_R_EAT_DUR;
+  },
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.enrageCd>0||p.enraged)return;
@@ -5043,6 +5229,7 @@ const Game={
         // cancel if already healing
         if(p.amaxHealing){p.amaxHealing=false;p.amaxHealTimer=0;return;}
       }
+      if(isMankspe(p)&&p.mankECd<=0&&!p.mankEActive&&!p.mankEResting){Game.mankDoE(pid);return;}
       if(p.interacting){p.interacting=false;p.interactTarget=null;return;}
       for(const g of W.gens){
         if(g.on)continue;
@@ -5270,6 +5457,9 @@ const Game={
         amaxShielding:p.amaxShielding||false,amaxShieldTimer:p.amaxShieldTimer||0,amaxRCd:p.amaxRCd||0,amaxShieldHit:p.amaxShieldHit||false,
         amaxRevealed:p.amaxRevealed||false,amaxRevealTimer:p.amaxRevealTimer||0,
         amaxPeaSlow:p.amaxPeaSlow||false,amaxPeaSlowTimer:p.amaxPeaSlowTimer||0,
+        mankQCd:p.mankQCd||0,mankQDashing:p.mankQDashing||false,mankQDashTimer:p.mankQDashTimer||0,mankQDashAng:p.mankQDashAng||0,mankQSpeedActive:p.mankQSpeedActive||false,mankQSpeedTimer:p.mankQSpeedTimer||0,mankQHit:p.mankQHit||false,
+        mankECd:p.mankECd||0,mankEActive:p.mankEActive||false,mankETimer:p.mankETimer||0,mankEResting:p.mankEResting||false,mankERestTimer:p.mankERestTimer||0,mankENoStam:p.mankENoStam||false,
+        mankRCd:p.mankRCd||0,mankREating:p.mankREating||false,mankREatTimer:p.mankREatTimer||0,mankRActive:p.mankRActive||false,mankRTimer:p.mankRTimer||0,mankFootprints:p.mankFootprints||[],
         nicoHasKnife:p.nicoHasKnife!==undefined?p.nicoHasKnife:true,
         nicoKnifeFlying:p.nicoKnifeFlying||false,nicoKnifeProjX:p.nicoKnifeProjX||0,nicoKnifeProjY:p.nicoKnifeProjY||0,
         nicoCharge:p.nicoCharge||false,nicoChargeAng:p.nicoChargeAng||0,
@@ -5351,6 +5541,12 @@ const Game={
           p.amaxShielding=d.amaxShielding||false;p.amaxShieldTimer=d.amaxShieldTimer||0;p.amaxRCd=d.amaxRCd||0;
           p.amaxShieldHit=d.amaxShieldHit||false;p.amaxRevealed=d.amaxRevealed||false;p.amaxRevealTimer=d.amaxRevealTimer||0;
           p.amaxPeaSlow=d.amaxPeaSlow||false;p.amaxPeaSlowTimer=d.amaxPeaSlowTimer||0;
+        }
+        if(d.mankQCd!==undefined){
+          p.mankQCd=d.mankQCd||0;p.mankQDashing=d.mankQDashing||false;p.mankQDashTimer=d.mankQDashTimer||0;p.mankQDashAng=d.mankQDashAng||0;
+          p.mankQSpeedActive=d.mankQSpeedActive||false;p.mankQSpeedTimer=d.mankQSpeedTimer||0;p.mankQHit=d.mankQHit||false;
+          p.mankECd=d.mankECd||0;p.mankEActive=d.mankEActive||false;p.mankETimer=d.mankETimer||0;p.mankEResting=d.mankEResting||false;p.mankERestTimer=d.mankERestTimer||0;p.mankENoStam=d.mankENoStam||false;
+          p.mankRCd=d.mankRCd||0;p.mankREating=d.mankREating||false;p.mankREatTimer=d.mankREatTimer||0;p.mankRActive=d.mankRActive||false;p.mankRTimer=d.mankRTimer||0;p.mankFootprints=d.mankFootprints||[];
         }
         if(d.nicoHasKnife!==undefined){
           p.nicoHasKnife=d.nicoHasKnife;p.nicoKnifeFlying=d.nicoKnifeFlying||false;
@@ -5728,8 +5924,38 @@ const Game={
       // Ghost Burger invisibility — survivor partially invisible to killer
       // isMe siempre se ve; si eres killer, el survivor con GB aparece semi-transparente
       const isGBInvis=(p.role==='survivor')&&(p.gbActive||p.gbEating)&&!isMe&&(me2&&me2.role==='killer');
-      const gbAlpha=isGBInvis?GB_INVIS_ALPHA:1;
+      // Mankspe Pan con Sal — completamente invisible para killer, visible para sí mismo
+      const isMankInvis=isMankspe(p)&&(p.mankRActive||p.mankREating)&&!isMe&&(me2&&me2.role==='killer');
+      const gbAlpha=isMankInvis?MANK_R_INVIS_ALPHA:isGBInvis?GB_INVIS_ALPHA:1;
       if(gbAlpha<1){ctx.save();ctx.globalAlpha=gbAlpha;}
+      // Mankspe eating animation
+      if(isMankspe(p)&&p.mankREating&&isMe){
+        const t=Date.now()/300;
+        ctx.save();ctx.globalAlpha=0.85+Math.sin(t)*0.15;
+        ctx.font=`${TILE*.55}px monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.fillText('🍞',p.x,p.y-r-18+Math.sin(t*1.8)*3);
+        ctx.restore();
+      }
+      // Mankspe invisible aura (visible only to self)
+      if(isMankspe(p)&&p.mankRActive&&isMe){
+        const t=Date.now()/400;
+        const pulse=0.4+Math.sin(t)*0.25;
+        ctx.beginPath();ctx.arc(p.x,p.y,r*1.7+Math.sin(t*1.3)*3,0,Math.PI*2);
+        ctx.fillStyle=`rgba(80,200,255,${pulse*0.12})`;ctx.fill();
+        ctx.beginPath();ctx.arc(p.x,p.y,r*1.2,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(100,220,255,${pulse*0.55})`;ctx.lineWidth=2;ctx.stroke();
+      }
+      // Mankspe footprints (visible to everyone including killer)
+      if(isMankspe(p)&&p.mankFootprints&&p.mankFootprints.length){
+        p.mankFootprints.forEach(fp=>{
+          const a=Math.max(0,fp.life/MANK_R_FOOTPRINT_DUR)*0.55;
+          ctx.save();ctx.globalAlpha=a;
+          ctx.translate(fp.x,fp.y);ctx.rotate(fp.ang+Math.PI/2);
+          ctx.font=`${TILE*.35}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText('👣',0,0);
+          ctx.restore();
+        });
+      }
       // Eating animation: burger emoji floating above
       if(p.gbEating&&isMe){
         const t=Date.now()/300;
@@ -6070,8 +6296,82 @@ const Game={
           // "ME" outline — golden for AMaxGE5
           if(isMe){ctx.strokeStyle='rgba(180,120,255,.5)';ctx.lineWidth=1.5;ctx.strokeRect(-s*.52,-s*1.1,s*1.04,s*2.02);}
           ctx.shadowBlur=0;
+        } else if(isMankspe(p)){
+          // ── MANKSPE SURVIVOR — Roblox style, casual look with card ──
+          // Speed E glow aura
+          if(p.mankEActive){
+            const pulse3=0.5+Math.sin(Date.now()/120)*0.4;
+            ctx.shadowColor=`rgba(255,220,0,${pulse3})`;ctx.shadowBlur=18*pulse3;
+          }
+          // Legs — dark jeans
+          ctx.fillStyle='#1e2a4a';
+          ctx.fillRect(-s*.38,s*.28,s*.33,s*.58);
+          ctx.fillRect(s*.05,s*.28,s*.33,s*.58);
+          // Shoes — white sneakers
+          ctx.fillStyle='#e0e0e0';
+          ctx.fillRect(-s*.42,s*.76,s*.36,s*.12);
+          ctx.fillRect(s*.06,s*.76,s*.36,s*.12);
+          ctx.fillStyle='#aaaaaa';
+          ctx.fillRect(-s*.42,s*.84,s*.36,s*.04);
+          ctx.fillRect(s*.06,s*.84,s*.36,s*.04);
+          // Torso — red hoodie
+          ctx.fillStyle='#cc2222';
+          ctx.fillRect(-s*.5,-s*.38,s,s*.72);
+          // Hoodie pocket
+          ctx.fillStyle='rgba(0,0,0,.18)';
+          ctx.fillRect(-s*.2,s*.18,s*.4,s*.18);
+          // Hoodie shine
+          ctx.fillStyle='rgba(255,180,180,.1)';
+          ctx.fillRect(-s*.38,-s*.3,s*.38,s*.5);
+          // Arms — red
+          ctx.fillStyle='#cc2222';
+          ctx.fillRect(-s*.83,-s*.3,s*.3,s*.62);
+          ctx.fillRect(s*.53,-s*.3,s*.3,s*.62);
+          // Hands — skin tone
+          ctx.fillStyle='#d4a870';
+          ctx.fillRect(-s*.86,s*.22,s*.32,s*.2);
+          ctx.fillRect(s*.54,s*.22,s*.32,s*.2);
+          // Neck
+          ctx.fillStyle='#d4a870';
+          ctx.fillRect(-s*.14,-s*.44,s*.28,s*.12);
+          // Head — skin tone
+          ctx.fillStyle='#d4a870';
+          ctx.fillRect(-s*.42,-s*1.08,s*.84,s*.72);
+          // Hair — black messy
+          ctx.fillStyle='#111111';
+          ctx.fillRect(-s*.44,-s*1.1,s*.88,s*.28);
+          ctx.fillRect(-s*.44,-s*.92,s*.1,s*.12);
+          ctx.fillRect(s*.3,-s*.92,s*.14,s*.1);
+          // Head shine
+          ctx.fillStyle='rgba(255,210,160,.18)';
+          ctx.beginPath();ctx.ellipse(-s*.1,-s*.9,s*.16,s*.09,-.3,0,Math.PI*2);ctx.fill();
+          // Eyes — bored/indifferent
+          ctx.fillStyle='#1a1a1a';
+          ctx.fillRect(-s*.28,-s*.82,s*.15,s*.12);
+          ctx.fillRect(s*.13,-s*.82,s*.15,s*.12);
+          // Eye shine
+          ctx.fillStyle='#fff';
+          ctx.fillRect(-s*.24,-s*.8,s*.05,s*.04);
+          ctx.fillRect(s*.17,-s*.8,s*.05,s*.04);
+          // Flat mouth (indifferent expression)
+          ctx.fillStyle='#7a4a20';ctx.fillRect(-s*.18,-s*.6,s*.36,s*.05);
+          // Playing card in right hand (Balatro reference)
+          ctx.save();ctx.translate(s*.7,s*.3);ctx.rotate(-0.25);
+          ctx.fillStyle='#fff';ctx.fillRect(-s*.18,-s*.25,s*.35,s*.5);
+          ctx.strokeStyle='#ccc';ctx.lineWidth=s*.02;ctx.strokeRect(-s*.18,-s*.25,s*.35,s*.5);
+          ctx.fillStyle='#cc2222';ctx.font=`${s*.22}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText('🃏',0,0);
+          ctx.restore();
+          // Invisible shimmer overlay (only when R active and self)
+          if(p.mankRActive&&isMe){
+            const t3=Date.now()/300;
+            ctx.fillStyle=`rgba(100,220,255,${0.08+Math.sin(t3)*0.04})`;
+            ctx.fillRect(-s*.52,-s*1.1,s*1.04,s*2.02);
+          }
+          // "ME" outline — cyan for Mankspe
+          if(isMe){ctx.strokeStyle='rgba(80,200,255,.5)';ctx.lineWidth=1.5;ctx.strokeRect(-s*.52,-s*1.1,s*1.04,s*2.02);}
+          ctx.shadowBlur=0;
         } else {
-        // ── NOOB SURVIVOR ──
         // Legs — green
         ctx.fillStyle='#1a8c1a';
         ctx.fillRect(-s*.38,s*.28,s*.33,s*.58);
@@ -7250,6 +7550,24 @@ const STORE_SURVIVORS=[
       {key:'R',desc:'Escudito para siempre — Solo disponible tras usar Lore de Fnaf con éxito. Usa el martillo como escudo: invulnerable 2.5s. Si el asesino golpea durante el escudo: contraataque automático que aleja 5 studs y stunea 2s. Si nadie ataca durante el escudo: Lentitud II por 3s y Mareo I por 2s. En LMS: invulnerabilidad reducida a 1s. CD: 45s.'}
     ],
     lore:'Alejandro estaba en su casa después de la piscina, listo para estudiar francés para su examen. De pronto, un fuerte dolor de cabeza lo interrumpió y no lo dejó concentrarse. Cansado, decidió recostarse y se quedó dormido. Al despertar, sintió que algo no estaba bien, como si el ambiente hubiera cambiado. Se levantó lentamente y, sin saber por qué, tomó un martillo cerca de su cuarto. Al salir, ya no estaba en su mundo, sino en un lugar extraño y oscuro. Allí encontró a otros supervivientes igual de confundidos. A pesar del miedo, Alejandro se mantuvo positivo y animó al grupo. Desde ese momento, decidió proteger a los demás y no rendirse.',
+    skins:[] },
+  { id:'mankspe', name:'MANKSPE', price:500, free:false, icon:'🃏', author:'Mankspe',
+    tagline:'El superviviente que nunca es su culpa. Siempre.',
+    stats:[
+      {lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}
+    ],
+    statsDetail:[
+      {lbl:'Tipo',val:'Evasivo'},
+      {lbl:'Vida',val:'igual a NOOB'},
+      {lbl:'Velocidad normal',val:'igual a NOOB'},
+      {lbl:'Stamina total',val:'igual a NOOB'}
+    ],
+    abilities:[
+      {key:'Q',desc:'No es mi culpa — Hace un sprint rápido avanzando 9 studs en la dirección que mira. Si atraviesa al enemigo, le da Velocidad I por 5 segundos. CD: 25s.'},
+      {key:'E',desc:'Tenia que ser negro — Obtiene Velocidad III por 3 segundos. Durante este estado no puede recargar stamina. Al terminar, descansa quieto 1 segundo sin poder moverse. CD: 30s.'},
+      {key:'R',desc:'Pan con Sal — Matias se come un pan con sal y se vuelve indetectable y completamente invisible, pero sus pisadas se ven en el suelo. CD: 38s.'}
+    ],
+    lore:'Mankspe era un niñito fracasado que se la pasaba jugando "Balatro" gastando el tiempo de su vida pasando de nivel en nivel, mientras su perro Cosmo lo miraba con una cara de genuina decepción. Por ello, su perro buscó a un mago llamado "José Carlos Milla de la Torre", quien le dio una pócima que se suponía le quitaría sus vicios. Esa misma noche, Cosmo se la puso en su comida, lo que causó que a Matias le diera un ataque y terminara siendo transportado a otra dimensión.',
     skins:[] }
 ];
 
