@@ -1930,7 +1930,7 @@ const NICO_Q_SPEED = KR * 2.0;
 const NICO_Q_MAX_TURN = 0.6;
 const NICO_E_CD = 10;
 const NICO_E_KNIFE_RECOVER = 30; // cuchillo regresa después de 30s
-const NICO_E_DMG = 1;
+const NICO_E_DMG = 15; // cuchillo lanzado hace 15 de daño
 const NICO_E_MARK_DUR = 10;
 const NICO_E_KNIFE_SPEED = KR * 3.2;
 const NICO_R_CD = 30;
@@ -1964,6 +1964,7 @@ const LOBBY_SPEED = 160; // px/s movement in lobby world
 // ── AMAXGE5 CONSTANTS ──
 const AMAX_HP = 90;
 const AMAX_Q_CD = 35;        // pea shooter cooldown
+const AMAX_Q_BUILD_DUR = 5;  // segundos quieto para construir la torreta
 const AMAX_Q_RANGE = 40;     // in studs (tiles)
 const AMAX_Q_FIRE_INTERVAL = 2; // fire every 2s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
@@ -1974,6 +1975,7 @@ const AMAX_Q_PEA_SLOW_DUR = 2.5; // Slow II duration on killer
 const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
 const AMAX_Q_HP = 40;           // lanzaguisantes hitpoints
 const AMAX_E_CD = 20;
+const AMAX_E_RANGE = 6; // tiles — rango de curación para aliados cercanos
 const AMAX_E_HEAL_RATE = 6.0;   // HP per second → 30 HP total over 5s max
 const AMAX_E_MAX_DUR = 5;       // max heal duration per use
 const AMAX_E_UNLOCK_DUR = 3;    // must heal 3s to unlock R
@@ -2369,7 +2371,7 @@ const UI={
       }
       // AMaxGE5 effects
       if(me.amaxShielding&&me.amaxShieldTimer>0)effects.push({icon:'🔨',name:'ESCUDITO',timer:me.amaxShieldTimer,type:'positive'});
-      if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN 6.0/s',timer:me.amaxHealTimer,type:'positive'});
+      if(me.amaxHealing&&me.amaxHealTimer>0)effects.push({icon:'📖',name:'CURACIÓN 6.0/s (aliados 6 tiles)',timer:me.amaxHealTimer,type:'positive'});
       if(me.amaxRevealed&&me.amaxRevealTimer>0)effects.push({icon:'👁',name:'REVELADO',timer:me.amaxRevealTimer,type:'neutral'});
       if(me.amaxPeaSlow&&me.amaxPeaSlowTimer>0)effects.push({icon:'🫛',name:'LENTITUD II',timer:me.amaxPeaSlowTimer,type:'debuff'});
       if(me.enraged&&me.enrageTimer>0)effects.push({icon:'😡',name:'ENRAGED',timer:me.enrageTimer,type:'positive'});
@@ -2540,8 +2542,16 @@ const UI={
         const aqActive=me.amaxPeaActive||false;
         const aqOv=document.getElementById('amaxQOverlay');if(aqOv)aqOv.style.transform=`scaleY(${aqActive?0:aqPct})`;
         const aqWrap=document.getElementById('amaxQWrap');if(aqWrap)aqWrap.className='ability-icon-wrap'+(aqActive?' ready':aqPct>0?' on-cd':' ready');
+        const aqBuilding=me.amaxBuilding||false;
         const aqNum=document.getElementById('amaxQNum');
-        if(aqNum){aqNum.style.display=(aqActive||aqPct>0)?'flex':'none';aqNum.textContent=aqActive?'🌱':(aqPct>0?Math.ceil(me.amaxQCd)+'s':'');}
+        if(aqNum){
+          const showNum=aqActive||aqPct>0||aqBuilding;
+          aqNum.style.display=showNum?'flex':'none';
+          if(aqBuilding) aqNum.textContent='🔨'+Math.ceil(me.amaxBuildTimer||0)+'s';
+          else if(aqActive) aqNum.textContent='🌱';
+          else if(aqPct>0) aqNum.textContent=Math.ceil(me.amaxQCd)+'s';
+          else aqNum.textContent='';
+        }
         // ── AMaxGE5 E: Lore de Fnaf ──
         const aeSlot=document.getElementById('amaxESlot');if(aeSlot)aeSlot.style.display='flex';
         const aePct=me.amaxECd>0?me.amaxECd/AMAX_E_CD:0;
@@ -4053,6 +4063,7 @@ const Game={
         survivorChar,
         // AMaxGE5 state
         amaxPeaX:0,amaxPeaY:0,amaxPeaActive:false,amaxPeaFireTimer:AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:AMAX_Q_TURN_INTERVAL,amaxPeaAng:0,amaxQCd:0,amaxPeaHp:AMAX_Q_HP,
+        amaxBuilding:false,amaxBuildTimer:0, // fase de construcción: quieto 5s antes de activar torreta
         amaxPeaProjs:[],  // [{x,y,vx,vy,life}] traveling pea projectiles
         amaxHealing:false,amaxHealTimer:0,amaxHealAccum:0,amaxECd:0,amaxRUnlocked:false,amaxRUses:0,
         amaxShielding:false,amaxShieldTimer:0,amaxRCd:0,amaxShieldHit:false,
@@ -4468,6 +4479,28 @@ const Game={
           if(isAMaxGE5(p)&&p.role==='survivor'){
             if(p.amaxQCd>0)p.amaxQCd=Math.max(0,p.amaxQCd-dt);
             if((p.amaxHitCd||0)>0)p.amaxHitCd=Math.max(0,p.amaxHitCd-dt);
+            // ── Build phase: countdown while AMax stays still ──
+            if(p.amaxBuilding){
+              p.amaxBuildTimer=Math.max(0,(p.amaxBuildTimer||0)-dt);
+              if(p.amaxBuildTimer<=0){
+                // Construction complete → spawn turret + start CD
+                p.amaxBuilding=false;
+                const amaxCount=Object.values(W.players).filter(x=>x.role==='survivor'&&x.alive&&isAMaxGE5(x)).length;
+                const rangeReduction=Math.max(0,(amaxCount-1)*0.20);
+                const effectiveRange=AMAX_Q_RANGE*(1-rangeReduction);
+                p.amaxPeaActive=true;
+                p.amaxPeaX=p.x;p.amaxPeaY=p.y;
+                p.amaxPeaRange=effectiveRange;
+                p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
+                p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
+                p.amaxPeaHp=AMAX_Q_HP;
+                p.amaxPeaProjs=[];
+                p.amaxPeaMarked=true;
+                const _kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+                p.amaxPeaAng=_kk?Math.atan2(_kk.y-p.y,_kk.x-p.x):p.facing;
+                p.amaxQCd=AMAX_Q_CD;
+              }
+            }
             // Pea shooter ticks
             if(p.amaxPeaActive){
               // Check if killer destroys the lanzaguisantes (melee range attack)
@@ -4516,12 +4549,21 @@ const Game={
             if(p.amaxHealing){
               p.amaxHealTimer=Math.max(0,(p.amaxHealTimer||0)-dt);
               const healAmt=AMAX_E_HEAL_RATE*dt;
+              // Curar a AMaxGE5
               p.hp=Math.min(p.maxHp,p.hp+healAmt);
               p.amaxHealAccum=(p.amaxHealAccum||0)+dt;
               if(p.amaxHealAccum>=AMAX_E_UNLOCK_DUR&&!p.amaxRUnlocked){
                 p.amaxRUnlocked=true;
                 p.amaxRUses=(p.amaxRUses||0)+1;
               }
+              // Curar a supervivientes aliados dentro del rango
+              const healRange=AMAX_E_RANGE*TILE;
+              Object.values(W.players).forEach(ally=>{
+                if(ally.id===p.id)return; // ya curado arriba
+                if(ally.role!=='survivor'||!ally.alive)return;
+                if(Math.hypot(ally.x-p.x,ally.y-p.y)>healRange)return;
+                ally.hp=Math.min(ally.maxHp,ally.hp+healAmt);
+              });
               if(p.amaxHealTimer<=0){p.amaxHealing=false;p.amaxHealMarked=false;}
             }
             if(p.amaxECd>0)p.amaxECd=Math.max(0,p.amaxECd-dt);
@@ -4664,8 +4706,8 @@ const Game={
   moveP(p,dt,inp,sprinting){
     // Block all movement during combo stun (survivor) or killer combo lock
     if(p.comboStunned||p.comboLocked)return;
-    // AMaxGE5: block movement when healing
-    if(isAMaxGE5(p)&&p.amaxHealing)return;
+    // AMaxGE5: block movement when healing or building turret
+    if(isAMaxGE5(p)&&(p.amaxHealing||p.amaxBuilding))return;
     // Block movement when AMaxGE5-stunned (killer got stunned by counterattack)
     if(p.amaxStunned)return;
     // Nicostos: charge handles its own movement; still/revive blocks
@@ -4823,23 +4865,24 @@ const Game={
   amaxDoQ(pid){
     const p=W.players[pid];
     if(!p||!p.alive||!isAMaxGE5(p))return;
-    if(p.amaxQCd>0||p.amaxPeaActive)return;
-    // Count other AMaxGE5 in the round
-    const amaxCount=Object.values(W.players).filter(x=>x.role==='survivor'&&x.alive&&isAMaxGE5(x)).length;
-    const rangeReduction=Math.max(0,(amaxCount-1)*0.20);
-    const effectiveRange=AMAX_Q_RANGE*(1-rangeReduction);
-    p.amaxPeaActive=true;
-    p.amaxPeaX=p.x;p.amaxPeaY=p.y;
-    p.amaxPeaRange=effectiveRange;
-    p.amaxPeaFireTimer=AMAX_Q_FIRE_INTERVAL;
-    p.amaxPeaTurnTimer=AMAX_Q_TURN_INTERVAL;
-    p.amaxPeaHp=AMAX_Q_HP;
-    p.amaxPeaProjs=[];
-    p.amaxPeaMarked=true; // torreta marcada para todos los supervivientes
-    // Aim toward killer
-    const killer=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    p.amaxPeaAng=killer?Math.atan2(killer.y-p.amaxPeaY,killer.x-p.amaxPeaX):p.facing;
-    p.amaxQCd=AMAX_Q_CD;
+    // Block if already in build phase or CD active without existing turret to replace
+    if(p.amaxBuilding)return;
+    if(p.amaxQCd>0&&!p.amaxPeaActive)return; // CD running and no turret to replace → deny
+    // If CD is running but turret exists (wants to relocate): only allow after CD expires
+    if(p.amaxQCd>0&&p.amaxPeaActive)return;
+    // Destroy existing turret if there is one
+    if(p.amaxPeaActive){
+      p.amaxPeaActive=false;
+      p.amaxPeaProjs=[];
+      p.amaxPeaHp=0;
+      p.amaxPeaMarked=false;
+    }
+    // Enter build phase: AMax stays still for AMAX_Q_BUILD_DUR seconds
+    p.amaxBuilding=true;
+    p.amaxBuildTimer=AMAX_Q_BUILD_DUR;
+    // CD starts AFTER construction (handled in tick when build completes)
+    // Reset any partial CD
+    p.amaxQCd=0;
   },
 
   amaxDoE(pid){
@@ -5222,7 +5265,7 @@ const Game={
         gbActive:p.gbActive||false,gbTimer:p.gbTimer||0,
         killerChar:p.killerChar||'slasher',
         survivorChar:p.survivorChar||'noob',
-        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],amaxPeaMarked:p.amaxPeaMarked||false,
+        amaxPeaX:p.amaxPeaX||0,amaxPeaY:p.amaxPeaY||0,amaxPeaActive:p.amaxPeaActive||false,amaxPeaFireTimer:p.amaxPeaFireTimer||AMAX_Q_FIRE_INTERVAL,amaxPeaTurnTimer:p.amaxPeaTurnTimer||AMAX_Q_TURN_INTERVAL,amaxPeaAng:p.amaxPeaAng||0,amaxQCd:p.amaxQCd||0,amaxPeaHp:p.amaxPeaHp||0,amaxPeaProjs:p.amaxPeaProjs||[],amaxPeaMarked:p.amaxPeaMarked||false,amaxBuilding:p.amaxBuilding||false,amaxBuildTimer:p.amaxBuildTimer||0,
         amaxHealing:p.amaxHealing||false,amaxHealTimer:p.amaxHealTimer||0,amaxHealAccum:p.amaxHealAccum||0,amaxECd:p.amaxECd||0,amaxRUnlocked:p.amaxRUnlocked||false,amaxRUses:p.amaxRUses||0,
         amaxShielding:p.amaxShielding||false,amaxShieldTimer:p.amaxShieldTimer||0,amaxRCd:p.amaxRCd||0,amaxShieldHit:p.amaxShieldHit||false,
         amaxRevealed:p.amaxRevealed||false,amaxRevealTimer:p.amaxRevealTimer||0,
@@ -5300,6 +5343,7 @@ const Game={
         if(d.amaxQCd!==undefined){
           p.amaxQCd=d.amaxQCd||0;p.amaxPeaX=d.amaxPeaX||0;p.amaxPeaY=d.amaxPeaY||0;
           p.amaxPeaActive=d.amaxPeaActive||false;p.amaxPeaFireTimer=d.amaxPeaFireTimer||0;p.amaxPeaMarked=d.amaxPeaMarked||false;
+          p.amaxBuilding=d.amaxBuilding||false;p.amaxBuildTimer=d.amaxBuildTimer||0;
           p.amaxPeaTurnTimer=d.amaxPeaTurnTimer||0;p.amaxPeaAng=d.amaxPeaAng||0;
           p.amaxPeaHp=d.amaxPeaHp||0;p.amaxPeaProjs=d.amaxPeaProjs||[];
           p.amaxHealing=d.amaxHealing||false;p.amaxHealTimer=d.amaxHealTimer||0;p.amaxHealAccum=d.amaxHealAccum||0;
@@ -6114,6 +6158,28 @@ const Game={
       if(gbAlpha<1)ctx.restore();
     });
 
+    // ── AMaxGE5: build progress visual (while AMax is standing still building) ──
+    Object.values(W.players).forEach(p=>{
+      if(!p.alive||!isAMaxGE5(p)||!p.amaxBuilding)return;
+      const bx=p.x,by=p.y;
+      const pct=1-((p.amaxBuildTimer||0)/AMAX_Q_BUILD_DUR);
+      const t2=Date.now()/300;
+      ctx.save();
+      // Pulsing construction glow
+      ctx.beginPath();ctx.arc(bx,by,TILE*.7,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255,200,40,${0.3+Math.sin(t2)*0.2})`;ctx.lineWidth=2.5;ctx.setLineDash([5,6]);ctx.stroke();ctx.setLineDash([]);
+      // Progress arc (yellow)
+      ctx.beginPath();ctx.arc(bx,by-TILE*.85,TILE*.32,-Math.PI/2,-Math.PI/2+pct*Math.PI*2,false);
+      ctx.strokeStyle='rgba(255,220,0,0.85)';ctx.lineWidth=4;ctx.lineCap='round';ctx.stroke();
+      // Background arc
+      ctx.beginPath();ctx.arc(bx,by-TILE*.85,TILE*.32,0,Math.PI*2);
+      ctx.strokeStyle='rgba(80,60,0,0.4)';ctx.lineWidth=4;ctx.stroke();
+      // Hammer emoji
+      ctx.font=`${TILE*.4}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.globalAlpha=0.85+Math.sin(t2*2)*0.15;
+      ctx.fillText('🔨',bx,by-TILE*.85);
+      ctx.globalAlpha=1;ctx.restore();
+    });
     // ── AMaxGE5: pea shooter visual ──
     Object.values(W.players).forEach(p=>{
       if(!p.alive||!isAMaxGE5(p)||!p.amaxPeaActive)return;
@@ -6136,12 +6202,19 @@ const Game={
       ctx.fillStyle=hpPct>0.5?'#2ecc71':hpPct>0.25?'#f39c12':'#e74c3c';
       ctx.fillRect(bx2,by2,bw*hpPct,bh);
       ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.strokeRect(bx2,by2,bw,bh);
-      // Range ring — visible para el dueño, semi-visible para otros supervivientes
+      // Range ring — SOLO visible para el dueño de la torreta, celeste transparente
       const range=(p.amaxPeaRange||AMAX_Q_RANGE)*TILE;
       const isMyTurret=(p.id===S.myId);
-      const rangeAlpha=isMyTurret?(0.45+pulse*0.2):(0.10+pulse*0.08);
-      ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
-      ctx.strokeStyle=`rgba(0,220,80,${rangeAlpha})`;ctx.lineWidth=isMyTurret?2:1.2;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
+      if(isMyTurret){
+        const pulse2=0.5+Math.sin(t2*1.4)*0.5;
+        // Relleno celeste muy transparente para ver las paredes
+        ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
+        ctx.fillStyle=`rgba(80,210,255,${0.05+pulse2*0.04})`;ctx.fill();
+        // Borde celeste punteado
+        ctx.beginPath();ctx.arc(px,py,range,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(80,210,255,${0.55+pulse2*0.20})`;
+        ctx.lineWidth=1.8;ctx.setLineDash([7,7]);ctx.stroke();ctx.setLineDash([]);
+      }
       // Torreta marcada: beacon visual para todos los supervivientes
       if(p.amaxPeaMarked){
         const beaconA=0.55+Math.sin(t2*1.8)*0.3;
@@ -6172,8 +6245,14 @@ const Game={
       if(!p.alive||!isAMaxGE5(p)||!p.amaxHealing)return;
       const t2=Date.now()/300;
       const pulse=0.55+Math.sin(t2)*0.35;
+      const healRange=AMAX_E_RANGE*TILE;
       ctx.save();
-      // Glow zone around player
+      // Rango de curación — círculo exterior translúcido
+      ctx.beginPath();ctx.arc(p.x,p.y,healRange,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(60,255,120,${0.18+pulse*0.12})`;ctx.lineWidth=1.5;ctx.setLineDash([6,8]);ctx.stroke();ctx.setLineDash([]);
+      ctx.beginPath();ctx.arc(p.x,p.y,healRange,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,180,60,${0.03+pulse*0.03})`;ctx.fill();
+      // Glow zone alrededor del jugador
       const gr=ctx.createRadialGradient(p.x,p.y,TILE*.2,p.x,p.y,TILE*1.2);
       gr.addColorStop(0,`rgba(80,255,120,${pulse*0.28})`);
       gr.addColorStop(0.5,`rgba(0,200,80,${pulse*0.12})`);
@@ -6182,11 +6261,21 @@ const Game={
       ctx.beginPath();ctx.arc(p.x,p.y,TILE*.85,0,Math.PI*2);
       ctx.strokeStyle=`rgba(60,255,120,${0.55+pulse*.35})`;ctx.lineWidth=2.5+Math.sin(t2)*1;
       ctx.shadowColor='rgba(0,255,100,.8)';ctx.shadowBlur=16*pulse;ctx.stroke();ctx.shadowBlur=0;
-      // Book emoji
+      // Emoji de libro
       ctx.font=`${TILE*.5}px monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
       ctx.globalAlpha=0.85+Math.sin(t2)*0.15;
       ctx.fillText('📖',p.x,p.y-TILE*.6+Math.sin(t2*1.5)*3);
       ctx.globalAlpha=1;ctx.restore();
+      // Indicador verde en aliados que están siendo curados
+      Object.values(W.players).forEach(ally=>{
+        if(ally.id===p.id||ally.role!=='survivor'||!ally.alive)return;
+        if(Math.hypot(ally.x-p.x,ally.y-p.y)>healRange)return;
+        ctx.save();
+        ctx.font=`${TILE*.38}px monospace`;ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.globalAlpha=0.6+Math.sin(t2*2+ally.x)*0.3;
+        ctx.fillText('💚',ally.x,ally.y-TILE*.55+Math.sin(t2*1.8)*3);
+        ctx.globalAlpha=1;ctx.restore();
+      });
     });
 
     // ── AMaxGE5 shield visual ──
@@ -7111,7 +7200,7 @@ const STORE_KILLERS=[
       {lbl:'Daño slam',val:'20'},
       {lbl:'CD',val:'25s'},
       {lbl:'── E ¿QUIERES? ──',val:''},
-      {lbl:'Daño cuchillo',val:'1'},
+      {lbl:'Daño cuchillo',val:'15'},
       {lbl:'Recupera cuchillo',val:'20s'},
       {lbl:'CD (al recuperar)',val:'10s'},
       {lbl:'── R ESTRÉS AGUDO ──',val:''},
@@ -7126,7 +7215,7 @@ const STORE_KILLERS=[
     abilities:[
       {key:'M1',desc:'Cuchillazo — 22.5 de daño con cuchillo (19 sin él). CD: 1.9s. Sin cuchillo se mueve un 20% más veloz.'},
       {key:'Q',desc:'Embestida — Se lanza en línea recta difícilmente girando. Gasta 15 stamina/seg. Si impacta: agarra al objetivo, 10 de daño + 20 al lanzarlo al suelo. Nicostos recibe Lentitud I por 1s. CD: 25s.'},
-      {key:'E',desc:'¿Quieres? — Lanza el cuchillo hacia donde mira. Si impacta: marca al objetivo por 10s con Lentitud I. Inflige 1 de daño. Al lanzarlo pierde el cuchillo y lo recupera en 20s; el CD de 10s inicia al recuperarlo.'},
+      {key:'E',desc:'¿Quieres? — Lanza el cuchillo hacia donde mira. Si impacta: marca al objetivo por 10s con Lentitud I. Inflige 15 de daño. Al lanzarlo pierde el cuchillo y lo recupera en 20s; el CD de 10s inicia al recuperarlo.'},
       {key:'R',desc:'Estrés Agudo — Se detiene 1s y se vuelve invisible progresivamente en 2s. Puede ver a todos los supervivientes. Dura máx 10s. Al volverse visible espera 0.5s antes de poder moverse. CD: 30s.'},
       {key:'T',desc:'¿Conseguimos Berserk? — Se desbloquea al matar 2 personas (no acumulable). Recarga stamina a 35/seg (máx 85 en este modo), Invisibilidad II por 20s, invulnerable al aturdimiento y rango de detección +10%. Dura 20s.'},
       {key:'PASIVA',desc:'Al golpear a alguien puede ver un rastro de sangre que lo guía hacia el superviviente más cercano.'}
@@ -7156,8 +7245,8 @@ const STORE_SURVIVORS=[
       {lbl:'Stamina total',val:'igual a NOOB'}
     ],
     abilities:[
-      {key:'Q',desc:'Referencia?????!!!!! — Planta un guisante que dispara cada 2s a 40 studs. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
-      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 6 HP/seg (30 HP total en 5s). Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
+      {key:'Q',desc:'Referencia?????!!!!! — Se queda quieto 5s construyendo una torreta de guisantes que dispara cada 2s a 40 studs. Si ya existe una, la destruye y construye una nueva en el sitio actual. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
+      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 6 HP/seg (30 HP total en 5s). Cura también a supervivientes aliados en un radio de 6 tiles. Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
       {key:'R',desc:'Escudito para siempre — Solo disponible tras usar Lore de Fnaf con éxito. Usa el martillo como escudo: invulnerable 2.5s. Si el asesino golpea durante el escudo: contraataque automático que aleja 5 studs y stunea 2s. Si nadie ataca durante el escudo: Lentitud II por 3s y Mareo I por 2s. En LMS: invulnerabilidad reducida a 1s. CD: 45s.'}
     ],
     lore:'Alejandro estaba en su casa después de la piscina, listo para estudiar francés para su examen. De pronto, un fuerte dolor de cabeza lo interrumpió y no lo dejó concentrarse. Cansado, decidió recostarse y se quedó dormido. Al despertar, sintió que algo no estaba bien, como si el ambiente hubiera cambiado. Se levantó lentamente y, sin saber por qué, tomó un martillo cerca de su cuarto. Al salir, ya no estaba en su mundo, sino en un lugar extraño y oscuro. Allí encontró a otros supervivientes igual de confundidos. A pesar del miedo, Alejandro se mantuvo positivo y animó al grupo. Desde ese momento, decidió proteger a los demás y no rendirse.',
