@@ -5106,6 +5106,7 @@ const Game={
     p.mankREating=true;
     p.mankREatTimer=MANK_R_EAT_DUR;
   },
+  doEnrage(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.enrageCd>0||p.enraged)return;
