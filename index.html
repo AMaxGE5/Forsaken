@@ -4144,7 +4144,11 @@ const Game={
     mb.classList.remove('show');void mb.offsetWidth;
     mb.classList.add('show');
     // Show killer reveal then start game
-    Game.showKillerReveal(()=>{GameAudio.playRound();Game.mainLoop();});
+    Game.showKillerReveal(()=>{
+      const kk=Object.values(W.players).find(p=>p.role==='killer');
+      GameAudio.playRound(kk?kk.killerChar:'slasher');
+      Game.mainLoop();
+    });
   },
 
   showKillerReveal(callback){
@@ -7545,16 +7549,17 @@ const GameAudio={
     this._fadeIn(this._lobby,0.45,600);
   },
 
-  playRound(){
+  playRound(killerChar){
     this.stopAll();
     this._mode='map';
     this._map=this._mkAudio('mapas/ronda.mp3',true,0.50);
     this._fadeIn(this._map,0.50,800);
-    // Pre-cargar layers en silencio (no reproducir — se inician al entrar en rango)
-    this._l1=this._mkAudio('slasher/layer1.mp3',true,0);
-    this._l2=this._mkAudio('slasher/layer2.mp3',true,0);
-    this._l3=this._mkAudio('slasher/layer3.mp3',true,0);
-    this._ct=this._mkAudio('slasher/chase theme.mp3',true,0);
+    // Carpeta de layers según el killer
+    const folder=killerChar==='nicostos'?'nicostos':'slasher';
+    this._l1=this._mkAudio(`${folder}/layer1.mp3`,true,0);
+    this._l2=this._mkAudio(`${folder}/layer2.mp3`,true,0);
+    this._l3=this._mkAudio(`${folder}/layer3.mp3`,true,0);
+    this._ct=this._mkAudio(`${folder}/chase theme.mp3`,true,0);
     this._chaseActive=false;
     this._currentLayer=0;
   },
