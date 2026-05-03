@@ -4045,6 +4045,10 @@ function applyShieldDamage(s, dmg){
   if(isAMaxGE5&&isAMaxGE5(s)&&s.role==='survivor'){
     if((s.amaxHitCd||0)>0) return; // hit cooldown active — ignore this hit
     s.amaxHitCd=0.18; // 180ms per-hit immunity
+    // Cancelar curación activa
+    if(s.amaxHealing){s.amaxHealing=false;s.amaxHealTimer=0;s.amaxHealMarked=false;}
+    // Cancelar construcción del peashooter si aún no terminó
+    if(s.amaxBuilding){s.amaxBuilding=false;s.amaxBuildTimer=0;s.amaxPeaActive=false;}
   }
   // Martin force field: bloquea todo daño
   if(isMartin&&isMartin(s)&&s.martEShieldActive)return;
