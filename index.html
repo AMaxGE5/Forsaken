@@ -2200,13 +2200,13 @@ const AMAX_Q_FIRE_INTERVAL = 2; // fire every 2s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
 const AMAX_Q_BLINDNESS_DUR = 0.8; // blindness I duration
 const AMAX_Q_REVEAL_DUR = 5;    // revealed duration
-const AMAX_Q_PEA_SPEED = 20;    // pea projectile speed in tiles/s (más rápido)
+const AMAX_Q_PEA_SPEED = 34;    // pea projectile speed in tiles/s (más rápido)
 const AMAX_Q_PEA_SLOW_DUR = 2.5; // Slow II duration on killer
 const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
-const AMAX_Q_HP = 40;           // lanzaguisantes hitpoints
+const AMAX_Q_HP = 80;           // lanzaguisantes hitpoints (2 golpes: 40+40)
 const AMAX_E_CD = 20;
 const AMAX_E_RANGE = 6; // tiles — rango de curación para aliados cercanos
-const AMAX_E_HEAL_RATE = 6.0;   // HP per second → 30 HP total over 5s max
+const AMAX_E_HEAL_RATE = 12.0;  // HP per second (más rápido)
 const AMAX_E_MAX_DUR = 5;       // max heal duration per use
 const AMAX_E_UNLOCK_DUR = 3;    // must heal 3s to unlock R
 const AMAX_R_CD = 36;
@@ -5266,9 +5266,15 @@ const Game={
     p.m1Cd=NICO_M1_CD;
     const dmg=p.nicoHasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
     const ang=p.facing;
-    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
-    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2,maxLife:.2,idx:0,nicoSlash:true,hasKnife:p.nicoHasKnife});
+    // 3 hitboxes escalonados (igual que slasher) con pequeño delay visual
+    for(let i=0;i<M1_SLASHES;i++){
+      const delay=i*M1_DELAY;
+      const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
+      const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+      slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2+delay,maxLife:.2+delay,idx:i,nicoSlash:true,hasKnife:p.nicoHasKnife});
+    }
+    if(!p.m1HitSet)p.m1HitSet=new Set();
+    p.m1HitSet=new Set();
     Object.values(W.players).forEach(s=>{
       if(s.role!=='survivor'||!s.alive)return;
       if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
