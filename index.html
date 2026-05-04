@@ -835,6 +835,31 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
   background:#fff;border-radius:50%;transition:transform .15s;
 }
 .lsp-toggle input:checked~.lsp-toggle-thumb{transform:translateX(18px);}
+.lsp-divider{border:none;border-top:1px solid rgba(255,255,255,.1);margin:12px 0;}
+.lsp-codes-title{font-size:.52rem;letter-spacing:.38em;color:var(--dim);margin-bottom:10px;margin-top:2px;}
+.lsp-code-row{display:flex;gap:6px;align-items:center;}
+.lsp-code-input{
+  flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.16);
+  color:#fff;font-family:'Share Tech Mono',monospace;font-size:.65rem;
+  letter-spacing:.1em;padding:6px 9px;outline:none;
+  transition:border-color .15s;
+}
+.lsp-code-input::placeholder{color:rgba(255,255,255,.25);letter-spacing:.05em;}
+.lsp-code-input:focus{border-color:rgba(255,255,255,.45);}
+.lsp-code-btn{
+  background:rgba(192,57,43,.18);border:1px solid rgba(192,57,43,.45);
+  color:var(--blood);font-family:'Share Tech Mono',monospace;font-size:.58rem;
+  letter-spacing:.1em;padding:6px 10px;cursor:pointer;white-space:nowrap;
+  transition:background .15s,border-color .15s;
+}
+.lsp-code-btn:hover{background:rgba(192,57,43,.35);border-color:var(--blood);}
+.lsp-code-msg{
+  font-family:'Share Tech Mono',monospace;font-size:.6rem;
+  letter-spacing:.08em;margin-top:7px;min-height:14px;
+  transition:opacity .3s;
+}
+.lsp-code-msg.ok{color:#2ecc71;}
+.lsp-code-msg.err{color:#e74c3c;}
 </style>
 </head>
 <body>
@@ -989,6 +1014,13 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           <span class="lsp-toggle-thumb"></span>
         </label>
       </div>
+      <hr class="lsp-divider">
+      <div class="lsp-codes-title">CÓDIGOS</div>
+      <div class="lsp-code-row">
+        <input class="lsp-code-input" id="lspCodeInput" type="text" placeholder="ingresa un código..." maxlength="32" autocomplete="off" spellcheck="false">
+        <button class="lsp-code-btn" onclick="Codes.redeem()">CANJEAR</button>
+      </div>
+      <div class="lsp-code-msg" id="lspCodeMsg"></div>
     </div>
 
     <!-- ══ SHOP MODAL ══ -->
@@ -1587,6 +1619,53 @@ const PersistDB={
   async getRemember(){return localStorage.getItem(this._RKEY);},
   async setRemember(user){localStorage.setItem(this._RKEY,user);},
   async clearRemember(){localStorage.removeItem(this._RKEY);},
+
+  // Verifica si un código global ya fue reclamado. Devuelve {claimed:bool, by:string|null}
+  async checkGlobalCode(codeKey){
+    const db=_initFirebase();
+    if(db){
+      try{
+        const snap=await db.ref('global_codes/'+codeKey).once('value');
+        const val=snap.val();
+        if(val&&val.claimedBy)return {claimed:true,by:val.claimedBy};
+        return {claimed:false,by:null};
+      }catch(e){console.warn('Firebase checkGlobalCode:',e);}
+    }
+    // Fallback localStorage (single-device only)
+    try{
+      const gc=JSON.parse(localStorage.getItem('fsk_global_codes')||'{}');
+      if(gc[codeKey])return {claimed:true,by:gc[codeKey].claimedBy};
+    }catch(e){}
+    return {claimed:false,by:null};
+  },
+
+  // Intenta reclamar un código global de forma atómica. Devuelve true si tuvo éxito.
+  async claimGlobalCode(codeKey, username){
+    const db=_initFirebase();
+    if(db){
+      try{
+        let success=false;
+        await db.ref('global_codes/'+codeKey).transaction(current=>{
+          if(current===null){
+            // Nadie lo ha reclamado aún — lo tomamos
+            success=true;
+            return {claimedBy:username,claimedAt:Date.now()};
+          }
+          // Ya está tomado — abortar transacción
+          return undefined;
+        });
+        return success;
+      }catch(e){console.warn('Firebase claimGlobalCode:',e);}
+    }
+    // Fallback localStorage
+    try{
+      const gc=JSON.parse(localStorage.getItem('fsk_global_codes')||'{}');
+      if(gc[codeKey])return false;
+      gc[codeKey]={claimedBy:username,claimedAt:Date.now()};
+      localStorage.setItem('fsk_global_codes',JSON.stringify(gc));
+      return true;
+    }catch(e){return false;}
+  },
 };
 
 const Auth={
@@ -1720,6 +1799,7 @@ const Stats={
     this.equippedKiller=acc.equippedKiller||'';
     this.equippedSurvivor=acc.equippedSurvivor||'';
     this.hitboxPref=acc.hitboxPref||false;
+    this.redeemedCodes=acc.redeemedCodes||[];
   },
   save(){
     if(!this._key)return;
@@ -1738,6 +1818,7 @@ const Stats={
     db[this._key].equippedKiller=this.equippedKiller||'';
     db[this._key].equippedSurvivor=this.equippedSurvivor||'';
     db[this._key].hitboxPref=this.hitboxPref||false;
+    db[this._key].redeemedCodes=this.redeemedCodes||[];
     // Guardar en Firebase (async, no bloquea)
     PersistDB.saveUser(this._key, db[this._key]);
   },
@@ -1780,8 +1861,85 @@ const Stats={
   },
 };
 
-// Session tick interval
-setInterval(()=>{if(S&&S.inLobbyWorld)Stats.tickSession();},5000);
+// ══════════════════════════════════════════
+//  CODES — Canjes de recompensa
+// ══════════════════════════════════════════
+const CODES_DB = {
+  // Códigos normales (cada jugador puede canjearlo una vez)
+  'demo': {
+    reward(){Stats.addCoins(200);},
+    msg:'✅ +200 monedas — ¡gracias por jugar la demo!',
+  },
+  // Códigos globales (solo UNA persona en el mundo puede canjearlo)
+  // global:true activa la verificación en Firebase
+  'dev': {
+    global:true,
+    reward(){Stats.addCoins(5000);},
+    msg:'✅ +5000 monedas — ¡fuiste el primero!',
+    msgTaken(by){return `❌ Código ya reclamado por ${by}`;},
+  },
+};
+
+const Codes={
+  redeem(){
+    if(!Stats._key){
+      this._show('⚠ Inicia sesión primero','err');return;
+    }
+    const inp=document.getElementById('lspCodeInput');
+    if(!inp)return;
+    const raw=inp.value.trim();
+    const code=raw.toLowerCase();
+    if(!code){this._show('⚠ Escribe un código','err');return;}
+
+    const entry=CODES_DB[code];
+    if(!entry){this._show('❌ Código inválido','err');return;}
+
+    // Verificar si este usuario ya lo canjeó localmente
+    const used=Stats.redeemedCodes||[];
+    if(used.includes(code)){this._show('❌ Código ya canjeado','err');return;}
+
+    if(entry.global){
+      // Código global: consultar Firebase antes de dar recompensa
+      this._show('⏳ Verificando...','');
+      PersistDB.claimGlobalCode(code, Stats.username).then(success=>{
+        if(!success){
+          // Ya fue reclamado — averiguar por quién para el mensaje
+          PersistDB.checkGlobalCode(code).then(info=>{
+            this._show(entry.msgTaken(info.by||'otro jugador'),'err');
+          });
+        }else{
+          // Reclamado con éxito
+          entry.reward();
+          Stats.redeemedCodes=[...used,code];
+          Stats.save();
+          inp.value='';
+          this._show(entry.msg,'ok');
+        }
+      }).catch(()=>{this._show('❌ Error de conexión','err');});
+    }else{
+      // Código normal
+      entry.reward();
+      Stats.redeemedCodes=[...used,code];
+      Stats.save();
+      inp.value='';
+      this._show(entry.msg,'ok');
+    }
+  },
+  _show(msg,type){
+    const el=document.getElementById('lspCodeMsg');
+    if(!el)return;
+    el.textContent=msg;
+    el.className='lsp-code-msg '+(type||'');
+    clearTimeout(this._hideT);
+    if(msg)this._hideT=setTimeout(()=>{el.textContent='';el.className='lsp-code-msg';},5000);
+  },
+};
+
+// Enter key inside code input triggers redeem
+document.addEventListener('DOMContentLoaded',()=>{
+  const inp=document.getElementById('lspCodeInput');
+  if(inp)inp.addEventListener('keydown',e=>{if(e.key==='Enter')Codes.redeem();});
+});
 
 // ══════════════════════════════════════════
 //  SAVE FILE — Guardado en archivo con hash
@@ -1870,6 +2028,7 @@ const SaveFile = {
           Stats.equippedKiller  = d.equippedKiller  || '';
           Stats.equippedSurvivor= d.equippedSurvivor|| '';
           Stats.hitboxPref      = d.hitboxPref      || false;
+          Stats.redeemedCodes   = d.redeemedCodes   || [];
           // Sincronizar con localStorage
           const acc = {user:d.user, pass:'', ...d};
           const loc = JSON.parse(localStorage.getItem('fsk_users')||'{}');
@@ -4155,10 +4314,30 @@ const Game={
     const killer=Object.values(W.players).find(p=>p.role==='killer');
     const killerUser=(killer?(killer.username||killer.name):'?').toUpperCase();
     const isMe=killer&&killer.id===S.myId;
-    const charName=(killer&&killer.killerChar==='nicostos')?'NICOSTOS':'SLASHER';
+    const isNico=killer&&killer.killerChar==='nicostos';
+    const charName=isNico?'NICOSTOS':'SLASHER';
     document.getElementById('krName').textContent=charName;
     document.getElementById('krUser').textContent=isMe?'▶ '+killerUser+' (TÚ)':killerUser;
+    // Cambiar estética del overlay según el killer
     const ov=document.getElementById('killerRevealOv');
+    const fog=document.getElementById('krFogBg');
+    const nameEl=document.getElementById('krName');
+    const subEl=document.getElementById('krSub');
+    if(isNico){
+      ov.style.background='#000';
+      fog.style.background='radial-gradient(ellipse at 50% 35%,rgba(60,0,120,.85) 0%,rgba(10,0,30,.98) 55%,#000 100%)';
+      nameEl.style.color='#a020f0';
+      nameEl.style.textShadow='0 0 30px rgba(160,0,255,.9),0 0 80px rgba(100,0,200,.5),0 0 140px rgba(60,0,120,.4)';
+      subEl.textContent='El asesino de esta ronda es...';
+      // Scanlines overlay en el fondo
+      ov.style.setProperty('--nico-mode','1');
+    }else{
+      ov.style.background='#000';
+      fog.style.background='radial-gradient(ellipse at 50% 35%,rgba(100,0,0,.9) 0%,rgba(20,0,0,.98) 55%,#000 100%)';
+      nameEl.style.color='#e74c3c';
+      nameEl.style.textShadow='0 0 30px rgba(231,76,60,.9),0 0 80px rgba(231,76,60,.5),0 0 140px rgba(150,0,0,.4)';
+      subEl.textContent='El asesino de esta ronda es...';
+    }
     ov.classList.remove('fading');
     ov.classList.add('show');
     KillerReveal.start();
@@ -7367,100 +7546,172 @@ const KillerReveal={
     c.fillStyle=vig;c.fillRect(0,0,w,h);
   },
   _drawNicostos(c,w,h,cx,cy,t,appear){
-    // Purple fog background
-    c.save();c.globalAlpha=appear*.4;
-    for(let i=0;i<8;i++){
-      const ang=i/8*Math.PI*2+t*.1;
-      const dist=55+Math.sin(t*.7+i)*22;
-      const fx=cx+Math.cos(ang)*dist*1.6,fy=cy+h*.2+Math.sin(ang*.6)*18;
-      const r=45+Math.sin(t*1.1+i*1.2)*15;
-      const fog=c.createRadialGradient(fx,fy,0,fx,fy,r);
-      fog.addColorStop(0,'rgba(80,0,160,.5)');fog.addColorStop(1,'rgba(0,0,0,0)');
-      c.fillStyle=fog;c.beginPath();c.ellipse(fx,fy,r*1.3,r*.55,0,0,Math.PI*2);c.fill();
+    // ── NICOSTOS: materialización desde estática digital / glitch ──
+    const phase1End=0.8, phase2End=2.2;
+    const glitchPhase=Math.max(0,Math.min(1,(t-phase1End)/(phase2End-phase1End)));
+    const stablePhase=Math.max(0,(t-phase2End)*0.5);
+
+    // Scanlines de TV muerta
+    c.save();
+    const scanAlpha=Math.max(0,1-glitchPhase*0.6)*0.55;
+    c.globalAlpha=scanAlpha;
+    for(let y2=0;y2<h;y2+=4){
+      const bright=(Math.random()*0.18+0.02);
+      c.fillStyle=`rgba(${20+Math.random()*30},${20+Math.random()*30},${40+Math.random()*60},${bright})`;
+      c.fillRect(0,y2,w,2);
     }
     c.restore();
 
-    const bodyH=h*.6,bodyW=bodyH*.5;
+    // Estática de píxeles en fase temprana
+    if(t<phase2End+0.3){
+      const staticAmt=Math.max(0,1-glitchPhase*1.1);
+      c.save();c.globalAlpha=staticAmt*0.75;
+      const blockSize=6;
+      for(let bx=0;bx<w;bx+=blockSize){
+        for(let by=0;by<h;by+=blockSize){
+          if(Math.random()>0.45){
+            const v=Math.random();
+            if(v<0.3){c.fillStyle=`rgba(80,0,200,${Math.random()*0.7})`;}
+            else if(v<0.5){c.fillStyle=`rgba(0,200,255,${Math.random()*0.5})`;}
+            else{c.fillStyle=`rgba(240,240,255,${Math.random()*0.35})`;}
+            c.fillRect(bx,by,blockSize+Math.random()*6,blockSize);
+          }
+        }
+      }
+      c.restore();
+    }
+
+    // Líneas de glitch horizontal
+    c.save();c.globalAlpha=Math.min(1,glitchPhase*1.4+0.1)*(1-Math.min(1,stablePhase*0.7));
+    for(let g=0;g<10;g++){
+      const gy=Math.random()*h;
+      const gw=30+Math.random()*w*0.6;
+      const gx=(Math.random()-0.5)*80;
+      const gh=Math.random()<0.3?8:2;
+      c.fillStyle=Math.random()<0.5?'rgba(0,220,255,0.35)':'rgba(160,0,255,0.28)';
+      c.fillRect(gx,gy,gw,gh);
+    }
+    c.restore();
+
+    if(glitchPhase<=0)return;
+
+    const bodyH=h*.60,bodyW=bodyH*.5;
     const bodyY=cy-bodyH*.32;
+    const figAlpha=Math.min(1,glitchPhase*1.3);
+    const abr=Math.max(0,(1-glitchPhase)*14);
 
-    // Hoodie body
-    c.save();c.globalAlpha=appear*.95;
-    const hoodieG=c.createLinearGradient(cx,bodyY,cx,bodyY+bodyH);
-    hoodieG.addColorStop(0,'#1a0a2a');hoodieG.addColorStop(1,'rgba(10,4,18,0)');
-    c.fillStyle=hoodieG;
-    c.beginPath();
-    c.moveTo(cx-bodyW*.28,bodyY+bodyH*.12);
-    c.bezierCurveTo(cx-bodyW*.5,bodyY+bodyH*.38,cx-bodyW*.62,bodyY+bodyH*.62,cx-bodyW*.72,bodyY+bodyH);
-    c.lineTo(cx+bodyW*.72,bodyY+bodyH);
-    c.bezierCurveTo(cx+bodyW*.62,bodyY+bodyH*.62,cx+bodyW*.5,bodyY+bodyH*.38,cx+bodyW*.28,bodyY+bodyH*.12);
-    c.closePath();c.fill();
-    c.restore();
+    // Figura con chromatic aberration
+    [{dx:-abr,dy:0,tint:true},{dx:abr*.5,dy:-abr*.3,tint:true},{dx:0,dy:0,tint:false}].forEach(({dx,dy,tint})=>{
+      c.save();c.translate(dx,dy);
+      c.globalAlpha=tint?figAlpha*0.45:figAlpha*0.96;
+      if(tint)c.globalCompositeOperation='screen';
 
-    // Arms
-    c.save();c.globalAlpha=appear*.9;
-    // Right arm with knife
-    c.beginPath();c.moveTo(cx+bodyW*.22,bodyY+bodyH*.22);
-    c.bezierCurveTo(cx+bodyW*.52,bodyY+bodyH*.32,cx+bodyW*.68,bodyY+bodyH*.5,cx+bodyW*.58,bodyY+bodyH*.7);
-    c.lineWidth=bodyW*.1;c.strokeStyle='#1a0a2a';c.lineCap='round';c.stroke();
-    c.restore();
+      const hg=c.createLinearGradient(cx,bodyY,cx,bodyY+bodyH);
+      hg.addColorStop(0,tint?'#1a0a2a':'#1e0c32');hg.addColorStop(.4,'#16082a');hg.addColorStop(1,'rgba(10,4,18,0)');
+      c.fillStyle=hg;
+      c.beginPath();
+      c.moveTo(cx-bodyW*.28,bodyY+bodyH*.12);
+      c.bezierCurveTo(cx-bodyW*.5,bodyY+bodyH*.38,cx-bodyW*.62,bodyY+bodyH*.62,cx-bodyW*.72,bodyY+bodyH);
+      c.lineTo(cx+bodyW*.72,bodyY+bodyH);
+      c.bezierCurveTo(cx+bodyW*.62,bodyY+bodyH*.62,cx+bodyW*.5,bodyY+bodyH*.38,cx+bodyW*.28,bodyY+bodyH*.12);
+      c.closePath();c.fill();
 
-    // Knife
-    c.save();c.globalAlpha=appear*.98;
-    c.translate(cx+bodyW*.6,bodyY+bodyH*.42);c.rotate(.35);
-    const bladeLen=bodyH*.38;const mW=bodyH*.038;
-    const bladeG=c.createLinearGradient(0,0,mW,bladeLen);
-    bladeG.addColorStop(0,'#d0d0d0');bladeG.addColorStop(.5,'#a0a0a0');bladeG.addColorStop(1,'#505050');
-    c.fillStyle='#2a1a0a';c.fillRect(-mW*.2,-bladeLen*.2,mW*.8,bladeLen*.22);
-    c.fillStyle='#888';c.fillRect(-mW*.6,bladeLen*.02,mW*1.5,mW*.38);
-    c.fillStyle=bladeG;
-    c.beginPath();c.moveTo(-mW*.3,bladeLen*.04);c.lineTo(mW*.8,bladeLen*.04);c.lineTo(mW*.2,bladeLen*.04+bladeLen);c.closePath();c.fill();
-    c.fillStyle='rgba(180,0,0,.7)';
-    c.beginPath();c.moveTo(-mW*.2,bladeLen*.42);c.lineTo(mW*.65,bladeLen*.42);c.lineTo(mW*.2,bladeLen*.04+bladeLen);c.closePath();c.fill();
-    c.restore();
+      c.beginPath();c.moveTo(cx+bodyW*.22,bodyY+bodyH*.22);
+      c.bezierCurveTo(cx+bodyW*.52,bodyY+bodyH*.32,cx+bodyW*.68,bodyY+bodyH*.5,cx+bodyW*.58,bodyY+bodyH*.7);
+      c.lineWidth=bodyW*.1;c.strokeStyle=tint?'#2a0a4a':'#1a0a2a';c.lineCap='round';c.stroke();
 
-    // Hood
-    const headR=bodyH*.155;const headY=bodyY+bodyH*.07;
-    c.save();c.globalAlpha=appear;
-    c.fillStyle='#13062a';
-    c.beginPath();c.ellipse(cx,headY,headR*1.05,headR*1.08,0,0,Math.PI*2);c.fill();
-    // Inner shadow
-    c.fillStyle='#0a0318';c.beginPath();c.ellipse(cx,headY,headR*.78,headR*.82,0,0,Math.PI*2);c.fill();
-    // Face skin
-    c.fillStyle='#c8a882';c.beginPath();c.ellipse(cx,headY+headR*.06,headR*.52,headR*.62,0,0,Math.PI*2);c.fill();
-    // Eyes — corrupt purple glow
-    const eyePulse=.75+Math.sin(t*3)*0.25;
-    [-1,1].forEach(side=>{
-      const ex=cx+side*headR*.22,ey=headY-headR*.12;
-      c.fillStyle='#111';c.beginPath();c.ellipse(ex,ey,headR*.13,headR*.11,0,0,Math.PI*2);c.fill();
-      const eg=c.createRadialGradient(ex,ey,0,ex,ey,headR*.18);
-      eg.addColorStop(0,`rgba(180,0,255,${eyePulse})`);eg.addColorStop(1,'rgba(0,0,0,0)');
-      c.fillStyle=eg;c.beginPath();c.ellipse(ex,ey,headR*.18,headR*.14,0,0,Math.PI*2);c.fill();
-      c.shadowColor='rgba(150,0,255,.9)';c.shadowBlur=12*eyePulse;
-      c.fillStyle=`rgba(200,0,255,${eyePulse*.9})`;c.beginPath();c.arc(ex,ey,headR*.08,0,Math.PI*2);c.fill();
-      c.shadowBlur=0;
+      c.save();c.translate(cx+bodyW*.6,bodyY+bodyH*.42);c.rotate(.35);
+      const bladeLen2=bodyH*.38;const bW=bodyH*.038;
+      const bladeG=c.createLinearGradient(0,0,bW,bladeLen2);
+      bladeG.addColorStop(0,'#d0d0ff');bladeG.addColorStop(.5,'#a0a0cc');bladeG.addColorStop(1,'#5050aa');
+      c.fillStyle='#2a1a3a';c.fillRect(-bW*.2,-bladeLen2*.2,bW*.8,bladeLen2*.22);
+      c.fillStyle='#886';c.fillRect(-bW*.6,bladeLen2*.02,bW*1.5,bW*.38);
+      c.fillStyle=bladeG;
+      c.beginPath();c.moveTo(-bW*.3,bladeLen2*.04);c.lineTo(bW*.8,bladeLen2*.04);c.lineTo(bW*.2,bladeLen2*.04+bladeLen2);c.closePath();c.fill();
+      c.fillStyle='rgba(120,0,255,.55)';
+      c.beginPath();c.moveTo(-bW*.2,bladeLen2*.42);c.lineTo(bW*.65,bladeLen2*.42);c.lineTo(bW*.2,bladeLen2*.04+bladeLen2);c.closePath();c.fill();
+      c.restore();
+
+      const headR=bodyH*.155;const headY=bodyY+bodyH*.07;
+      c.fillStyle='#13062a';c.beginPath();c.ellipse(cx,headY,headR*1.05,headR*1.08,0,0,Math.PI*2);c.fill();
+      c.fillStyle='#0a0318';c.beginPath();c.ellipse(cx,headY,headR*.78,headR*.82,0,0,Math.PI*2);c.fill();
+      c.fillStyle='#c8a882';c.beginPath();c.ellipse(cx,headY+headR*.06,headR*.52,headR*.62,0,0,Math.PI*2);c.fill();
+
+      const eyePulse=.75+Math.sin(t*3)*.25;
+      [-1,1].forEach(side=>{
+        const ex=cx+side*headR*.22,ey=headY-headR*.12;
+        c.fillStyle='#111';c.beginPath();c.ellipse(ex,ey,headR*.13,headR*.11,0,0,Math.PI*2);c.fill();
+        const eg=c.createRadialGradient(ex,ey,0,ex,ey,headR*.22);
+        eg.addColorStop(0,`rgba(180,0,255,${eyePulse})`);eg.addColorStop(1,'rgba(0,0,0,0)');
+        c.fillStyle=eg;c.beginPath();c.ellipse(ex,ey,headR*.22,headR*.17,0,0,Math.PI*2);c.fill();
+        if(!tint){
+          c.shadowColor='rgba(150,0,255,.9)';c.shadowBlur=14*eyePulse;
+          c.fillStyle=`rgba(200,0,255,${eyePulse*.9})`;c.beginPath();c.arc(ex,ey,headR*.09,0,Math.PI*2);c.fill();
+          c.shadowBlur=0;
+        }
+      });
+      c.strokeStyle='rgba(80,40,20,.7)';c.lineWidth=headR*.05;c.lineCap='round';
+      c.beginPath();c.moveTo(cx-headR*.22,headY+headR*.3);c.bezierCurveTo(cx-headR*.1,headY+headR*.38,cx+headR*.1,headY+headR*.38,cx+headR*.22,headY+headR*.3);c.stroke();
+      const hoodG=c.createLinearGradient(cx-headR,headY-headR*.9,cx+headR,headY-headR*.2);
+      hoodG.addColorStop(0,'rgba(10,3,20,.92)');hoodG.addColorStop(1,'rgba(10,3,20,0)');
+      c.beginPath();c.ellipse(cx,headY-headR*.65,headR*1.1,headR*.58,0,0,Math.PI*2);c.fillStyle=hoodG;c.fill();
+      c.restore();
     });
-    // Mouth slight frown
-    c.strokeStyle='rgba(80,40,20,.7)';c.lineWidth=headR*.05;c.lineCap='round';
-    c.beginPath();c.moveTo(cx-headR*.22,headY+headR*.3);c.bezierCurveTo(cx-headR*.1,headY+headR*.38,cx+headR*.1,headY+headR*.38,cx+headR*.22,headY+headR*.3);c.stroke();
-    // Hood shadow
-    const hoodG=c.createLinearGradient(cx-headR,headY-headR*.9,cx+headR,headY-headR*.2);
-    hoodG.addColorStop(0,'rgba(10,3,20,.92)');hoodG.addColorStop(1,'rgba(10,3,20,0)');
-    c.beginPath();c.ellipse(cx,headY-headR*.65,headR*1.1,headR*.58,0,0,Math.PI*2);c.fillStyle=hoodG;c.fill();
-    c.restore();
 
-    // Particles (purple dust)
-    c.save();c.globalAlpha=appear*.55;
-    for(let i=0;i<12;i++){
-      const px=cx+(Math.sin(t*.45+i*2.3)*110+Math.cos(t*.28+i)*55);
-      const py=bodyY+bodyH*.12+((t*16+i*41)%bodyH*.72);
-      c.fillStyle=i%3===0?'rgba(160,0,255,.5)':'rgba(180,150,255,.22)';
-      c.beginPath();c.arc(px,py,1.3+Math.sin(i)*.9,0,Math.PI*2);c.fill();
+    // Corrupción de píxeles sobre la figura
+    const corruptAmt=Math.max(0,0.55-glitchPhase*0.35);
+    if(corruptAmt>0.01){
+      c.save();c.globalAlpha=corruptAmt;
+      [[cx-bodyW*.4,bodyY,bodyW*.35,bodyH*.22],[cx+bodyW*.1,bodyY+bodyH*.3,bodyW*.3,bodyH*.15],
+       [cx-bodyW*.5,bodyY+bodyH*.55,bodyW*.4,bodyH*.1],[cx-bodyW*.15,bodyY+bodyH*.08,bodyW*.3,bodyH*.12]
+      ].forEach(([zx,zy,zw,zh])=>{
+        if(Math.random()<0.6){
+          c.fillStyle=Math.random()<0.5?'rgba(0,0,0,0.9)':'rgba(80,0,180,0.55)';
+          c.fillRect(zx+Math.random()*20,zy+Math.random()*10,zw*(0.3+Math.random()*0.7),4+Math.random()*zh);
+        }
+      });
+      c.restore();
+    }
+
+    // Arcos eléctricos al consolidarse
+    const arcAlpha=Math.max(0,Math.sin(glitchPhase*Math.PI)*0.65)*(0.5+Math.sin(t*8)*0.5);
+    if(arcAlpha>0.01){
+      c.save();c.globalAlpha=arcAlpha;
+      for(let a=0;a<6;a++){
+        const arcAng=a/6*Math.PI*2+t*2.5;
+        const r1=bodyH*.3+Math.sin(t*4+a)*18;
+        const r2=r1+12+Math.random()*20;
+        c.strokeStyle='rgba(180,0,255,0.75)';c.lineWidth=1.5;
+        c.shadowColor='rgba(140,0,255,0.9)';c.shadowBlur=8;
+        c.beginPath();
+        c.moveTo(cx+Math.cos(arcAng)*r1,cy+Math.sin(arcAng)*r1*.55);
+        c.lineTo(cx+Math.cos(arcAng+0.35)*r2,cy+Math.sin(arcAng+0.35)*r2*.55);
+        c.stroke();c.shadowBlur=0;
+      }
+      c.restore();
+    }
+
+    // Bits y bytes flotando
+    c.save();c.globalAlpha=Math.min(0.65,appear*.7);
+    c.font=`${Math.min(9,w/80)}px monospace`;
+    const bits=['0','1','\u2593','\u2591','\u2588','\u2592'];
+    for(let i=0;i<18;i++){
+      const px2=cx+(Math.sin(t*.4+i*2.1)*130+Math.cos(t*.3+i)*55);
+      const py2=bodyY+bodyH*.05+((t*20+i*45)%(bodyH*.9));
+      const fadeEdge=Math.min(py2-bodyY,bodyY+bodyH-py2)/(bodyH*.1);
+      c.globalAlpha=Math.min(0.65,appear*.65)*Math.min(1,fadeEdge);
+      c.fillStyle=i%4===0?'rgba(0,255,200,.9)':i%4===1?'rgba(160,0,255,.8)':'rgba(200,200,255,.4)';
+      c.fillText(bits[i%bits.length],px2,py2);
     }
     c.restore();
 
-    // Vignette
-    const vig=c.createRadialGradient(cx,cy,h*.1,cx,cy,h*.65);
-    vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,.78)');
+    // Scanlines finales
+    c.save();c.globalAlpha=0.08;
+    for(let sl=0;sl<h;sl+=3){c.fillStyle='rgba(0,0,0,1)';c.fillRect(0,sl,w,1);}
+    c.restore();
+
+    const vig=c.createRadialGradient(cx,cy,h*.08,cx,cy,h*.62);
+    vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,.82)');
     c.fillStyle=vig;c.fillRect(0,0,w,h);
   },
 };
