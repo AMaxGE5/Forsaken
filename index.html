@@ -4726,10 +4726,11 @@ const Game={
             // Banana checks: array of bananas, expire after 25s
             if(!p.martBananas)p.martBananas=[];
             p.martBananas=p.martBananas.filter(bn=>{
+              try{
               bn.life=(bn.life||MART_Q_EXPIRE)-dt;
               if(bn.life<=0)return false;
               if(!bn.active)return false;
-              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+              const kk=W.players?Object.values(W.players).find(k=>k&&k.role==='killer'&&k.alive):null;
               if(kk&&Math.hypot(kk.x-bn.x,kk.y-bn.y)<TILE*0.9){
                 // Lentitud II + helpless
                 kk.martSlowed=true;kk.martSlowTimer=MART_Q_SLOW_DUR;
@@ -4737,6 +4738,7 @@ const Game={
                 return false; // banana desaparece al pisarse
               }
               return true;
+              }catch(e){return false;}
             });
           }
           // Killer: tick martin helpless + slow
@@ -5151,7 +5153,7 @@ const Game={
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurv.length===1){
             const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
-            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;W.time=Math.min(W.time,LMS_TIME);S.lmsTrackerT=LMS_TRACKER_DUR;
+            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;W.time=LMS_TIME;S.lmsTrackerT=LMS_TRACKER_DUR;
               // Broadcast LMS to clients so they can trigger music
               Net.broadcast({t:'lms'});
               GameAudio.playLMS();
@@ -5477,7 +5479,8 @@ const Game={
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martQCd>0)return;
     p.martQCd=MART_Q_CD;
-    p.martBananas=[{x:p.x,y:p.y,active:true,life:MART_Q_EXPIRE,ownerId:pid}];
+    if(!p.martBananas)p.martBananas=[];
+    p.martBananas.push({x:p.x,y:p.y,active:true,life:MART_Q_EXPIRE,ownerId:pid});
   },
   martDoE(pid){
     const p=W.players[pid];
@@ -5872,7 +5875,7 @@ const Game={
         mankQCd:p.mankQCd||0,mankQDashing:p.mankQDashing||false,mankQDashTimer:p.mankQDashTimer||0,mankQDashAng:p.mankQDashAng||0,mankQSpeedActive:p.mankQSpeedActive||false,mankQSpeedTimer:p.mankQSpeedTimer||0,mankQHit:p.mankQHit||false,
         mankECd:p.mankECd||0,mankEActive:p.mankEActive||false,mankETimer:p.mankETimer||0,mankEResting:p.mankEResting||false,mankERestTimer:p.mankERestTimer||0,mankENoStam:p.mankENoStam||false,
         mankRCd:p.mankRCd||0,mankREating:p.mankREating||false,mankREatTimer:p.mankREatTimer||0,mankRActive:p.mankRActive||false,mankRTimer:p.mankRTimer||0,mankFootprints:p.mankFootprints||[],
-        martQCd:p.martQCd||0,martBananas:p.martBananas||[],
+        martQCd:p.martQCd||0,martBananas:(p.martBananas||[]).map(bn=>({x:bn.x,y:bn.y,life:bn.life,active:bn.active,ownerId:bn.ownerId})),
         martECd:p.martECd||0,martEShieldActive:p.martEShieldActive||false,martEShieldTimer:p.martEShieldTimer||0,
         martESpeedActive:p.martESpeedActive||false,martESpeedTimer:p.martESpeedTimer||0,
         martEDistractActive:p.martEDistractActive||false,martEDistractCount:p.martEDistractCount||0,martEDistractTimer:p.martEDistractTimer||0,
