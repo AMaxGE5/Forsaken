@@ -5477,8 +5477,7 @@ const Game={
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martQCd>0)return;
     p.martQCd=MART_Q_CD;
-    if(!p.martBananas)p.martBananas=[];
-    p.martBananas.push({x:p.x,y:p.y,active:true,life:MART_Q_EXPIRE,ownerId:pid});
+    p.martBananas=[{x:p.x,y:p.y,active:true,life:MART_Q_EXPIRE,ownerId:pid}];
   },
   martDoE(pid){
     const p=W.players[pid];
@@ -8751,10 +8750,12 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
   if(!S.running||S.isHost||S.isDeadSpec)return;
   const me=W.players?.[S.myId];
   if(me)me.facing=Inp.facing;
+  const _q=Inp.q;const _e=Inp.e;const _r=Inp.r;const _f=Inp.f;const _m1=Inp.m1;const _tk=Inp.t;
+  Inp.q=false;Inp.e=false;Inp.r=false;Inp.f=false;Inp.m1=false;Inp.t=false;
   Net.sendHost({
     t:'input',pid:S.myId,
-    inp:{...Inp.k},shift:Inp.sh,e:Inp.e,f:Inp.f,
-    m1:Inp.m1,facing:Inp.facing,q:Inp.q,r:Inp.r,tk:Inp.t,
+    inp:{...Inp.k},shift:Inp.sh,e:_e,f:_f,
+    m1:_m1,facing:Inp.facing,q:_q,r:_r,tk:_tk,
   });
 })();
 </script>
