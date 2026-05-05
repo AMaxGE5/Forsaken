@@ -1501,7 +1501,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="reCd">volviendo al lobby en 8s...</div>
   </div>
 
-  <div class="ap do" id="pDo">[MANTENER E] ACTIVAR GENERADOR</div>
+  <div class="ap do" id="pDo">[MANTENER F] ACTIVAR GENERADOR</div>
   <div class="ap esc" id="pEsc">[E] ¡ESCAPAR!</div>
 
   <!-- Death overlay with spectate button -->
@@ -2109,21 +2109,24 @@ const MANK_R_EAT_DUR = 0.8; // animación de comer el pan
 const MANK_R_INVIS_ALPHA = 0.05; // completamente invisible (casi opaco 0)
 const MANK_R_FOOTPRINT_DUR = 1.5; // cuánto duran las pisadas en el suelo
 // ── MARTIN ──
-const MART_Q_CD = 15;              // Q: DAWN — plátano trampa (15s)
-const MART_Q_EXPIRE = 25;          // plátanos desaparecen después de 25s
+const MART_Q_CD = 28;              // Q: DAWN — plátano trampa
+const MART_Q_EXPIRE = 32;          // plátanos desaparecen después de 32s
 const MART_Q_SLOW_DUR = 5;         // lentitud II por 5s al killer
 const MART_Q_HELPLESS_DUR = 1;     // duración helpless al pisar plátano
-const MART_E_CD = 20;              // E: BLIPI — risa de payaso
+const MART_E_CD = 35;              // E: BLIPI — risa de payaso (35s)
 const MART_E_RANGE = TILE * 5;     // rango de detección del killer
 const MART_E_REVEAL_DUR = 5;       // killer revelado para supervivientes
-const MART_E_SLOW_DUR = 4;         // lentitud II al killer
+const MART_E_SLOW_DUR = 8;         // lentitud I al killer por 8s
 const MART_E_SPEED_DUR = 5;        // velocidad I para Martín por 5s
 const MART_E_HEAL = 10;            // curación al activar E
 const MART_E_SHIELD_DUR = 2;       // campo de fuerza para Martín
-const MART_E_DISTRACT_COUNT = 5;   // número de emojis payaso
-const MART_E_DISTRACT_INTERVAL = 1.2; // segundos entre cada emoji
-const MART_E_DISTRACT_FADE = 1.0;  // duración de cada emoji (fade out)
+const MART_E_DISTRACT_COUNT = 4;   // 4 emojis payaso
+const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
 const MART_E_ZONE_DUR = 0.8;       // duración visual de la zona de impacto
+// Hitbox frontal de la risa (como el M1 del Slasher)
+const MART_E_HB_OFFSET = HB_OFFSET;
+const MART_E_HB_W = HB_W * 1.1;
+const MART_E_HB_H = HB_H * 1.1;
 const GB_INVIS_ALPHA = 0.28; // Invisibilidad IV — alpha visible para el killer (no completa, esa es nivel 6)
 
 // ── Habilidad Q del Killer: BEHEAD ──
@@ -2615,7 +2618,7 @@ const UI={
       // Martin effects
       if(isMartin(me)){
         if(me.martEShieldActive&&me.martEShieldTimer>0)effects.push({icon:'🛡️',name:'CAMPO DE FUERZA',timer:me.martEShieldTimer,type:'positive'});
-        if(me.martBananas&&me.martBananas.length)effects.push({icon:'🍌',name:`PLÁTANOS: ${me.martBananas.length}`,timer:0,type:'positive'});
+        if(me.martBanana&&me.martBanana.active)effects.push({icon:'🍌',name:'PLÁTANO ACTIVO',timer:0,type:'positive'});
       }
       // Killer: martin debuffs
       if(me.role==='killer'){
@@ -2865,7 +2868,7 @@ const UI={
         const mqtPct=me.martQCd>0?me.martQCd/MART_Q_CD:0;
         const mqtOv=document.getElementById('martQOverlay');if(mqtOv)mqtOv.style.transform=`scaleY(${mqtPct})`;
         const mqtWrap=document.getElementById('martQWrap');
-        const bHasBanana=me.martBananas&&me.martBananas.length>0;
+        const bHasBanana=me.martBanana&&me.martBanana.active;
         if(mqtWrap)mqtWrap.className='ability-icon-wrap'+(bHasBanana?' ready':mqtPct>0?' on-cd':' ready');
         const mqtNum=document.getElementById('martQNum');
         if(mqtNum){mqtNum.style.display=(bHasBanana||mqtPct>0)?'flex':'none';mqtNum.textContent=bHasBanana?'🍌':(mqtPct>0?Math.ceil(me.martQCd)+'s':'');}
@@ -4215,7 +4218,7 @@ function applyShieldDamage(s, dmg){
     // Cancelar curación activa
     if(s.amaxHealing){s.amaxHealing=false;s.amaxHealTimer=0;s.amaxHealMarked=false;}
     // Cancelar construcción del peashooter si aún no terminó
-    if(s.amaxBuilding){s.amaxBuilding=false;s.amaxBuildTimer=0;s.amaxPeaActive=false;}
+    if(s.amaxBuilding){s.amaxBuilding=false;s.amaxBuildTimer=0;s.amaxPeaActive=false;s.amaxQCd=AMAX_Q_CD;}
   }
   // Martin force field: bloquea todo daño
   if(isMartin&&isMartin(s)&&s.martEShieldActive)return;
@@ -4411,7 +4414,7 @@ const Game={
         mankECd:0,mankEActive:false,mankETimer:0,mankEResting:false,mankERestTimer:0,
         mankRCd:0,mankREating:false,mankREatTimer:0,mankRActive:false,mankRTimer:0,mankFootprints:[],
         // Martin state
-        martQCd:0,martBananas:[],
+        martQCd:0,martBanana:null,
         martECd:0,martEShieldActive:false,martEShieldTimer:0,
         martEDistractActive:false,martEDistractCount:0,martEDistractTimer:0,
         martEZoneActive:false,martEZoneTimer:0,martEZoneX:0,martEZoneY:0,
@@ -4499,6 +4502,36 @@ const Game={
         const sh=p.id===S.myId?Inp.sh:p.shift;
         Game.moveP(p,dt,inp,sh);
         if(p.m1Cd>0)p.m1Cd=Math.max(0,p.m1Cd-dt);
+        // Nicostos M1 queued hitboxes — release every 0.1s
+        if(isNicostos(p)&&p.nicoM1Queue&&p.nicoM1Queue.length){
+          p.nicoM1Queue=p.nicoM1Queue.filter(q=>{
+            q.delay-=dt;
+            if(q.delay<=0&&!q.fired){
+              q.fired=true;
+              slashFX.push({x:q.cx,y:q.cy,ang:q.ang,hw:HB_W/2,hh:HB_H/2,life:.18,maxLife:.18,idx:q.idx,nicoSlash:true,hasKnife:p.nicoHasKnife});
+              // Hit check for this slash
+              Object.values(W.players).forEach(s=>{
+                if(s.role!=='survivor'||!s.alive)return;
+                if(p.m1HitSet&&p.m1HitSet.has(s.id))return;
+                if(pointInRotRect(s.x,s.y,q.cx,q.cy,HB_W/2,HB_H/2,q.ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
+                  if(!p.m1HitSet)p.m1HitSet=new Set();
+                  p.m1HitSet.add(s.id);
+                  applyShieldDamage(s,q.dmg);
+                  if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+                    W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                    p.nicoKillCount=(p.nicoKillCount||0)+1;
+                    if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+                  } else {
+                    p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
+                  }
+                  Game.checkWin();
+                }
+              });
+              return false; // remove from queue
+            }
+            return !q.fired;
+          });
+        }
         // qCd ticks for everyone; Nicostos: paused while charge is active
         const nicoCharging=isNicostos(p)&&p.nicoCharge;
         if(p.qCd>0&&!nicoCharging)p.qCd=Math.max(0,p.qCd-dt);
@@ -4685,38 +4718,24 @@ const Game={
               p.martESpeedTimer=Math.max(0,(p.martESpeedTimer||0)-dt);
               if(p.martESpeedTimer<=0)p.martESpeedActive=false;
             }
-            // E visual distraction countdown (sent to killer via state)
-            if(p.martEDistractActive){
-              p.martEDistractTimer=Math.max(0,(p.martEDistractTimer||0)-dt);
-              if(p.martEDistractTimer<=0){
-                p.martEDistractCount=(p.martEDistractCount||0)+1;
-                if(p.martEDistractCount>=MART_E_DISTRACT_COUNT){
-                  p.martEDistractActive=false;p.martEDistractCount=0;
-                }else{
-                  p.martEDistractTimer=MART_E_DISTRACT_INTERVAL;
-                }
-              }
-            }
             // E zone visual tick
             if(p.martEZoneActive){
               p.martEZoneTimer=Math.max(0,(p.martEZoneTimer||0)-dt);
               if(p.martEZoneTimer<=0)p.martEZoneActive=false;
             }
-            // Banana checks: array of bananas, expire after 25s
-            if(!p.martBananas)p.martBananas=[];
-            p.martBananas=p.martBananas.filter(bn=>{
-              bn.life=(bn.life||MART_Q_EXPIRE)-dt;
-              if(bn.life<=0)return false;
-              if(!bn.active)return false;
-              const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-              if(kk&&Math.hypot(kk.x-bn.x,kk.y-bn.y)<TILE*0.9){
-                // Lentitud II + helpless
-                kk.martSlowed=true;kk.martSlowTimer=MART_Q_SLOW_DUR;
-                kk.martHelpless=true;kk.martHelplessTimer=MART_Q_HELPLESS_DUR;
-                return false; // banana desaparece al pisarse
+            // Banana check: single banana, expires after MART_Q_EXPIRE seconds
+            if(p.martBanana&&p.martBanana.active){
+              p.martBanana.life=(p.martBanana.life||MART_Q_EXPIRE)-dt;
+              if(p.martBanana.life<=0){p.martBanana=null;}
+              else {
+                const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+                if(kk&&Math.hypot(kk.x-p.martBanana.x,kk.y-p.martBanana.y)<TILE*0.9){
+                  kk.martSlowed=true;kk.martSlowTimer=MART_Q_SLOW_DUR;
+                  kk.martHelpless=true;kk.martHelplessTimer=MART_Q_HELPLESS_DUR;
+                  p.martBanana=null;
+                }
               }
-              return true;
-            });
+            }
           }
           // Killer: tick martin helpless + slow
           if(p.role==='killer'){
@@ -4732,15 +4751,14 @@ const Game={
               p.martESlowTimer=Math.max(0,(p.martESlowTimer||0)-dt);
               if(p.martESlowTimer<=0){p.martESlowed=false;}
             }
-            // Killer: visual distraction from Martin E
+            // Killer: visual distraction from Martin E — 4 clowns, each 2.5s
             if(p.martDistractActive){
-              p.martDistractTimer=Math.max(0,(p.martDistractTimer||0)-dt);
-              if(p.martDistractTimer<=0){
+              p.martDistractTimer=(p.martDistractTimer||0)+dt;
+              if(p.martDistractTimer>=MART_E_DISTRACT_FADE){
+                p.martDistractTimer=0;
                 p.martDistractCount=(p.martDistractCount||0)+1;
                 if(p.martDistractCount>=MART_E_DISTRACT_COUNT){
-                  p.martDistractActive=false;p.martDistractCount=0;
-                } else {
-                  p.martDistractTimer=MART_E_DISTRACT_INTERVAL;
+                  p.martDistractActive=false;p.martDistractCount=0;p.martDistractTimer=0;
                 }
               }
             }
@@ -5131,7 +5149,9 @@ const Game={
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurv.length===1){
             const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
-            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;W.time=Math.min(W.time,LMS_TIME);S.lmsTrackerT=LMS_TRACKER_DUR;
+            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;
+              W.time=Math.max(73,Math.min(W.time,LMS_TIME));  // mínimo 73s (1:13), máximo LMS_TIME
+              S.lmsTrackerT=LMS_TRACKER_DUR;
               // Broadcast LMS to clients so they can trigger music
               Net.broadcast({t:'lms'});
               GameAudio.playLMS();
@@ -5253,7 +5273,7 @@ const Game={
     const nicoInvisSpeed=isNicostos(p)&&p.nicoInvisSpeedActive?1.15:1; // Speed I mientras invisible
     const peaSlowII=p.role==='killer'&&p.amaxPeaSlow?AMAX_Q_PEA_SLOW_VAL:1; // Lentitud II from pea hit
     const martBanSlow=p.role==='killer'&&p.martSlowed?0.4:1; // Lentitud III (×0.4) from banana
-    const martESlow=p.role==='killer'&&p.martESlowed?0.7:1;  // Lentitud II (×0.7) from BLIPI
+    const martESlow=p.role==='killer'&&p.martESlowed?0.85:1;  // Lentitud I (×0.85) from BLIPI
     const mankQSpeed=isMankspe(p)&&p.mankQSpeedActive?1.15:1; // Speed I after Q dash hit
     const mankESpeed=isMankspe(p)&&p.mankEActive?2.0:1; // Speed III (×2.0) during E
     const martESpeed=isMartin(p)&&p.martESpeedActive?1.15:1; // Speed I from BLIPI
@@ -5302,27 +5322,12 @@ const Game={
     const ang=p.facing;
     const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
     const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    // 3 hitboxes visuales escalonados
+    // Queue 3 hitboxes: first immediate, second +0.1s, third +0.2s
+    if(!p.nicoM1Queue)p.nicoM1Queue=[];
     for(let i=0;i<M1_SLASHES;i++){
-      const delay=i*M1_DELAY;
-      slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2+delay,maxLife:.2+delay,idx:i,nicoSlash:true,hasKnife:p.nicoHasKnife});
+      p.nicoM1Queue.push({delay:i*0.1,ang,cx,cy,dmg,idx:i,fired:false});
     }
-    // Hit check (una sola vez)
     p.m1HitSet=new Set();
-    Object.values(W.players).forEach(s=>{
-      if(s.role!=='survivor'||!s.alive)return;
-      if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
-        applyShieldDamage(s,dmg);
-        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
-          W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-          p.nicoKillCount=(p.nicoKillCount||0)+1;
-          if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
-        } else {
-          p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
-        }
-        Game.checkWin();
-      }
-    });
   },
 
   doQ(pid){
@@ -5472,36 +5477,41 @@ const Game={
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martQCd>0)return;
     p.martQCd=MART_Q_CD;
-    if(!p.martBananas)p.martBananas=[];
-    p.martBananas.push({x:p.x,y:p.y,active:true,life:MART_Q_EXPIRE,ownerId:pid});
+    // Colocar nuevo plátano (reemplaza el anterior si existía)
+    p.martBanana={x:p.x,y:p.y,active:true,life:MART_Q_EXPIRE,ownerId:pid};
   },
   martDoE(pid){
     const p=W.players[pid];
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martECd>0)return;
-    // Check if killer is in range facing direction
-    const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    if(!kk)return;
-    const dist=Math.hypot(kk.x-p.x,kk.y-p.y);
-    // Angle check: must be roughly facing the killer
-    const angToKiller=Math.atan2(kk.y-p.y,kk.x-p.x);
-    const facingDiff=Math.abs(((p.facing-angToKiller)+Math.PI*3)%(Math.PI*2)-Math.PI);
-    if(dist>MART_E_RANGE||facingDiff>Math.PI*0.6)return; // killer not in front
     p.martECd=MART_E_CD;
-    // Reveal killer to all survivors
-    kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
-    // Lentitud II to killer
-    kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
-    // Force field for Martin
+    const ang=p.facing;
+    const cx=p.x+Math.cos(ang)*(MART_E_HB_OFFSET+MART_E_HB_H/2);
+    const cy=p.y+Math.sin(ang)*(MART_E_HB_OFFSET+MART_E_HB_H/2);
+    // 3 hitboxes frontales visibles (igual que M1 del slasher)
+    for(let i=0;i<3;i++){
+      slashFX.push({x:cx,y:cy,ang,hw:MART_E_HB_W/2,hh:MART_E_HB_H/2,life:.22+i*.08,maxLife:.22+i*.08,idx:i,martLaugh:true});
+    }
+    // Check killer hit
+    let hit=false;
+    Object.values(W.players).forEach(kk=>{
+      if(kk.role!=='killer'||!kk.alive||hit)return;
+      if(pointInRotRect(kk.x,kk.y,cx,cy,MART_E_HB_W/2,MART_E_HB_H/2,ang)||Math.hypot(kk.x-p.x,kk.y-p.y)<TILE*.9){
+        hit=true;
+        // Lentitud I (×0.85) por 8s
+        kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
+        // Reveal killer para todos 5s
+        kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
+        // Distracciones: 4 payasos, cada 2.5s (gestionado en killer tick)
+        kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=0; // empieza inmediatamente
+        // Zona de impacto visual
+        p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
+      }
+    });
+    // Efectos en Martin independientemente de si pegó
     p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
-    // Velocidad I para Martin por 5s
     p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
-    // Curar 10 HP
     p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
-    // Visual distraction sequence for killer
-    kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=MART_E_DISTRACT_INTERVAL;
-    // Zone of impact visual at killer position
-    p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
   },
   doEnrage(pid){
     const p=W.players[pid];
@@ -5863,7 +5873,7 @@ const Game={
         mankQCd:p.mankQCd||0,mankQDashing:p.mankQDashing||false,mankQDashTimer:p.mankQDashTimer||0,mankQDashAng:p.mankQDashAng||0,mankQSpeedActive:p.mankQSpeedActive||false,mankQSpeedTimer:p.mankQSpeedTimer||0,mankQHit:p.mankQHit||false,
         mankECd:p.mankECd||0,mankEActive:p.mankEActive||false,mankETimer:p.mankETimer||0,mankEResting:p.mankEResting||false,mankERestTimer:p.mankERestTimer||0,mankENoStam:p.mankENoStam||false,
         mankRCd:p.mankRCd||0,mankREating:p.mankREating||false,mankREatTimer:p.mankREatTimer||0,mankRActive:p.mankRActive||false,mankRTimer:p.mankRTimer||0,mankFootprints:p.mankFootprints||[],
-        martQCd:p.martQCd||0,martBananas:p.martBananas||[],
+        martQCd:p.martQCd||0,martBanana:p.martBanana||null,
         martECd:p.martECd||0,martEShieldActive:p.martEShieldActive||false,martEShieldTimer:p.martEShieldTimer||0,
         martESpeedActive:p.martESpeedActive||false,martESpeedTimer:p.martESpeedTimer||0,
         martEDistractActive:p.martEDistractActive||false,martEDistractCount:p.martEDistractCount||0,martEDistractTimer:p.martEDistractTimer||0,
@@ -5961,7 +5971,7 @@ const Game={
           p.mankRCd=d.mankRCd||0;p.mankREating=d.mankREating||false;p.mankREatTimer=d.mankREatTimer||0;p.mankRActive=d.mankRActive||false;p.mankRTimer=d.mankRTimer||0;p.mankFootprints=d.mankFootprints||[];
         }
         if(d.martQCd!==undefined){
-          p.martQCd=d.martQCd||0;p.martBananas=d.martBananas||[];
+          p.martQCd=d.martQCd||0;p.martBanana=d.martBanana||null;
           p.martECd=d.martECd||0;p.martEShieldActive=d.martEShieldActive||false;p.martEShieldTimer=d.martEShieldTimer||0;
           p.martESpeedActive=d.martESpeedActive||false;p.martESpeedTimer=d.martESpeedTimer||0;
           p.martEDistractActive=d.martEDistractActive||false;p.martEDistractCount=d.martEDistractCount||0;p.martEDistractTimer=d.martEDistractTimer||0;
@@ -6329,11 +6339,12 @@ const Game={
         }
       } else if(S.showHitbox){
         // Normal M1/Q hitbox debug — only visible when hitbox ON
-        ctx.fillStyle=`rgba(220,30,30,${alpha*0.55})`;
+        const isLaugh=sf.martLaugh;
+        ctx.fillStyle=isLaugh?`rgba(255,220,0,${alpha*0.45})`:`rgba(220,30,30,${alpha*0.55})`;
         ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
+        ctx.strokeStyle=isLaugh?`rgba(255,240,80,${alpha*0.95})`:`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
         ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        ctx.strokeStyle=`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
+        ctx.strokeStyle=isLaugh?`rgba(255,255,160,${alpha*0.7})`:`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
       }
       ctx.globalAlpha=1;ctx.restore();
@@ -6371,7 +6382,7 @@ const Game={
       // Mankspe footprints (visible to everyone including killer)
       if(isMankspe(p)&&p.mankFootprints&&p.mankFootprints.length){
         p.mankFootprints.forEach(fp=>{
-          const a=Math.max(0,fp.life/MANK_R_FOOTPRINT_DUR)*0.55;
+          const a=Math.max(0,fp.life/MANK_R_FOOTPRINT_DUR)*0.30; // 45% más invisible
           ctx.save();ctx.globalAlpha=a;
           ctx.translate(fp.x,fp.y);ctx.rotate(fp.ang+Math.PI/2);
           ctx.font=`${TILE*.35}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -7040,7 +7051,24 @@ const Game={
       }
       ctx.restore();
     });
-    // ── AMaxGE5: traveling pea projectiles ──
+    // ── MARTIN: banana arrow marker (visible to survivors) ──
+    if(me.role==='survivor'){
+      Object.values(W.players).forEach(p=>{
+        if(!p.alive||!isMartin(p)||!p.martBanana||!p.martBanana.active)return;
+        const bn=p.martBanana;
+        const {sx,sy}=toScreen(bn.x,bn.y);
+        const t3=Date.now()/400;
+        const pulse3=0.6+Math.sin(t3)*0.4;
+        if(!onScreen(sx,sy)){
+          drawEdgeArrow(bn.x,bn.y,'rgba(255,220,0,0.9)','🍌');
+        } else {
+          ctx.save();ctx.globalAlpha=pulse3*0.7;
+          ctx.beginPath();ctx.arc(sx,sy,TILE*sc*0.52+Math.sin(t3*1.3)*2,0,Math.PI*2);
+          ctx.strokeStyle='rgba(255,220,0,1)';ctx.lineWidth=1.5;ctx.setLineDash([4,5]);ctx.stroke();ctx.setLineDash([]);
+          ctx.restore();
+        }
+      });
+    }
     Object.values(W.players).forEach(p=>{
       if(!isAMaxGE5(p)||!p.amaxPeaProjs||!p.amaxPeaProjs.length)return;
       p.amaxPeaProjs.forEach(pj=>{
@@ -7214,6 +7242,16 @@ const Game={
         else{ctx.save();ctx.font='bold 9px monospace';ctx.fillStyle='rgba(0,255,80,0.8)';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('⚡ GEN',sx,sy-TILE*sc*0.7);ctx.restore();}
       });
     }
+    // Helper: is a survivor invisible to the current viewer?
+    const survIsInvisToMe=(s)=>{
+      if(!s||s.role!=='survivor')return false;
+      const isSelf=s.id===me.id;
+      if(isSelf)return false; // always see yourself
+      if((s.gbActive||s.gbEating)&&me.role==='killer')return true;
+      if(isMankspe(s)&&(s.mankRActive||s.mankREating)&&me.role==='killer')return true;
+      return false;
+    };
+
     if(S.lms){
       const alpha=1;
       if(me.role==='survivor'){
@@ -7221,32 +7259,27 @@ const Game={
         if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
       } else if(me.role==='killer'){
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
-          // Indetectable: Ghost Burger activo → no aparece en tracker
           if((s.gbActive||s.gbEating)&&S.lmsTrackerT<=0)return;
-          // Mankspe Pan con Sal → indetectable
           if(isMankspe(s)&&(s.mankRActive||s.mankREating))return;
           const {sx,sy}=toScreen(s.x,s.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(s.x,s.y,'rgba(52,152,219,0.9)','🏃');else drawEdgeArrow(s.x,s.y,'rgba(52,152,219,0.9)','🏃');ctx.restore();
         });
       }
     }
-    // ── MARTIN banana traps (visible to all) ──
-    Object.values(W.players).filter(p=>isMartin&&isMartin(p)&&p.martBananas&&p.martBananas.length).forEach(p=>{
-      p.martBananas.forEach(bn=>{
-        if(!bn.active)return;
-        const {sx,sy}=toScreen(bn.x,bn.y);
-        if(!onScreen(sx,sy))return;
-        const bob=Math.sin(Date.now()/300)*2;
-        const fadeAlpha=Math.min(1,(bn.life||MART_Q_EXPIRE)/MART_Q_EXPIRE*1.5); // fade as expiry nears
-        ctx.save();ctx.globalAlpha=Math.min(1,fadeAlpha);
-        ctx.font=`${TILE*sc*0.55}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.shadowColor='rgba(255,220,0,0.6)';ctx.shadowBlur=10;
-        ctx.fillText('🍌',sx,sy+bob);
-        ctx.restore();
-        // Shadow glow under banana
-        ctx.save();ctx.globalAlpha=(0.18+Math.sin(Date.now()/400)*0.06)*fadeAlpha;
-        ctx.beginPath();ctx.ellipse(sx,sy+TILE*sc*0.3,TILE*sc*0.5,TILE*sc*0.2,0,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,220,0,1)';ctx.fill();ctx.restore();
-      });
+    // ── MARTIN banana trap (visible to all) ──
+    Object.values(W.players).filter(p=>isMartin&&isMartin(p)&&p.martBanana&&p.martBanana.active).forEach(p=>{
+      const bn=p.martBanana;
+      const {sx,sy}=toScreen(bn.x,bn.y);
+      if(!onScreen(sx,sy))return;
+      const bob=Math.sin(Date.now()/300)*2;
+      const fadeAlpha=Math.min(1,(bn.life||MART_Q_EXPIRE)/MART_Q_EXPIRE*1.5);
+      ctx.save();ctx.globalAlpha=Math.min(1,fadeAlpha);
+      ctx.font=`${TILE*sc*0.55}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor='rgba(255,220,0,0.6)';ctx.shadowBlur=10;
+      ctx.fillText('🍌',sx,sy+bob);
+      ctx.restore();
+      ctx.save();ctx.globalAlpha=(0.18+Math.sin(Date.now()/400)*0.06)*Math.min(1,fadeAlpha);
+      ctx.beginPath();ctx.ellipse(sx,sy+TILE*sc*0.3,TILE*sc*0.5,TILE*sc*0.2,0,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,220,0,1)';ctx.fill();ctx.restore();
     });
     // ── MARTIN E zone of impact visual ──
     Object.values(W.players).filter(p=>isMartin&&isMartin(p)&&p.martEZoneActive).forEach(p=>{
@@ -7300,22 +7333,16 @@ const Game={
     }
     // ── MARTIN clown distraction overlay (killer screen only) ──
     if(me.role==='killer'&&me.martDistractActive){
-      const t=Date.now()/400;
       const cw=canvas.width,ch=canvas.height;
-      const phase=me.martDistractTimer>0?(me.martDistractTimer/MART_E_DISTRACT_INTERVAL):0;
-      const fadeAlpha=phase<0.3?phase/0.3:1;
+      const progress=(me.martDistractTimer||0)/MART_E_DISTRACT_FADE; // 0→1 over 2.5s
+      const alpha=Math.max(0,1-progress); // fade from 1 to 0
       ctx.save();
-      ctx.globalAlpha=fadeAlpha*0.88;
-      ctx.font=`${Math.min(cw,ch)*0.22}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.shadowColor='rgba(255,0,255,0.7)';ctx.shadowBlur=30;
-      ctx.fillText('🤡',cw*0.5+Math.sin(t)*20,ch*0.5+Math.cos(t*0.8)*15);
-      const positions=[[0.2,0.3],[0.8,0.25],[0.15,0.7],[0.82,0.72],[0.5,0.18],[0.5,0.82]];
-      ctx.font=`${Math.min(cw,ch)*0.1}px monospace`;
-      positions.forEach(([fx,fy],i)=>{
-        const wa=Math.sin(t*1.5+i)*8;const wb=Math.cos(t*1.1+i*1.3)*6;
-        ctx.globalAlpha=fadeAlpha*0.45;
-        ctx.fillText('🤡',cw*fx+wa,ch*fy+wb);
-      });
+      ctx.globalAlpha=alpha*0.92;
+      ctx.font=`${Math.min(cw,ch)*0.72}px monospace`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor=`rgba(255,0,255,${alpha*0.8})`;ctx.shadowBlur=60*alpha;
+      ctx.fillText('🤡',cw*0.5,ch*0.5);
+      ctx.shadowBlur=0;
       ctx.restore();
     }
     if(me.role==='killer'&&isNicostos(me)&&(me.nicoInvis||me.nicoInvisStill)){
@@ -7792,10 +7819,10 @@ const GameAudio={
   //  • En LMS también suenan layers y chase theme.
 
   // ── Distancias en píxeles (mundo) ──
-  DIST_L1: TILE * 13.5,   // empieza layer 1
-  DIST_L2: TILE * 12,   // sube a layer 2
-  DIST_L3: TILE * 10.5,    // sube a layer 3
-  DIST_CT: TILE * 5.8,    // activa chase theme
+  DIST_L1: TILE * 13.8,   // empieza layer 1
+  DIST_L2: TILE * 12.9,   // sube a layer 2
+  DIST_L3: TILE * 11,    // sube a layer 3
+  DIST_CT: TILE * 5.6,    // activa chase theme
 
   // ── Estado ──
   _lobby: null,
