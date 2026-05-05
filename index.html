@@ -5189,18 +5189,19 @@ const Game={
       // Chase audio — se actualiza cada tick para supervivientes Y para el killer
       if(!S.isDeadSpec&&me&&me.alive){
         if(me.role==='survivor'){
-          // Superviviente: distancia al killer
+          // Superviviente: distancia al killer → escucha todas las layers + chase theme
           const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
           if(killer) GameAudio.updateChase(Math.hypot(me.x-killer.x,me.y-killer.y));
           else GameAudio.updateChase(99999);
         } else if(me.role==='killer'){
-          // Killer: escucha chase según el superviviente vivo más cercano
+          // Killer: SOLO escucha el chase theme (no layers 1-2-3)
+          // Le pasamos la distancia pero bloqueamos layers — usa updateChaseKiller
           const aliveSurvivors=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurvivors.length>0){
             const minDist=Math.min(...aliveSurvivors.map(s=>Math.hypot(me.x-s.x,me.y-s.y)));
-            GameAudio.updateChase(minDist);
+            GameAudio.updateChaseKiller(minDist);
           } else {
-            GameAudio.updateChase(99999);
+            GameAudio.updateChaseKiller(99999);
           }
         }
       }
@@ -7821,7 +7822,7 @@ const GameAudio={
   // ── Distancias en píxeles (mundo) ──
   DIST_L1: TILE * 13.8,   // empieza layer 1
   DIST_L2: TILE * 12.9,   // sube a layer 2
-  DIST_L3: TILE * 11,    // sube a layer 3
+  DIST_L3: TILE * 11,     // sube a layer 3
   DIST_CT: TILE * 5.6,    // activa chase theme
 
   // ── Estado ──
@@ -7908,6 +7909,27 @@ const GameAudio={
     this._l1=null;this._l2=null;this._l3=null;this._ct=null;
     this._chaseActive=false;
     this._currentLayer=0;
+  },
+
+  // Killer: solo escucha el chase theme, no las layers 1-2-3
+  updateChaseKiller(distPx){
+    if(this._mode!=='map') return;
+    const d=distPx;
+    // Solo activar/desactivar chase theme
+    const inCT=d<=this.DIST_CT;
+    if(inCT&&!this._chaseActive){
+      this._chaseActive=true;
+      this._currentLayer=4;
+      const bgTrack=this._map;
+      if(bgTrack)this._fadeOut(bgTrack,400);
+      this._startLayer(this._ct,0.62,300);
+    } else if(!inCT&&this._chaseActive&&d>this.DIST_L1){
+      // Salió del rango CT completamente
+      this._chaseActive=false;
+      this._currentLayer=0;
+      this._stopLayer(this._ct,400);
+      if(this._map)this._fadeIn(this._map,0.50,500);
+    }
   },
 
   // Llamado cada tick desde mainLoop con la distancia al killer (px).
