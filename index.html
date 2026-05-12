@@ -234,9 +234,11 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
   background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.15);
   padding:5px 10px;border-radius:20px;
   font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.07em;
-  color:rgba(255,255,255,.9);animation:effectIn .18s ease;
+  color:rgba(255,255,255,.9);
   backdrop-filter:blur(3px);
+  opacity:1;
 }
+.effect-pill.new-pill{animation:effectIn .22s ease forwards;}
 @keyframes effectIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
 .effect-icon{font-size:.9rem;flex-shrink:0;}
 .effect-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -244,6 +246,36 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .effect-pill.debuff{border-color:rgba(231,76,60,.4);color:rgba(255,160,140,.95);}
 .effect-pill.positive{border-color:rgba(46,204,113,.4);color:rgba(140,255,200,.95);}
 .effect-pill.neutral{border-color:rgba(52,152,219,.4);color:rgba(140,200,255,.95);}
+/* Admin panel */
+#adminPanelBtn{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.65);border:1.5px solid rgba(192,57,43,.6);
+  color:rgba(192,57,43,.9);font-family:'Share Tech Mono',monospace;font-size:.62rem;
+  letter-spacing:.22em;padding:6px 18px;cursor:pointer;border-radius:20px;
+  pointer-events:all;z-index:200;backdrop-filter:blur(4px);
+  transition:background .15s,border-color .15s;display:none;
+}
+#adminPanelBtn:hover{background:rgba(192,57,43,.18);border-color:var(--blood);}
+#adminPanel{
+  position:absolute;top:52px;left:50%;transform:translateX(-50%);
+  width:min(420px,88vw);max-height:70vh;overflow-y:auto;
+  background:rgba(5,5,14,.96);border:1px solid rgba(192,57,43,.35);
+  border-radius:8px;padding:20px 24px;z-index:190;
+  display:none;flex-direction:column;gap:10px;
+  backdrop-filter:blur(8px);pointer-events:all;
+}
+#adminPanel.open{display:flex;}
+.ap-title{font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.35em;color:rgba(192,57,43,.9);margin-bottom:6px;text-align:center;}
+.ap-row{display:flex;flex-direction:column;gap:5px;border-top:1px solid rgba(255,255,255,.07);padding-top:10px;}
+.ap-row:first-of-type{border-top:none;padding-top:0;}
+.ap-row-label{font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.45);}
+.ap-execute-btn{
+  background:rgba(10,10,10,.8);border:1px solid rgba(192,57,43,.45);
+  color:rgba(192,57,43,.9);font-family:'Share Tech Mono',monospace;font-size:.62rem;
+  letter-spacing:.15em;padding:8px 16px;cursor:pointer;border-radius:4px;
+  transition:background .15s,border-color .15s;text-align:center;
+}
+.ap-execute-btn:hover{background:rgba(192,57,43,.22);border-color:var(--blood);color:#fff;}
 
 #s-game{background:#000;overflow:hidden;}
 #gameCanvas{position:absolute;top:0;left:0;image-rendering:pixelated;}
@@ -964,6 +996,18 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     </div>
     <div style="position:absolute;bottom:54px;left:50%;transform:translateX(-50%);font-size:.55rem;color:rgba(255,255,255,.28);letter-spacing:.18em;pointer-events:none;">WASD / ↑↓←→ PARA MOVERSE</div>
 
+    <!-- ══ ADMIN PANEL BUTTON (host only) ══ -->
+    <button id="adminPanelBtn" onclick="AdminPanel.toggle()">PANEL</button>
+
+    <!-- ══ ADMIN PANEL ══ -->
+    <div id="adminPanel">
+      <div class="ap-title">⚙ PANEL DE ADMINISTRADOR</div>
+      <div class="ap-row">
+        <div class="ap-row-label">FORCE INTERMISSION END — inicia la ronda inmediatamente</div>
+        <button class="ap-execute-btn" onclick="AdminPanel.forceIntermissionEnd()">Execute</button>
+      </div>
+    </div>
+
     <!-- ══ LEFT LOBBY MENU ══ -->
     <div id="lobbyLeftMenu">
       <div id="llmMoney">
@@ -1501,7 +1545,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="reCd">volviendo al lobby en 8s...</div>
   </div>
 
-  <div class="ap do" id="pDo">[MANTENER E] ACTIVAR GENERADOR</div>
+  <div class="ap do" id="pDo">[MANTENER F] ACTIVAR GENERADOR</div>
   <div class="ap esc" id="pEsc">[E] ¡ESCAPAR!</div>
 
   <!-- Death overlay with spectate button -->
@@ -2072,16 +2116,16 @@ const SaveFile = {
 const TILE = 36;
 const MAP_W = 65, MAP_H = 45;
 const VP_TILES_W = 14;
-const SW = 80, SR = 140;   // Survivor: walk 80, run 140
-const KW = 90, KR = 150;   // Killer:   walk 90, run 150
+const SW = 78, SR = 135;   // Survivor: walk 78, run 135
+const KW = 85, KR = 140;   // Slasher:  walk 85, run 140
 const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
 const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
-const BLEED_DMG = 4.5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
+const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
 const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8*0.75, HB_H = TILE*2.0*0.75;  // M1 hitbox −25%
-const INTERACT_SEC = 4.5;
-const GEN_TIME_BONUS = 25;
-const LMS_TIME = 73, LMS_TRACKER_DUR = 5;
+const INTERACT_SEC = 15;
+const GEN_TIME_BONUS = 20;
+const LMS_TIME = 74, LMS_TRACKER_DUR = 5;
 const BLOXY_CD = 40, BLOXY_DUR = 8; // Bloxy Cola cooldown & effect duration
 // ── Habilidad Q del Survivor: SLATE SKIN ──
 const SS_CD = 30;           // cooldown en segundos
@@ -2113,17 +2157,20 @@ const MART_Q_CD = 15;              // Q: DAWN — plátano trampa (15s)
 const MART_Q_EXPIRE = 25;          // plátanos desaparecen después de 25s
 const MART_Q_SLOW_DUR = 5;         // lentitud II por 5s al killer
 const MART_Q_HELPLESS_DUR = 1;     // duración helpless al pisar plátano
-const MART_E_CD = 20;              // E: BLIPI — risa de payaso
+const MART_E_CD = 35;              // E: BLIPI — risa de payaso (35s)
 const MART_E_RANGE = TILE * 5;     // rango de detección del killer
 const MART_E_REVEAL_DUR = 5;       // killer revelado para supervivientes
-const MART_E_SLOW_DUR = 4;         // lentitud II al killer
+const MART_E_SLOW_DUR = 8;         // lentitud I al killer por 8s
 const MART_E_SPEED_DUR = 5;        // velocidad I para Martín por 5s
 const MART_E_HEAL = 10;            // curación al activar E
 const MART_E_SHIELD_DUR = 2;       // campo de fuerza para Martín
-const MART_E_DISTRACT_COUNT = 5;   // número de emojis payaso
-const MART_E_DISTRACT_INTERVAL = 1.2; // segundos entre cada emoji
-const MART_E_DISTRACT_FADE = 1.0;  // duración de cada emoji (fade out)
+const MART_E_DISTRACT_COUNT = 4;   // 4 emojis payaso
+const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
 const MART_E_ZONE_DUR = 0.8;       // duración visual de la zona de impacto
+// Hitbox frontal de la risa (como el M1 del Slasher)
+const MART_E_HB_OFFSET = HB_OFFSET;
+const MART_E_HB_W = HB_W * 1.1;
+const MART_E_HB_H = HB_H * 1.1;
 const GB_INVIS_ALPHA = 0.28; // Invisibilidad IV — alpha visible para el killer (no completa, esa es nivel 6)
 
 // ── Habilidad Q del Killer: BEHEAD ──
@@ -2149,12 +2196,13 @@ const ENRAGE_STAM_CAP_DUR = 6.5; // tiempo para alcanzar el cap
 const ENRAGE_AURA_LINGER = 2;  // segundos que el aura permanece tras terminar ENRAGED
 
 // ── NICOSTOS — constantes ──
-const NICO_WALK = KW * 0.97;
-const NICO_RUN  = KR * 0.97;
+const NICO_WALK = 80;       // Nicostos walk 80 px/s
+const NICO_RUN  = 138;      // Nicostos run 138 px/s
 const NICO_M1_DMG = 22.5;
 const NICO_M1_DMG_NO_KNIFE = 10;
 const NICO_NO_KNIFE_SPEED = 1.10; // +10% speed when knife is thrown
-const NICO_M1_CD = 1.9;
+const NICO_M1_CD = 2.0;          // M1 CD con cuchillo
+const NICO_M1_CD_NO_KNIFE = 1.5; // M1 CD sin cuchillo
 const NICO_Q_CD = 25;
 const NICO_Q_STAM_DRAIN = 15;
 const NICO_Q_DMG_GRAB = 10;
@@ -2185,7 +2233,8 @@ const COMBO_TOTAL_DMG = 50;   // daño total normal
 const COMBO_TOTAL_DMG_ENRAGED = 70; // [ENRAGED]
 // 5 hits: 2 machete slashes + 3 chainsaw hits. Each = 1/5 del total
 const COMBO_HITS = 5;
-const COMBO_HIT_DELAYS = [0, 0.18, 0.38, 0.52, 0.66]; // tiempos de cada golpe (s)
+const COMBO_HIT_DELAYS = [0, 0.32, 0.64, 0.92, 1.22]; // más lento — gashing wound dura 2s
+const GASHING_WOUND_DUR = 2.0; // duración del gashing wound (stun del primer golpe)
 const COMBO_HB_W = HB_W * 1.1;
 const COMBO_HB_H = HB_H * 1.0;
 const GAME_DUR = 210;        // 3:30
@@ -2198,7 +2247,7 @@ const LOBBY_SPEED = 160; // px/s movement in lobby world
 // ── AMAXGE5 CONSTANTS ──
 const AMAX_HP = 90;
 const AMAX_Q_CD = 35;        // pea shooter cooldown
-const AMAX_Q_BUILD_DUR = 5;  // segundos quieto para construir la torreta
+const AMAX_Q_BUILD_DUR = 4.8;  // segundos quieto para construir la torreta
 const AMAX_Q_RANGE = 12;     // in studs (tiles) — reducido 70%
 const AMAX_Q_FIRE_INTERVAL = 2; // fire every 2s
 const AMAX_Q_TURN_INTERVAL = 3; // re-aim toward killer every 3s
@@ -2208,11 +2257,11 @@ const AMAX_Q_PEA_SPEED = 34;    // pea projectile speed in tiles/s (más rápido
 const AMAX_Q_PEA_SLOW_DUR = 2.5; // Slow II duration on killer
 const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
 const AMAX_Q_HP = 80;           // lanzaguisantes hitpoints (2 golpes: 40+40)
-const AMAX_E_CD = 20;
+const AMAX_E_CD = 22;
 const AMAX_E_RANGE = 5.1; // tiles — radio de curación reducido 15% (era 6)
-const AMAX_E_HEAL_RATE = 12.0;  // HP per second (más rápido)
-const AMAX_E_MAX_DUR = 5;       // max heal duration per use
-const AMAX_E_UNLOCK_DUR = 3;    // must heal 3s to unlock R
+const AMAX_E_HEAL_RATE = 6.0;   // HP per second (6 × 6s = 36 HP max)
+const AMAX_E_MAX_DUR = 6;       // max heal duration per use (6 seconds)
+const AMAX_E_UNLOCK_DUR = 3;    // heal 3s (self only) to unlock R
 const AMAX_R_CD = 36;
 const AMAX_R_SHIELD_DUR = 2.5;
 const AMAX_R_SHIELD_DUR_LMS = 1.0;
@@ -2489,6 +2538,8 @@ const UI={
     UI.renderLobbyPlayers();
     Economy.updateDisplays();
     LobbySettings.loadHitbox();
+    // Admin panel: only visible to host
+    if(S.isHost)AdminPanel.show(); else AdminPanel.hide();
     // Ensure keyboard input works in lobby
     setTimeout(()=>{document.getElementById('s-lobby').focus();},50);
   },
@@ -2633,7 +2684,24 @@ const UI={
         if(me.mankRActive&&me.mankRTimer>0)effects.push({icon:'👻',name:'INVISIBLE',timer:me.mankRTimer,type:'positive'});
       }
       if(me.enraged&&me.enrageTimer>0)effects.push({icon:'😡',name:'ENRAGED',timer:me.enrageTimer,type:'positive'});
-      efPanel.innerHTML=effects.map(e=>`<div class="effect-pill ${e.type}"><span class="effect-icon">${e.icon}</span><span class="effect-name">${e.name}</span><span class="effect-timer">${e.timer>0?Math.ceil(e.timer)+'s':''}</span></div>`).join('');
+
+      // Smart diff: only rebuild DOM structure if effect list changes; update timers in-place
+      const newKey=effects.map(e=>e.icon+e.name+e.type).join('|');
+      if(efPanel._effectsKey!==newKey){
+        const oldKey=efPanel._effectsKey||'';
+        const oldParts=oldKey?oldKey.split('|'):[];
+        efPanel._effectsKey=newKey;
+        efPanel.innerHTML=effects.map((e,i)=>{
+          const k=e.icon+e.name+e.type;
+          const isNew=!oldParts.includes(k);
+          return `<div class="effect-pill ${e.type}${isNew?' new-pill':''}" data-ei="${i}"><span class="effect-icon">${e.icon}</span><span class="effect-name">${e.name}</span><span class="effect-timer" data-et="${i}"></span></div>`;
+        }).join('');
+      }
+      // Always update timers in-place (no DOM rebuild, no animation re-trigger)
+      effects.forEach((e,i)=>{
+        const el=efPanel.querySelector(`[data-et="${i}"]`);
+        if(el)el.textContent=e.timer>0?Math.ceil(e.timer)+'s':'';
+      });
     }
 
     // HP — always normal color (green/yellow/red). Shield is shown separately.
@@ -2686,7 +2754,7 @@ const UI={
 
       if(nicoMode){
         // M1
-        const cdPctN=me.m1Cd>0?me.m1Cd/NICO_M1_CD:0;
+        const cdPctN=me.m1Cd>0?me.m1Cd/(me.nicoHasKnife?NICO_M1_CD:NICO_M1_CD_NO_KNIFE):0;
         const nm1Ov=document.getElementById('nicoM1Overlay');if(nm1Ov)nm1Ov.style.transform=`scaleY(${cdPctN})`;
         const nm1W=document.getElementById('nicoM1Wrap');if(nm1W)nm1W.className='ability-icon-wrap'+(cdPctN>0?' on-cd':' ready');
         const nm1Num=document.getElementById('nicoM1Num');if(nm1Num){nm1Num.style.display=cdPctN>0?'flex':'none';if(cdPctN>0)nm1Num.textContent=me.m1Cd.toFixed(1);}
@@ -4215,7 +4283,7 @@ function applyShieldDamage(s, dmg){
     // Cancelar curación activa
     if(s.amaxHealing){s.amaxHealing=false;s.amaxHealTimer=0;s.amaxHealMarked=false;}
     // Cancelar construcción del peashooter si aún no terminó
-    if(s.amaxBuilding){s.amaxBuilding=false;s.amaxBuildTimer=0;s.amaxPeaActive=false;}
+    if(s.amaxBuilding){s.amaxBuilding=false;s.amaxBuildTimer=0;s.amaxPeaActive=false;s.amaxQCd=AMAX_Q_CD;}
   }
   // Martin force field: bloquea todo daño
   if(isMartin&&isMartin(s)&&s.martEShieldActive)return;
@@ -4466,13 +4534,33 @@ const Game={
   },
 
   updateCameraSpec(){
+    // Auto-switch to alive player if current target died
+    if(S.specTarget){
+      const t=W.players[S.specTarget];
+      if(!t||(!t.alive&&t.role!=='killer')){
+        const newTarget=Object.values(W.players).find(p=>p.id!==S.myId&&p.alive)
+          ||Object.values(W.players).find(p=>p.id!==S.myId);
+        if(newTarget)S.specTarget=newTarget.id;
+        UI.updSpecFollow();
+      }
+    } else {
+      const fallback=Object.values(W.players).find(p=>p.id!==S.myId);
+      if(fallback)S.specTarget=fallback.id;
+    }
     const p=S.specTarget?W.players[S.specTarget]:null;
     if(!p)return;
     CAM._effScale=SCALE;
     const worldW=MAP_W*TILE,worldH=MAP_H*TILE;
     const vpW=VW/SCALE,vpH=VH/SCALE;
-    CAM.x=Math.max(0,Math.min(worldW-vpW,p.x-vpW/2));
-    CAM.y=Math.max(0,Math.min(worldH-vpH,p.y-vpH/2));
+    const targetX=Math.max(0,Math.min(worldW-vpW,p.x-vpW/2));
+    const targetY=Math.max(0,Math.min(worldH-vpH,p.y-vpH/2));
+    // Smooth camera lerp toward target
+    const lerp=0.12;
+    CAM.x=CAM.x+(targetX-CAM.x)*lerp;
+    CAM.y=CAM.y+(targetY-CAM.y)*lerp;
+    // Snap if very close
+    if(Math.abs(CAM.x-targetX)<1)CAM.x=targetX;
+    if(Math.abs(CAM.y-targetY)<1)CAM.y=targetY;
   },
 
   mainLoop(){
@@ -4499,6 +4587,36 @@ const Game={
         const sh=p.id===S.myId?Inp.sh:p.shift;
         Game.moveP(p,dt,inp,sh);
         if(p.m1Cd>0)p.m1Cd=Math.max(0,p.m1Cd-dt);
+        // Nicostos M1 queued hitboxes — release every 0.1s
+        if(isNicostos(p)&&p.nicoM1Queue&&p.nicoM1Queue.length){
+          p.nicoM1Queue=p.nicoM1Queue.filter(q=>{
+            q.delay-=dt;
+            if(q.delay<=0&&!q.fired){
+              q.fired=true;
+              slashFX.push({x:q.cx,y:q.cy,ang:q.ang,hw:HB_W/2,hh:HB_H/2,life:.18,maxLife:.18,idx:q.idx,nicoSlash:true,hasKnife:p.nicoHasKnife});
+              // Hit check for this slash
+              Object.values(W.players).forEach(s=>{
+                if(s.role!=='survivor'||!s.alive)return;
+                if(p.m1HitSet&&p.m1HitSet.has(s.id))return;
+                if(pointInRotRect(s.x,s.y,q.cx,q.cy,HB_W/2,HB_H/2,q.ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
+                  if(!p.m1HitSet)p.m1HitSet=new Set();
+                  p.m1HitSet.add(s.id);
+                  applyShieldDamage(s,q.dmg);
+                  if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
+                    W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                    p.nicoKillCount=(p.nicoKillCount||0)+1;
+                    if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+                  } else {
+                    p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
+                  }
+                  Game.checkWin();
+                }
+              });
+              return false; // remove from queue
+            }
+            return !q.fired;
+          });
+        }
         // qCd ticks for everyone; Nicostos: paused while charge is active
         const nicoCharging=isNicostos(p)&&p.nicoCharge;
         if(p.qCd>0&&!nicoCharging)p.qCd=Math.max(0,p.qCd-dt);
@@ -4685,18 +4803,6 @@ const Game={
               p.martESpeedTimer=Math.max(0,(p.martESpeedTimer||0)-dt);
               if(p.martESpeedTimer<=0)p.martESpeedActive=false;
             }
-            // E visual distraction countdown (sent to killer via state)
-            if(p.martEDistractActive){
-              p.martEDistractTimer=Math.max(0,(p.martEDistractTimer||0)-dt);
-              if(p.martEDistractTimer<=0){
-                p.martEDistractCount=(p.martEDistractCount||0)+1;
-                if(p.martEDistractCount>=MART_E_DISTRACT_COUNT){
-                  p.martEDistractActive=false;p.martEDistractCount=0;
-                }else{
-                  p.martEDistractTimer=MART_E_DISTRACT_INTERVAL;
-                }
-              }
-            }
             // E zone visual tick
             if(p.martEZoneActive){
               p.martEZoneTimer=Math.max(0,(p.martEZoneTimer||0)-dt);
@@ -4732,15 +4838,14 @@ const Game={
               p.martESlowTimer=Math.max(0,(p.martESlowTimer||0)-dt);
               if(p.martESlowTimer<=0){p.martESlowed=false;}
             }
-            // Killer: visual distraction from Martin E
+            // Killer: visual distraction from Martin E — 4 clowns, each 2.5s
             if(p.martDistractActive){
-              p.martDistractTimer=Math.max(0,(p.martDistractTimer||0)-dt);
-              if(p.martDistractTimer<=0){
+              p.martDistractTimer=(p.martDistractTimer||0)+dt;
+              if(p.martDistractTimer>=MART_E_DISTRACT_FADE){
+                p.martDistractTimer=0;
                 p.martDistractCount=(p.martDistractCount||0)+1;
                 if(p.martDistractCount>=MART_E_DISTRACT_COUNT){
-                  p.martDistractActive=false;p.martDistractCount=0;
-                } else {
-                  p.martDistractTimer=MART_E_DISTRACT_INTERVAL;
+                  p.martDistractActive=false;p.martDistractCount=0;p.martDistractTimer=0;
                 }
               }
             }
@@ -4839,6 +4944,16 @@ const Game={
             // Q charge ticks
             if(p.nicoCharge){
               p.stamina=Math.max(0,p.stamina-NICO_Q_STAM_DRAIN*dt);
+              // Charge hitbox trail every 0.1s (visible when S.showHitbox)
+              if(S.showHitbox){
+                if(!p.nicoChargeHbTimer)p.nicoChargeHbTimer=0;
+                p.nicoChargeHbTimer+=dt;
+                if(p.nicoChargeHbTimer>=0.1){
+                  p.nicoChargeHbTimer=0;
+                  // Hitbox real del charge: circle radius 1.3 tiles around position
+                  slashFX.push({x:p.x,y:p.y,ang:p.nicoChargeAng,hw:TILE*0.65,hh:TILE*0.65,life:.12,maxLife:.12,idx:0,nicoChargeFX:true});
+                }
+              }
               // Move in locked direction with slow turn
               const targetAng=p.facing;
               let diff=targetAng-p.nicoChargeAng;
@@ -4853,7 +4968,7 @@ const Game={
               if(!hitWallX)p.x=nx2;
               if(!hitWallY)p.y=ny2;
               // Cancel charge on wall collision
-              if((hitWallX||hitWallY)&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
+              if((hitWallX||hitWallY)&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;if(isNicostos(p))p.speedBuff=1;}
               // Hit check during charge
               if(!p.nicoChargeHit){
                 Object.values(W.players).forEach(s=>{
@@ -4861,6 +4976,7 @@ const Game={
                   if(Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.3){
                     p.nicoChargeHit=true;
                     p.nicoCharge=false;
+                    if(isNicostos(p))p.speedBuff=1;
                     // Grab: 10 dmg + 20 slam = 30 total (no bleed on charge)
                     applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
                     // No bleed on charge attack
@@ -4883,7 +4999,7 @@ const Game={
                 });
               }
               // Stop if no stamina
-              if(p.stamina<=0&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
+              if(p.stamina<=0&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;if(isNicostos(p))p.speedBuff=1;}
             }
             // Q slow
             if(p.nicoSlow){p.nicoSlowTimer=Math.max(0,p.nicoSlowTimer-dt);if(p.nicoSlowTimer<=0)p.nicoSlow=false;}
@@ -4891,6 +5007,16 @@ const Game={
             if(p.nicoECd>0)p.nicoECd=Math.max(0,p.nicoECd-dt);
             // E knife flying projectile
             if(p.nicoKnifeFlying){
+              // Knife hitbox trail every 0.1s
+              if(S.showHitbox){
+                if(!p.nicoKnifeHbTimer)p.nicoKnifeHbTimer=0;
+                p.nicoKnifeHbTimer+=dt;
+                if(p.nicoKnifeHbTimer>=0.1){
+                  p.nicoKnifeHbTimer=0;
+                  const kAng=Math.atan2(p.nicoKnifeVy,p.nicoKnifeVx);
+                  slashFX.push({x:p.nicoKnifeProjX,y:p.nicoKnifeProjY,ang:kAng,hw:TILE*0.35,hh:TILE*0.35,life:.12,maxLife:.12,idx:0,nicoKnifeFX:true});
+                }
+              }
               const spd=NICO_E_KNIFE_SPEED*dt;
               p.nicoKnifeProjX+=p.nicoKnifeVx*spd;
               p.nicoKnifeProjY+=p.nicoKnifeVy*spd;
@@ -5048,17 +5174,16 @@ const Game={
             if(p.amaxHealing){
               p.amaxHealTimer=Math.max(0,(p.amaxHealTimer||0)-dt);
               const healAmt=AMAX_E_HEAL_RATE*dt;
-              // Curar a AMaxGE5
+              // Curar a AMaxGE5 (self) — acumula para desbloquear R
               p.hp=Math.min(p.maxHp,p.hp+healAmt);
-              p.amaxHealAccum=(p.amaxHealAccum||0)+dt;
+              p.amaxHealAccum=(p.amaxHealAccum||0)+dt; // solo self cuenta
               if(p.amaxHealAccum>=AMAX_E_UNLOCK_DUR&&!p.amaxRUnlocked){
                 p.amaxRUnlocked=true;
-                p.amaxRUses=(p.amaxRUses||0)+1;
               }
-              // Curar a supervivientes aliados dentro del rango
+              // Curar a supervivientes aliados dentro del rango (NO cuentan para R)
               const healRange=AMAX_E_RANGE*TILE;
               Object.values(W.players).forEach(ally=>{
-                if(ally.id===p.id)return; // ya curado arriba
+                if(ally.id===p.id)return;
                 if(ally.role!=='survivor'||!ally.alive)return;
                 if(Math.hypot(ally.x-p.x,ally.y-p.y)>healRange)return;
                 ally.hp=Math.min(ally.maxHp,ally.hp+healAmt);
@@ -5131,7 +5256,9 @@ const Game={
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurv.length===1){
             const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
-            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;W.time=Math.min(W.time,LMS_TIME);S.lmsTrackerT=LMS_TRACKER_DUR;
+            if(killer){S.lms=true;S.lmsLastSurvivorId=aliveSurv[0].id;
+              W.time=Math.max(73,Math.min(W.time,LMS_TIME));  // mínimo 73s (1:13), máximo LMS_TIME
+              S.lmsTrackerT=LMS_TRACKER_DUR;
               // Broadcast LMS to clients so they can trigger music
               Net.broadcast({t:'lms'});
               GameAudio.playLMS();
@@ -5169,18 +5296,19 @@ const Game={
       // Chase audio — se actualiza cada tick para supervivientes Y para el killer
       if(!S.isDeadSpec&&me&&me.alive){
         if(me.role==='survivor'){
-          // Superviviente: distancia al killer
+          // Superviviente: distancia al killer → escucha todas las layers + chase theme
           const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
           if(killer) GameAudio.updateChase(Math.hypot(me.x-killer.x,me.y-killer.y));
           else GameAudio.updateChase(99999);
         } else if(me.role==='killer'){
-          // Killer: escucha chase según el superviviente vivo más cercano
+          // Killer: SOLO escucha el chase theme (no layers 1-2-3)
+          // Le pasamos la distancia pero bloqueamos layers — usa updateChaseKiller
           const aliveSurvivors=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
           if(aliveSurvivors.length>0){
             const minDist=Math.min(...aliveSurvivors.map(s=>Math.hypot(me.x-s.x,me.y-s.y)));
-            GameAudio.updateChase(minDist);
+            GameAudio.updateChaseKiller(minDist);
           } else {
-            GameAudio.updateChase(99999);
+            GameAudio.updateChaseKiller(99999);
           }
         }
       }
@@ -5226,7 +5354,14 @@ const Game={
     const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking&&!p.gbEating;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
-    if(isSprint){
+
+    // Killer: check if any survivor is within 12 tiles
+    const killerNearSurv=p.role==='killer'&&Object.values(W.players).some(
+      s=>s.role==='survivor'&&s.alive&&Math.hypot(s.x-p.x,s.y-p.y)<TILE*12
+    );
+
+    if(isSprint&&(p.role!=='killer'||killerNearSurv)){
+      // Only drain stamina if survivor or killer near survivor
       const prev=p.stamina;
       const drain=p.role==='killer'?KDRAIN:SDRAIN;
       p.stamina=Math.max(0,p.stamina-drain*dt);
@@ -5235,16 +5370,20 @@ const Game={
     } else {
       if(p.staminaCd>0)p.staminaCd-=dt;
       else if(!isMankspe(p)||!p.mankENoStam){
-        // Killers solo regeneran stamina si hay algún superviviente cerca (≤20 tiles)
-        let canRegen=true;
-        if(p.role==='killer'){
-          const nearSurv=Object.values(W.players).some(s=>s.role==='survivor'&&s.alive&&Math.hypot(s.x-p.x,s.y-p.y)<TILE*20);
-          if(!nearSurv)canRegen=false;
+        if(p.role==='killer'&&!killerNearSurv){
+          // Killer far from all survivors: regen freely (as if walking)
+          p.stamina=Math.min(p.maxStamina||KSMAX,p.stamina+KREGEN*dt);
+        } else {
+          // Normal regen (already not sprinting)
+          p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+(p.role==='killer'?KREGEN:SREGEN)*dt);
         }
-        if(canRegen)p.stamina=Math.min(p.maxStamina||SMAX,p.stamina+(p.role==='killer'?KREGEN:SREGEN)*dt);
       }
     }
     if(moving)p.facing=Math.atan2(dy,dx);
+    // Nicostos: if not charging and no active timed buff, ensure speedBuff is clean
+    if(isNicostos(p)&&!p.nicoCharge&&!p.bloxyActive&&!p.ssActive&&!p.beheadSlow&&!p.amaxPeaSlow){
+      if(p.speedBuff!==1&&p.speedBuff>0.9&&p.speedBuff<1.1)p.speedBuff=1;
+    }
     const bw=p.role==='killer'?(isNicostos(p)?NICO_WALK:KW):SW;
     const rw=p.role==='killer'?(isNicostos(p)?NICO_RUN:KR):SR;
     // Nicostos no-knife speed bonus, but only when not in berserk/charge
@@ -5253,7 +5392,7 @@ const Game={
     const nicoInvisSpeed=isNicostos(p)&&p.nicoInvisSpeedActive?1.15:1; // Speed I mientras invisible
     const peaSlowII=p.role==='killer'&&p.amaxPeaSlow?AMAX_Q_PEA_SLOW_VAL:1; // Lentitud II from pea hit
     const martBanSlow=p.role==='killer'&&p.martSlowed?0.4:1; // Lentitud III (×0.4) from banana
-    const martESlow=p.role==='killer'&&p.martESlowed?0.7:1;  // Lentitud II (×0.7) from BLIPI
+    const martESlow=p.role==='killer'&&p.martESlowed?0.85:1;  // Lentitud I (×0.85) from BLIPI
     const mankQSpeed=isMankspe(p)&&p.mankQSpeedActive?1.15:1; // Speed I after Q dash hit
     const mankESpeed=isMankspe(p)&&p.mankEActive?2.0:1; // Speed III (×2.0) during E
     const martESpeed=isMartin(p)&&p.martESpeedActive?1.15:1; // Speed I from BLIPI
@@ -5297,32 +5436,17 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive)return;
     nicoBreakInvis(p);
-    p.m1Cd=NICO_M1_CD;
+    p.m1Cd=p.nicoHasKnife?NICO_M1_CD:NICO_M1_CD_NO_KNIFE;
     const dmg=p.nicoHasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
     const ang=p.facing;
     const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
     const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    // 3 hitboxes visuales escalonados
+    // Queue 3 hitboxes: first immediate, second +0.1s, third +0.2s
+    if(!p.nicoM1Queue)p.nicoM1Queue=[];
     for(let i=0;i<M1_SLASHES;i++){
-      const delay=i*M1_DELAY;
-      slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2+delay,maxLife:.2+delay,idx:i,nicoSlash:true,hasKnife:p.nicoHasKnife});
+      p.nicoM1Queue.push({delay:i*0.1,ang,cx,cy,dmg,idx:i,fired:false});
     }
-    // Hit check (una sola vez)
     p.m1HitSet=new Set();
-    Object.values(W.players).forEach(s=>{
-      if(s.role!=='survivor'||!s.alive)return;
-      if(pointInRotRect(s.x,s.y,cx,cy,HB_W/2,HB_H/2,ang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
-        applyShieldDamage(s,dmg);
-        if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
-          W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-          p.nicoKillCount=(p.nicoKillCount||0)+1;
-          if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
-        } else {
-          p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=6;
-        }
-        Game.checkWin();
-      }
-    });
   },
 
   doQ(pid){
@@ -5416,14 +5540,16 @@ const Game={
   amaxDoR(pid){
     const p=W.players[pid];
     if(!p||!p.alive||!isAMaxGE5(p))return;
-    if(!p.amaxRUnlocked||(p.amaxRUses||0)<=0)return;
+    if(!p.amaxRUnlocked)return;
     if(p.amaxShielding||p.amaxRCd>0)return;
-    p.amaxRUses--;
     const dur=S.lms?AMAX_R_SHIELD_DUR_LMS:AMAX_R_SHIELD_DUR;
     p.amaxShielding=true;
     p.amaxShieldTimer=dur;
     p.amaxShieldHit=false;
     p.amaxRCd=AMAX_R_CD;
+    // Lock R again — must heal 3s to unlock next use
+    p.amaxRUnlocked=false;
+    p.amaxHealAccum=0;
   },
 
   doGhostBurger(pid){
@@ -5479,29 +5605,34 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martECd>0)return;
-    // Check if killer is in range facing direction
-    const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    if(!kk)return;
-    const dist=Math.hypot(kk.x-p.x,kk.y-p.y);
-    // Angle check: must be roughly facing the killer
-    const angToKiller=Math.atan2(kk.y-p.y,kk.x-p.x);
-    const facingDiff=Math.abs(((p.facing-angToKiller)+Math.PI*3)%(Math.PI*2)-Math.PI);
-    if(dist>MART_E_RANGE||facingDiff>Math.PI*0.6)return; // killer not in front
     p.martECd=MART_E_CD;
-    // Reveal killer to all survivors
-    kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
-    // Lentitud II to killer
-    kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
-    // Force field for Martin
+    const ang=p.facing;
+    const cx=p.x+Math.cos(ang)*(MART_E_HB_OFFSET+MART_E_HB_H/2);
+    const cy=p.y+Math.sin(ang)*(MART_E_HB_OFFSET+MART_E_HB_H/2);
+    // 3 hitboxes frontales visibles (igual que M1 del slasher)
+    for(let i=0;i<3;i++){
+      slashFX.push({x:cx,y:cy,ang,hw:MART_E_HB_W/2,hh:MART_E_HB_H/2,life:.22+i*.08,maxLife:.22+i*.08,idx:i,martLaugh:true});
+    }
+    // Check killer hit
+    let hit=false;
+    Object.values(W.players).forEach(kk=>{
+      if(kk.role!=='killer'||!kk.alive||hit)return;
+      if(pointInRotRect(kk.x,kk.y,cx,cy,MART_E_HB_W/2,MART_E_HB_H/2,ang)||Math.hypot(kk.x-p.x,kk.y-p.y)<TILE*.9){
+        hit=true;
+        // Lentitud I (×0.85) por 8s
+        kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
+        // Reveal killer para todos 5s
+        kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
+        // Distracciones: 4 payasos, cada 2.5s (gestionado en killer tick)
+        kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=0; // empieza inmediatamente
+        // Zona de impacto visual
+        p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
+      }
+    });
+    // Efectos en Martin independientemente de si pegó
     p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
-    // Velocidad I para Martin por 5s
     p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
-    // Curar 10 HP
     p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
-    // Visual distraction sequence for killer
-    kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=MART_E_DISTRACT_INTERVAL;
-    // Zone of impact visual at killer position
-    p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
   },
   doEnrage(pid){
     const p=W.players[pid];
@@ -5557,40 +5688,52 @@ const Game={
     if(!p||!p.alive||p.role!=='killer')return;
     if(p.comboCd>0||p.comboActive)return;
     const enraged=p.enraged||false;
-    breakEnrage(p); // ENRAGED termina al atacar
+    breakEnrage(p);
     const cd=enraged?COMBO_CD_ENRAGED:COMBO_CD;
     const totalDmg=enraged?COMBO_TOTAL_DMG_ENRAGED:COMBO_TOTAL_DMG;
     const hitDmg=totalDmg/COMBO_HITS;
-    const comboDur=COMBO_HIT_DELAYS[COMBO_HITS-1]+0.15; // total duration
+    const comboDur=COMBO_HIT_DELAYS[COMBO_HITS-1]+0.15;
     p.comboCd=cd;
     p.comboActive=true;
     p.comboAng=p.facing;
-    p.comboLocked=true;       // killer can't move/act during combo
-    p.comboLockedTimer=comboDur+0.20; // released 0.2s after last hit
+    p.comboLocked=true;
+    p.comboLockedTimer=0.50; // only lock briefly for first swing
+    p.comboHitSet=new Set();
+    p._comboFirstHit=false; // track if first swing landed
 
     COMBO_HIT_DELAYS.forEach((delay,i)=>{
       setTimeout(()=>{
         if(!S.running)return;
         const pk=W.players[pid];
         if(!pk||!pk.alive){if(pk){pk.comboActive=false;pk.comboLocked=false;}return;}
+        // Hits 2-5 only fire if first hit connected
+        if(i>0&&!pk._comboFirstHit){
+          if(i===COMBO_HITS-1){pk.comboActive=false;pk.comboHitSet=null;}
+          return;
+        }
         const isMachete=i<2;
         const ang=pk.comboAng;
         const cx=pk.x+Math.cos(ang)*(HB_OFFSET+COMBO_HB_H/2);
         const cy=pk.y+Math.sin(ang)*(HB_OFFSET+COMBO_HB_H/2);
-        slashFX.push({
-          x:cx,y:cy,ang,
-          hw:COMBO_HB_W/2,hh:COMBO_HB_H/2,
-          life:isMachete?.18:.26,maxLife:isMachete?.18:.26,
-          idx:i,combo:true,chainsaw:!isMachete,
-        });
-        if(!pk.comboHitSet)pk.comboHitSet=new Set();
+        // Only show slashFX on hit 0 (first swing)
+        if(i===0&&S.showHitbox){
+          slashFX.push({x:cx,y:cy,ang,hw:COMBO_HB_W/2,hh:COMBO_HB_H/2,life:.22,maxLife:.22,idx:0,combo:true,chainsaw:false});
+        } else if(i>0&&isMachete&&S.showHitbox){
+          // no visual for hits 2-5
+        }
         Object.values(W.players).forEach(s=>{
           if(s.role!=='survivor'||!s.alive)return;
           if(pk.comboHitSet.has(s.id))return;
           if(pointInRotRect(s.x,s.y,cx,cy,COMBO_HB_W/2,COMBO_HB_H/2,ang)){
-            s.comboStunned=true;
-            s.comboStunTimer=comboDur-delay+0.10;
-            applyShieldDamage(s, hitDmg);
+            if(i===0){
+              // First hit: gashing wound — stun for 2s
+              pk._comboFirstHit=true;
+              s.comboStunned=true;
+              s.comboStunTimer=GASHING_WOUND_DUR;
+              pk.comboLocked=true;
+              pk.comboLockedTimer=comboDur+0.20;
+            }
+            applyShieldDamage(s,hitDmg);
             if(s.hp<=0){
               s.hp=0;s.alive=false;s.bleedTicks=0;
               s.comboStunned=false;
@@ -5598,7 +5741,6 @@ const Game={
               pk.comboHitSet.add(s.id);
             } else {
               s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
-              // Last hit → knockback push
               if(i===COMBO_HITS-1){
                 const kbDist=TILE*2.2;
                 s.comboKbVx=Math.cos(ang)*kbDist;
@@ -5606,10 +5748,11 @@ const Game={
                 s.comboKbTimer=0.18;
               }
             }
+            pk.comboHitSet.add(s.id);
             Game.checkWin();
           }
         });
-        if(i===COMBO_HITS-1){pk.comboActive=false;pk.comboHitSet=null;}
+        if(i===COMBO_HITS-1){pk.comboActive=false;pk.comboHitSet=null;pk._comboFirstHit=false;}
       },delay*1000);
     });
   },
@@ -5634,7 +5777,8 @@ const Game={
     if(p.role==='survivor'){
       if(isAMaxGE5(p)){
         if(!p.amaxHealing&&p.amaxECd<=0){Game.amaxDoE(pid);return;}
-        if(p.amaxHealing){p.amaxHealing=false;p.amaxHealTimer=0;return;}
+        // healing can no longer be cancelled by E — only by taking damage
+        return;
       }
       if(isMankspe(p)&&p.mankECd<=0&&!p.mankEActive&&!p.mankEResting){Game.mankDoE(pid);return;}
       if(isMartin(p)&&p.martECd<=0){Game.martDoE(pid);return;}
@@ -5783,13 +5927,23 @@ const Game={
 
   // Dead player enters spectate mode inside active game
   enterSpectate(){
-    const me=W.players?.[S.myId];
-    if(!me||me.alive)return;
     S.isDeadSpec=true;
 
-    // Find a valid spec target (killer or another survivor)
-    const targets=Object.values(W.players).filter(p=>p.id!==S.myId&&(p.alive||p.role==='killer'));
-    S.specTarget=targets.length>0?targets[0].id:Object.keys(W.players).find(id=>id!==S.myId)||null;
+    // Find best spec target: prefer alive players, then killer
+    const alive=Object.values(W.players).filter(p=>p.id!==S.myId&&p.alive);
+    const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.id!==S.myId);
+    const anyone=Object.values(W.players).find(p=>p.id!==S.myId);
+    S.specTarget=(alive[0]||killer||anyone||{}).id||null;
+
+    // Init camera immediately on target position so it doesn't stay frozen
+    if(S.specTarget&&W.players[S.specTarget]){
+      const t=W.players[S.specTarget];
+      const worldW=MAP_W*TILE,worldH=MAP_H*TILE;
+      const vpW=VW/SCALE,vpH=VH/SCALE;
+      CAM._effScale=SCALE;
+      CAM.x=Math.max(0,Math.min(worldW-vpW,t.x-vpW/2));
+      CAM.y=Math.max(0,Math.min(worldH-vpH,t.y-vpH/2));
+    }
 
     document.getElementById('deathOv').classList.remove('show');
     document.getElementById('specOverlay').classList.add('active');
@@ -5813,15 +5967,22 @@ const Game={
   },
 
   specNext(){
-    const ids=Object.keys(W.players);
+    const ids=Object.values(W.players).filter(p=>p.id!==S.myId&&(p.alive||p.role==='killer')).map(p=>p.id);
+    if(!ids.length)return;
     const i=ids.indexOf(S.specTarget);
     S.specTarget=ids[(i+1)%ids.length];
+    // Jump camera immediately
+    const t=W.players[S.specTarget];
+    if(t){const vpW=VW/SCALE,vpH=VH/SCALE,wW=MAP_W*TILE,wH=MAP_H*TILE;CAM.x=Math.max(0,Math.min(wW-vpW,t.x-vpW/2));CAM.y=Math.max(0,Math.min(wH-vpH,t.y-vpH/2));}
     UI.updSpecFollow();
   },
   specPrev(){
-    const ids=Object.keys(W.players);
+    const ids=Object.values(W.players).filter(p=>p.id!==S.myId&&(p.alive||p.role==='killer')).map(p=>p.id);
+    if(!ids.length)return;
     const i=ids.indexOf(S.specTarget);
     S.specTarget=ids[(i-1+ids.length)%ids.length];
+    const t=W.players[S.specTarget];
+    if(t){const vpW=VW/SCALE,vpH=VH/SCALE,wW=MAP_W*TILE,wH=MAP_H*TILE;CAM.x=Math.max(0,Math.min(wW-vpW,t.x-vpW/2));CAM.y=Math.max(0,Math.min(wH-vpH,t.y-vpH/2));}
     UI.updSpecFollow();
   },
 
@@ -6298,7 +6459,14 @@ const Game={
       const alpha=sf.life/sf.maxLife;
       ctx.save();ctx.translate(sf.x,sf.y);ctx.rotate(sf.ang);
 
-      if(sf.combo){
+      if(sf.nicoChargeFX||sf.nicoKnifeFX){
+        // Nico charge/knife trail — red circle hitbox
+        ctx.globalAlpha=alpha*0.75;
+        ctx.beginPath();ctx.arc(0,0,sf.hw,0,Math.PI*2);
+        ctx.fillStyle=`rgba(220,30,30,${alpha*0.35})`;ctx.fill();
+        ctx.strokeStyle=`rgba(255,80,80,${alpha*0.9})`;ctx.lineWidth=2;ctx.stroke();
+        ctx.shadowColor='rgba(255,0,0,0.6)';ctx.shadowBlur=6*alpha;ctx.stroke();ctx.shadowBlur=0;
+      } else if(sf.combo){
         // Combo FX — always visible regardless of hitbox toggle
         if(sf.chainsaw){
           // Motosierra — orange electric sparks, wider arc
@@ -6329,11 +6497,12 @@ const Game={
         }
       } else if(S.showHitbox){
         // Normal M1/Q hitbox debug — only visible when hitbox ON
-        ctx.fillStyle=`rgba(220,30,30,${alpha*0.55})`;
+        const isLaugh=sf.martLaugh;
+        ctx.fillStyle=isLaugh?`rgba(255,220,0,${alpha*0.45})`:`rgba(220,30,30,${alpha*0.55})`;
         ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
+        ctx.strokeStyle=isLaugh?`rgba(255,240,80,${alpha*0.95})`:`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
         ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        ctx.strokeStyle=`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
+        ctx.strokeStyle=isLaugh?`rgba(255,255,160,${alpha*0.7})`:`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
       }
       ctx.globalAlpha=1;ctx.restore();
@@ -6371,7 +6540,7 @@ const Game={
       // Mankspe footprints (visible to everyone including killer)
       if(isMankspe(p)&&p.mankFootprints&&p.mankFootprints.length){
         p.mankFootprints.forEach(fp=>{
-          const a=Math.max(0,fp.life/MANK_R_FOOTPRINT_DUR)*0.55;
+          const a=Math.max(0,fp.life/MANK_R_FOOTPRINT_DUR)*0.30; // 45% más invisible
           ctx.save();ctx.globalAlpha=a;
           ctx.translate(fp.x,fp.y);ctx.rotate(fp.ang+Math.PI/2);
           ctx.font=`${TILE*.35}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -7040,7 +7209,26 @@ const Game={
       }
       ctx.restore();
     });
-    // ── AMaxGE5: traveling pea projectiles ──
+    // ── MARTIN: banana arrow marker (visible to survivors) ──
+    if(me.role==='survivor'){
+      Object.values(W.players).forEach(p=>{
+        if(!p.alive||!isMartin(p)||!p.martBananas||!p.martBananas.length)return;
+        p.martBananas.forEach(bn=>{
+          if(!bn.active)return;
+          const {sx,sy}=toScreen(bn.x,bn.y);
+          const t3=Date.now()/400;
+          const pulse3=0.6+Math.sin(t3)*0.4;
+          if(!onScreen(sx,sy)){
+            drawEdgeArrow(bn.x,bn.y,'rgba(255,220,0,0.9)','🍌');
+          } else {
+            ctx.save();ctx.globalAlpha=pulse3*0.7;
+            ctx.beginPath();ctx.arc(sx,sy,TILE*sc*0.52+Math.sin(t3*1.3)*2,0,Math.PI*2);
+            ctx.strokeStyle='rgba(255,220,0,1)';ctx.lineWidth=1.5;ctx.setLineDash([4,5]);ctx.stroke();ctx.setLineDash([]);
+            ctx.restore();
+          }
+        });
+      });
+    }
     Object.values(W.players).forEach(p=>{
       if(!isAMaxGE5(p)||!p.amaxPeaProjs||!p.amaxPeaProjs.length)return;
       p.amaxPeaProjs.forEach(pj=>{
@@ -7214,6 +7402,16 @@ const Game={
         else{ctx.save();ctx.font='bold 9px monospace';ctx.fillStyle='rgba(0,255,80,0.8)';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('⚡ GEN',sx,sy-TILE*sc*0.7);ctx.restore();}
       });
     }
+    // Helper: is a survivor invisible to the current viewer?
+    const survIsInvisToMe=(s)=>{
+      if(!s||s.role!=='survivor')return false;
+      const isSelf=s.id===me.id;
+      if(isSelf)return false; // always see yourself
+      if((s.gbActive||s.gbEating)&&me.role==='killer')return true;
+      if(isMankspe(s)&&(s.mankRActive||s.mankREating)&&me.role==='killer')return true;
+      return false;
+    };
+
     if(S.lms){
       const alpha=1;
       if(me.role==='survivor'){
@@ -7221,9 +7419,7 @@ const Game={
         if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
       } else if(me.role==='killer'){
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
-          // Indetectable: Ghost Burger activo → no aparece en tracker
           if((s.gbActive||s.gbEating)&&S.lmsTrackerT<=0)return;
-          // Mankspe Pan con Sal → indetectable
           if(isMankspe(s)&&(s.mankRActive||s.mankREating))return;
           const {sx,sy}=toScreen(s.x,s.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(s.x,s.y,'rgba(52,152,219,0.9)','🏃');else drawEdgeArrow(s.x,s.y,'rgba(52,152,219,0.9)','🏃');ctx.restore();
         });
@@ -7300,22 +7496,27 @@ const Game={
     }
     // ── MARTIN clown distraction overlay (killer screen only) ──
     if(me.role==='killer'&&me.martDistractActive){
-      const t=Date.now()/400;
       const cw=canvas.width,ch=canvas.height;
-      const phase=me.martDistractTimer>0?(me.martDistractTimer/MART_E_DISTRACT_INTERVAL):0;
-      const fadeAlpha=phase<0.3?phase/0.3:1;
+      const progress=(me.martDistractTimer||0)/MART_E_DISTRACT_FADE; // 0→1 over 2.5s
+      const alpha=Math.max(0,1-progress); // fade from 1 to 0
       ctx.save();
-      ctx.globalAlpha=fadeAlpha*0.88;
-      ctx.font=`${Math.min(cw,ch)*0.22}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.shadowColor='rgba(255,0,255,0.7)';ctx.shadowBlur=30;
-      ctx.fillText('🤡',cw*0.5+Math.sin(t)*20,ch*0.5+Math.cos(t*0.8)*15);
-      const positions=[[0.2,0.3],[0.8,0.25],[0.15,0.7],[0.82,0.72],[0.5,0.18],[0.5,0.82]];
-      ctx.font=`${Math.min(cw,ch)*0.1}px monospace`;
-      positions.forEach(([fx,fy],i)=>{
-        const wa=Math.sin(t*1.5+i)*8;const wb=Math.cos(t*1.1+i*1.3)*6;
-        ctx.globalAlpha=fadeAlpha*0.45;
-        ctx.fillText('🤡',cw*fx+wa,ch*fy+wb);
-      });
+      // Dark pink/magenta tint that covers the whole screen
+      ctx.globalAlpha=alpha*0.55;
+      ctx.fillStyle='rgba(180,0,120,1)';
+      ctx.fillRect(0,0,cw,ch);
+      // Central giant clown
+      ctx.globalAlpha=alpha*0.95;
+      ctx.font=`${Math.min(cw,ch)*0.88}px monospace`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor=`rgba(255,0,255,${alpha})`;ctx.shadowBlur=80*alpha;
+      ctx.fillText('🤡',cw*0.5,ch*0.5);
+      ctx.shadowBlur=0;
+      // 4 corner clowns
+      const sz=Math.min(cw,ch)*0.28;
+      ctx.font=`${sz}px monospace`;
+      ctx.globalAlpha=alpha*0.75;
+      const corners=[[cw*0.14,ch*0.18],[cw*0.86,ch*0.18],[cw*0.14,ch*0.82],[cw*0.86,ch*0.82]];
+      corners.forEach(([x,y])=>ctx.fillText('🤡',x,y));
       ctx.restore();
     }
     if(me.role==='killer'&&isNicostos(me)&&(me.nicoInvis||me.nicoInvisStill)){
@@ -7792,10 +7993,10 @@ const GameAudio={
   //  • En LMS también suenan layers y chase theme.
 
   // ── Distancias en píxeles (mundo) ──
-  DIST_L1: TILE * 13.5,   // empieza layer 1
-  DIST_L2: TILE * 12,   // sube a layer 2
-  DIST_L3: TILE * 10.5,    // sube a layer 3
-  DIST_CT: TILE * 5.8,    // activa chase theme
+  DIST_L1: TILE * 13.8,   // empieza layer 1
+  DIST_L2: TILE * 12.9,   // sube a layer 2
+  DIST_L3: TILE * 11,     // sube a layer 3
+  DIST_CT: TILE * 5.6,    // activa chase theme
 
   // ── Estado ──
   _lobby: null,
@@ -7881,6 +8082,27 @@ const GameAudio={
     this._l1=null;this._l2=null;this._l3=null;this._ct=null;
     this._chaseActive=false;
     this._currentLayer=0;
+  },
+
+  // Killer: solo escucha el chase theme, no las layers 1-2-3
+  updateChaseKiller(distPx){
+    if(this._mode!=='map') return;
+    const d=distPx;
+    // Solo activar/desactivar chase theme
+    const inCT=d<=this.DIST_CT;
+    if(inCT&&!this._chaseActive){
+      this._chaseActive=true;
+      this._currentLayer=4;
+      const bgTrack=this._map;
+      if(bgTrack)this._fadeOut(bgTrack,400);
+      this._startLayer(this._ct,0.62,300);
+    } else if(!inCT&&this._chaseActive&&d>this.DIST_L1){
+      // Salió del rango CT completamente
+      this._chaseActive=false;
+      this._currentLayer=0;
+      this._stopLayer(this._ct,400);
+      if(this._map)this._fadeIn(this._map,0.50,500);
+    }
   },
 
   // Llamado cada tick desde mainLoop con la distancia al killer (px).
@@ -8711,6 +8933,39 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
     settBtn.classList.remove('active');
   }
 });
+
+// ══════════════════════════════════════════
+//  ADMIN PANEL (host only)
+// ══════════════════════════════════════════
+const AdminPanel={
+  _open:false,
+  show(){
+    const btn=document.getElementById('adminPanelBtn');
+    if(btn)btn.style.display='block';
+  },
+  hide(){
+    const btn=document.getElementById('adminPanelBtn');
+    if(btn)btn.style.display='none';
+    const panel=document.getElementById('adminPanel');
+    if(panel)panel.classList.remove('open');
+    this._open=false;
+  },
+  toggle(){
+    this._open=!this._open;
+    const panel=document.getElementById('adminPanel');
+    if(panel)panel.classList.toggle('open',this._open);
+  },
+  forceIntermissionEnd(){
+    if(!S.isHost)return;
+    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+    S.cdVal=0;
+    Net.broadcast({t:'cd',v:0});
+    Game.hostStart();
+    this._open=false;
+    const panel=document.getElementById('adminPanel');
+    if(panel)panel.classList.remove('open');
+  },
+};
 
 // Client input loop — sends inputs to host every frame
 (function inputLoop(){
