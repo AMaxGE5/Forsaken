@@ -6725,6 +6725,7 @@ const Game={
             ctx.beginPath();ctx.moveTo(-s*.6,s*.2);ctx.lineTo(-s*1.1,s*.6);ctx.stroke();
             // Hitbox debug: show charge collision circle (only when S.showHitbox)
             if(S.showHitbox){
+              const sc=sc2;
               ctx.save();ctx.setTransform(1,0,0,1,0,0); // reset transform to world coords
               ctx.scale(sc,sc);ctx.translate(-CAM.x,-CAM.y);
               ctx.beginPath();ctx.arc(p.x,p.y,TILE*0.9,0,Math.PI*2);
