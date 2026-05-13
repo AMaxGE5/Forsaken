@@ -248,9 +248,9 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 
 /* Admin panel */
 #adminPanelWrap{
-  position:absolute;top:160px;left:50%;transform:translateX(-50%);
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
   display:flex;flex-direction:column;align-items:center;gap:0;
-  z-index:50;pointer-events:all;
+  z-index:51;pointer-events:all;
 }
 #adminPanelBtn{
   display:none;
@@ -2129,7 +2129,7 @@ const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
 const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8*0.75, HB_H = TILE*2.0*0.75;  // M1 hitbox −25%
 const INTERACT_SEC = 15;
 const GEN_TIME_BONUS = 20;
-const LMS_TIME = 74, LMS_TRACKER_DUR = 5;
+const LMS_TIME = 74, LMS_TRACKER_DUR = 7;
 const BLOXY_CD = 40, BLOXY_DUR = 8; // Bloxy Cola cooldown & effect duration
 // ── Habilidad Q del Survivor: SLATE SKIN ──
 const SS_CD = 30;           // cooldown en segundos
@@ -2174,8 +2174,8 @@ const MART_E_DISTRACT_INTERVAL = 0.6; // segundos entre cada emoji payaso
 const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
 // Hitbox frontal de la risa (como el M1 del Slasher)
 const MART_E_HB_OFFSET = HB_OFFSET;
-const MART_E_HB_W = HB_W * 1.1;
-const MART_E_HB_H = HB_H * 1.1;
+const MART_E_HB_W = HB_W;
+const MART_E_HB_H = HB_H * 0.85;
 const MART_E_ZONE_DUR = 0.8;       // duración visual de la zona de impacto
 const GB_INVIS_ALPHA = 0.28; // Invisibilidad IV — alpha visible para el killer (no completa, esa es nivel 6)
 
@@ -2947,9 +2947,9 @@ const UI={
         const mqtOv=document.getElementById('martQOverlay');if(mqtOv)mqtOv.style.transform=`scaleY(${mqtPct})`;
         const mqtWrap=document.getElementById('martQWrap');
         const bHasBanana=me.martBananas&&me.martBananas.length>0;
-        if(mqtWrap)mqtWrap.className='ability-icon-wrap'+(bHasBanana?' ready':mqtPct>0?' on-cd':' ready');
+        if(mqtWrap)mqtWrap.className='ability-icon-wrap'+(mqtPct>0?' on-cd':bHasBanana?' ready':' ready');
         const mqtNum=document.getElementById('martQNum');
-        if(mqtNum){mqtNum.style.display=(bHasBanana||mqtPct>0)?'flex':'none';mqtNum.textContent=bHasBanana?'🍌':(mqtPct>0?Math.ceil(me.martQCd)+'s':'');}
+        if(mqtNum){mqtNum.style.display=(mqtPct>0||bHasBanana)?'flex':'none';mqtNum.textContent=mqtPct>0?Math.ceil(me.martQCd)+'s':bHasBanana?'🍌':'';}
         // ── Martin E: BLIPI ──
         const metSlot=document.getElementById('martESlot');if(metSlot)metSlot.style.display='flex';
         const metPct=me.martECd>0?me.martECd/MART_E_CD:0;
@@ -4152,12 +4152,14 @@ const Net={
       Game.clientStart(d);
 
     } else if(d.t==='lms'){
-      GameAudio.playLMS();
+      if(GameAudio._mode!=='lms') GameAudio.playLMS();
 
     } else if(d.t==='gs'){
       if(S.running)Game.applyState(d.gs);
 
     } else if(d.t==='over'){
+      // Forzar running=true para clientes (no host) por si el guard lo bloqueaba
+      if(!S.running&&!S.isHost) S.running=true;
       Game.handleRoundEnd(d.winner,d.reason,d.lmsLastSurvivorId||null);
 
     } else if(d.t==='lobbyPos'){
@@ -5842,7 +5844,10 @@ const Game={
 
     if(S.isHost)Net.broadcast({t:'over',winner,reason,lmsLastSurvivorId:S.lmsLastSurvivorId||null});
 
+    let _endOverlayShown=false;
     const showEndOverlay=()=>{
+      if(_endOverlayShown)return;
+      _endOverlayShown=true;
       const ov=document.getElementById('roundEndOv');
       const wEl=document.getElementById('reWinner');
       document.getElementById('reTitle').textContent='RONDA TERMINADA';
@@ -5863,13 +5868,17 @@ const Game={
           Game.doReturnToLobby();
         }
       },1000);
+      // Fallback: si en 30s aún no volvió al lobby (por bug), forzar retorno
+      const _fbTimeout=setTimeout(()=>{if(document.getElementById('s-game').classList.contains('active')){Game.doReturnToLobby();}},30000);
+      // Limpiar el fallback si se procesa normalmente
+      const _origIv=iv;
     };
 
     if(winner==='killer'){
       // Find killer name for the overlay
       const killerP=Object.values(W.players||{}).find(p=>p.role==='killer');
       const killerName=(killerP?killerP.name:'SLASHER').toUpperCase();
-      KillerWin.show(killerName,()=>showEndOverlay());
+      try{KillerWin.show(killerName,()=>showEndOverlay());}catch(e){console.warn('KillerWin error:',e);showEndOverlay();}
     } else {
       showEndOverlay();
     }
@@ -6151,7 +6160,12 @@ const Game={
     gs.gens.forEach(gd=>{const g=W.gens.find(x=>x.id===gd.id);if(g){g.on=gd.on;g.prog=gd.prog;}});
     W.time=gs.time;
     if(gs.slashFX)slashFX=gs.slashFX.filter(s=>s.life>0);
-    if(gs.lms!==undefined){S.lms=gs.lms;S.lmsTrackerT=gs.lmsTrackerT||0;}
+    if(gs.lms!==undefined){
+      const wasLms=S.lms;
+      S.lms=gs.lms;S.lmsTrackerT=gs.lmsTrackerT||0;
+      // Fallback: si entró en LMS y el audio no cambió (packet lms perdido)
+      if(!wasLms&&S.lms&&GameAudio._mode!=='lms') GameAudio.playLMS();
+    }
   },
 
   // ── DRAWING ──
@@ -6487,21 +6501,26 @@ const Game={
       ctx.globalAlpha=1;ctx.restore();
     });
 
-    // ── Martin BLIPI hitbox (showHitbox only) — amarillo dorado para diferenciarlo del M1 ──
+    // ── Martin BLIPI hitbox (showHitbox only) — mismo diseño que M1 rojo pero en amarillo ──
     if(S.showHitbox){
       Object.values(W.players).forEach(p=>{
         if(!isMartin||!isMartin(p)||!p.alive)return;
         if(p.martECd<MART_E_CD-0.25)return; // solo visible justo después de activar (~0.25s)
+        const alpha=Math.min(1,(p.martECd-(MART_E_CD-0.25))/0.25);
         const fx=Math.cos(p.facing),fy=Math.sin(p.facing);
         const hbCx=p.x+fx*MART_E_HB_OFFSET,hbCy=p.y+fy*MART_E_HB_OFFSET;
         ctx.save();
         ctx.translate(hbCx,hbCy);ctx.rotate(p.facing);
-        ctx.fillStyle='rgba(255,210,0,0.18)';
-        ctx.fillRect(-MART_E_HB_H/2,-MART_E_HB_W/2,MART_E_HB_H,MART_E_HB_W);
-        ctx.strokeStyle='rgba(255,220,0,0.9)';ctx.lineWidth=2;
-        ctx.shadowColor='rgba(255,200,0,0.8)';ctx.shadowBlur=10;
-        ctx.strokeRect(-MART_E_HB_H/2,-MART_E_HB_W/2,MART_E_HB_H,MART_E_HB_W);
-        ctx.shadowBlur=0;ctx.restore();
+        // Relleno amarillo (equivalente al rojo del M1)
+        ctx.fillStyle=`rgba(255,210,0,${alpha*0.55})`;
+        ctx.fillRect(-MART_E_HB_H,-MART_E_HB_W,MART_E_HB_H*2,MART_E_HB_W*2);
+        // Borde amarillo
+        ctx.strokeStyle=`rgba(255,220,0,${alpha*0.95})`;ctx.lineWidth=2;
+        ctx.strokeRect(-MART_E_HB_H,-MART_E_HB_W,MART_E_HB_H*2,MART_E_HB_W*2);
+        // Líneas internas (como el M1)
+        ctx.strokeStyle=`rgba(255,240,120,${alpha*0.7})`;ctx.lineWidth=1;
+        for(let i=0;i<3;i++){const oy=(i-1)*MART_E_HB_W*.55;ctx.beginPath();ctx.moveTo(-MART_E_HB_H,oy);ctx.lineTo(MART_E_HB_H,oy);ctx.stroke();}
+        ctx.restore();
       });
     }
 
@@ -7410,8 +7429,10 @@ const Game={
         if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
       } else if(me.role==='killer'){
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
+          // Indetectable: tracker expiró (7s) → no aparece
+          if(S.lmsTrackerT<=0)return;
           // Indetectable: Ghost Burger activo → no aparece en tracker
-          if((s.gbActive||s.gbEating)&&S.lmsTrackerT<=0)return;
+          if((s.gbActive||s.gbEating))return;
           // Mankspe Pan con Sal → indetectable
           if(isMankspe(s)&&(s.mankRActive||s.mankREating))return;
           const {sx,sy}=toScreen(s.x,s.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(s.x,s.y,'rgba(52,152,219,0.9)','🏃');else drawEdgeArrow(s.x,s.y,'rgba(52,152,219,0.9)','🏃');ctx.restore();
@@ -8130,14 +8151,19 @@ const GameAudio={
   },
 
   playLMS(){
-    this.stopAll();
-    this._mode='lms';
-    this._lms=this._mkAudio('lms/soul.mp3',true,0.60);
-    this._fadeIn(this._lms,0.60,600);
-    // En LMS no se cargan layers ni chase theme
-    this._l1=null;this._l2=null;this._l3=null;this._ct=null;
+    // Forzar parada completa de todo audio incluyendo chase activo
     this._chaseActive=false;
     this._currentLayer=0;
+    [this._map,this._l1,this._l2,this._l3,this._ct].forEach(a=>{
+      if(a){try{a.pause();a.currentTime=0;}catch(e){}}
+    });
+    this._map=null;this._l1=null;this._l2=null;this._l3=null;this._ct=null;
+    this._mode='lms';
+    if(!this._lms){
+      this._lms=this._mkAudio('lms/soul.mp3',true,0);
+    }
+    this._lms.currentTime=0;
+    this._fadeIn(this._lms,0.60,600);
   },
 
   // Llamado cada tick desde mainLoop con la distancia al killer (px).
