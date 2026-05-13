@@ -2172,10 +2172,10 @@ const MART_E_DISTRACT_COUNT = 4;   // 4 emojis payaso
 const MART_E_DISTRACT_INTERVAL = 0.6; // segundos entre cada emoji payaso
 
 const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
-// Hitbox frontal de la risa (como el M1 del Slasher)
-const MART_E_HB_OFFSET = HB_OFFSET;
+// Hitbox frontal de la risa (idéntico al M1 del Slasher en tamaño y posición)
+const MART_E_HB_OFFSET = HB_OFFSET + HB_H/2;  // mismo centro que el M1
 const MART_E_HB_W = HB_W;
-const MART_E_HB_H = HB_H * 0.85;
+const MART_E_HB_H = HB_H;
 const MART_E_ZONE_DUR = 0.8;       // duración visual de la zona de impacto
 const GB_INVIS_ALPHA = 0.28; // Invisibilidad IV — alpha visible para el killer (no completa, esa es nivel 6)
 
@@ -5396,10 +5396,17 @@ const Game={
     const ang=p.facing;
     const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
     const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    // Visual FX — 3 hitboxes staggered
+    // Visual FX — 3 hitboxes salen escalonadas con setTimeout
     for(let i=0;i<M1_SLASHES;i++){
-      const delay=i*M1_DELAY;
-      slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.2+delay,maxLife:.2+delay,idx:i,nicoSlash:true,hasKnife});
+      const delay=i*100;
+      setTimeout(()=>{
+        if(!S.running)return;
+        const fk=W.players[pid];if(!fk||!fk.alive)return;
+        const fang=fk.facing;
+        const fcx2=fk.x+Math.cos(fang)*(HB_OFFSET+HB_H/2);
+        const fcy2=fk.y+Math.sin(fang)*(HB_OFFSET+HB_H/2);
+        slashFX.push({x:fcx2,y:fcy2,ang:fang,hw:HB_W/2,hh:HB_H/2,life:.18,maxLife:.18,idx:i,nicoSlash:true,hasKnife});
+      },delay);
     }
     // ── Staggered hitbox queue: hit 0 fires immediately, hits 1-2 fire 0.1s later each ──
     p.m1HitSet=new Set();
@@ -5600,34 +5607,38 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martECd>0)return;
-    // CD always consumed — Martin can activate whenever he wants
     p.martECd=MART_E_CD;
-    // ── Frontal hitbox like Slasher M1 — check if killer is inside it ──
-    const fx=Math.cos(p.facing), fy=Math.sin(p.facing);
-    const hbCx=p.x+fx*MART_E_HB_OFFSET, hbCy=p.y+fy*MART_E_HB_OFFSET;
-    const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    if(!kk)return; // no killer alive — CD consumed but nothing happens
-    const dx=kk.x-hbCx, dy=kk.y-hbCy;
-    const lx= dx*fx+dy*fy;
-    const ly=-dx*fy+dy*fx;
-    const hit=Math.abs(lx)<=MART_E_HB_W*0.5&&Math.abs(ly)<=MART_E_HB_H*0.5;
-    if(!hit)return; // missed — CD consumed, no effects applied
-    // ── Hit connected — apply all effects ──
-    // Reveal killer to all survivors
-    kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
-    // Lentitud I (×0.85) to killer
-    kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
-    // Force field for Martin
-    p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
-    // Velocidad I para Martin
-    p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
-    // Curar 10 HP
-    p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
-    // Visual distraction: 4 corner payasos + 1 giant center payaso + magenta tint
-    kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=MART_E_DISTRACT_INTERVAL;
-    kk.martEBigDistract=true;kk.martEBigDistractTimer=MART_E_DISTRACT_FADE;
-    // Zone of impact visual at killer position
-    p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
+    let hitConnected=false;
+    const doHit=(hitIdx)=>{
+      if(!p||!p.alive)return;
+      const fang=p.facing;
+      const fx=Math.cos(fang),fy=Math.sin(fang);
+      // Mismo centro que el M1 del Slasher
+      const hbCx=p.x+fx*MART_E_HB_OFFSET;
+      const hbCy=p.y+fy*MART_E_HB_OFFSET;
+      // Visual FX amarillo (misma forma que slashFX rojo pero con martESlash flag)
+      slashFX.push({x:hbCx,y:hbCy,ang:fang,hw:HB_W/2,hh:HB_H/2,life:.18,maxLife:.18,idx:hitIdx,martESlash:true});
+      if(hitConnected&&hitIdx>0)return; // segunda hitbox solo aplica efectos si primera ya conectó
+      const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
+      if(!kk)return;
+      if(pointInRotRect(kk.x,kk.y,hbCx,hbCy,HB_W/2,HB_H/2,fang)){
+        if(hitConnected)return; // ya conectó en hitbox 1
+        hitConnected=true;
+        // ── Hit conectado — aplicar efectos ──
+        kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
+        kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
+        p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
+        p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
+        p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
+        kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=MART_E_DISTRACT_INTERVAL;
+        kk.martEBigDistract=true;kk.martEBigDistractTimer=MART_E_DISTRACT_FADE;
+        p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
+      }
+    };
+    // Hitbox 1 inmediata
+    doHit(0);
+    // Hitbox 2 a los 0.2s
+    setTimeout(()=>{if(S.running)doHit(1);},200);
   },
   doEnrage(pid){
     const p=W.players[pid];
@@ -6489,6 +6500,17 @@ const Game={
           ctx.beginPath();ctx.moveTo(-sf.hh*0.7,-sf.hw*0.4);ctx.lineTo(sf.hh*0.7,sf.hw*0.4);ctx.stroke();
           ctx.shadowBlur=0;
         }
+      } else if(sf.martESlash){
+        // Martin BLIPI — amarillo, siempre visible (como el M1 rojo pero dorado)
+        ctx.globalAlpha=alpha;
+        ctx.shadowColor='rgba(255,200,0,0.9)';ctx.shadowBlur=14;
+        ctx.fillStyle=`rgba(255,210,0,${alpha*0.45})`;
+        ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(255,230,0,${alpha*0.95})`;ctx.lineWidth=2;
+        ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(255,240,120,${alpha*0.65})`;ctx.lineWidth=1;
+        for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
+        ctx.shadowBlur=0;
       } else if(S.showHitbox){
         // Normal M1/Q hitbox debug — only visible when hitbox ON
         ctx.fillStyle=`rgba(220,30,30,${alpha*0.55})`;
@@ -6500,29 +6522,6 @@ const Game={
       }
       ctx.globalAlpha=1;ctx.restore();
     });
-
-    // ── Martin BLIPI hitbox (showHitbox only) — mismo diseño que M1 rojo pero en amarillo ──
-    if(S.showHitbox){
-      Object.values(W.players).forEach(p=>{
-        if(!isMartin||!isMartin(p)||!p.alive)return;
-        if(p.martECd<MART_E_CD-0.25)return; // solo visible justo después de activar (~0.25s)
-        const alpha=Math.min(1,(p.martECd-(MART_E_CD-0.25))/0.25);
-        const fx=Math.cos(p.facing),fy=Math.sin(p.facing);
-        const hbCx=p.x+fx*MART_E_HB_OFFSET,hbCy=p.y+fy*MART_E_HB_OFFSET;
-        ctx.save();
-        ctx.translate(hbCx,hbCy);ctx.rotate(p.facing);
-        // Relleno amarillo (equivalente al rojo del M1)
-        ctx.fillStyle=`rgba(255,210,0,${alpha*0.55})`;
-        ctx.fillRect(-MART_E_HB_H,-MART_E_HB_W,MART_E_HB_H*2,MART_E_HB_W*2);
-        // Borde amarillo
-        ctx.strokeStyle=`rgba(255,220,0,${alpha*0.95})`;ctx.lineWidth=2;
-        ctx.strokeRect(-MART_E_HB_H,-MART_E_HB_W,MART_E_HB_H*2,MART_E_HB_W*2);
-        // Líneas internas (como el M1)
-        ctx.strokeStyle=`rgba(255,240,120,${alpha*0.7})`;ctx.lineWidth=1;
-        for(let i=0;i<3;i++){const oy=(i-1)*MART_E_HB_W*.55;ctx.beginPath();ctx.moveTo(-MART_E_HB_H,oy);ctx.lineTo(MART_E_HB_H,oy);ctx.stroke();}
-        ctx.restore();
-      });
-    }
 
     // Players
     Object.values(W.players).forEach(p=>{
