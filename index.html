@@ -2157,8 +2157,8 @@ const MANK_R_EAT_DUR = 0.8; // animación de comer el pan
 const MANK_R_INVIS_ALPHA = 0.05; // completamente invisible (casi opaco 0)
 const MANK_R_FOOTPRINT_DUR = 1.5; // cuánto duran las pisadas en el suelo
 // ── MARTIN ──
-const MART_Q_CD = 20;              // Q: DAWN — plátano trampa (20s CD)
-const MART_Q_EXPIRE = 18;          // plátanos desaparecen después de 18s
+const MART_Q_CD = 18;              // Q: DAWN — plátano trampa (18s CD)
+const MART_Q_EXPIRE = 15;          // plátanos desaparecen después de 15s (se pudren)
 const MART_Q_SLOW_DUR = 5;         // lentitud II por 5s al killer
 const MART_Q_HELPLESS_DUR = 1;     // duración helpless al pisar plátano
 const MART_E_CD = 35;              // E: BLIPI — risa de payaso (35s)
@@ -2358,44 +2358,29 @@ function buildMap(){
     }
   });
 
-  // ── KILLER-ONLY WALLS (tile=4) — cortan todos los loops principales ──
-  const redSegs=[
-    // ── LOOPS LATERALES IZQUIERDOS ──
-    // Corredor izquierdo medio (y:16-28, x~7): corte horizontal que solo killer cruza
-    {y:19,x1:3, x2:6},   // corta el pasillo izq superior (y≈19)
-    {y:25,x1:3, x2:6},   // corta el pasillo izq inferior
-    // ── LOOPS LATERALES DERECHOS ──
-    {y:19,x1:58,x2:61},  // corta el pasillo der superior
-    {y:25,x1:58,x2:61},  // corta el pasillo der inferior
-    // ── LOOPS DE ESQUINA SUPERIOR IZQUIERDA (x:1-12, y:1-8) ──
-    {x:6, y1:3, y2:7},   // pared vertical que el killer puede cruzar (corta el loop de esquina)
-    // ── LOOPS DE ESQUINA SUPERIOR DERECHA ──
-    {x:58,y1:3, y2:7},
-    // ── LOOPS DE ESQUINA INFERIOR IZQUIERDA ──
-    {x:6, y1:37,y2:41},
-    // ── LOOPS DE ESQUINA INFERIOR DERECHA ──
-    {x:58,y1:37,y2:41},
-    // ── LOOPS TOP-CENTER (alrededor de pilares x:22-25 y x:38-41) ──
-    {y:5, x1:14,x2:18},  // corta el loop top entre el borde y pared y:9 (lado izq)
-    {y:5, x1:46,x2:50},  // lado derecho
-    // ── LOOPS BOTTOM-CENTER ──
-    {y:39,x1:14,x2:18},
-    {y:39,x1:46,x2:50},
-    // ── LOOP CENTRAL (alrededor del bloque central x:32) ──
-    {y:19,x1:30,x2:34},  // corta el loop top del centro
-    {y:25,x1:30,x2:34},  // corta el loop bottom del centro
-    // ── FLANCOS MID IZQUIERDO Y DERECHO (x:19-25, y:16-28) ──
-    {x:22,y1:17,y2:21},  // killer puede cruzar la zona flank izq top
-    {x:42,y1:17,y2:21},  // flank der top
-    {x:22,y1:23,y2:27},  // flank izq bottom
-    {x:42,y1:23,y2:27},  // flank der bottom
+  // ── KILLER-ONLY WALLS (tile=4) — 8 puertas estratégicas, 2-3 tiles cada una ──
+  const redDoors=[
+    // Esquina superior izquierda — puerta corta (2 tiles)
+    {x:6, y1:4, y2:5},
+    // Esquina superior derecha
+    {x:58,y1:4, y2:5},
+    // Esquina inferior izquierda
+    {x:6, y1:38,y2:39},
+    // Esquina inferior derecha
+    {x:58,y1:38,y2:39},
+    // Flanco izquierdo medio-arriba (corta el loop lateral izq)
+    {y:19,x1:4, x2:5},
+    // Flanco izquierdo medio-abajo
+    {y:25,x1:4, x2:5},
+    // Flanco derecho medio-arriba
+    {y:19,x1:59,x2:60},
+    // Flanco derecho medio-abajo
+    {y:25,x1:59,x2:60},
   ];
-  redSegs.forEach(seg=>{
+  redDoors.forEach(seg=>{
     if(seg.x1!==undefined){
-      // horizontal
       for(let x=seg.x1;x<=seg.x2;x++) if(m[seg.y][x]===0) m[seg.y][x]=4;
     } else {
-      // vertical
       for(let y=seg.y1;y<=seg.y2;y++) if(m[y][seg.x]===0) m[y][seg.x]=4;
     }
   });
@@ -4560,7 +4545,7 @@ const Game={
     const vpW=VW/effScale,vpH=VH/effScale;
     const targetX=Math.max(0,Math.min(worldW-vpW,me.x-vpW/2));
     const targetY=Math.max(0,Math.min(worldH-vpH,me.y-vpH/2));
-    const LERP=0.12;
+    const LERP=0.18;
     if(CAM.x===undefined||CAM._snapNext){CAM.x=targetX;CAM.y=targetY;CAM._snapNext=false;}
     else{
       CAM.x+=(targetX-CAM.x)*LERP;
@@ -6502,6 +6487,24 @@ const Game={
       ctx.globalAlpha=1;ctx.restore();
     });
 
+    // ── Martin BLIPI hitbox (showHitbox only) — amarillo dorado para diferenciarlo del M1 ──
+    if(S.showHitbox){
+      Object.values(W.players).forEach(p=>{
+        if(!isMartin||!isMartin(p)||!p.alive)return;
+        if(p.martECd<MART_E_CD-0.25)return; // solo visible justo después de activar (~0.25s)
+        const fx=Math.cos(p.facing),fy=Math.sin(p.facing);
+        const hbCx=p.x+fx*MART_E_HB_OFFSET,hbCy=p.y+fy*MART_E_HB_OFFSET;
+        ctx.save();
+        ctx.translate(hbCx,hbCy);ctx.rotate(p.facing);
+        ctx.fillStyle='rgba(255,210,0,0.18)';
+        ctx.fillRect(-MART_E_HB_H/2,-MART_E_HB_W/2,MART_E_HB_H,MART_E_HB_W);
+        ctx.strokeStyle='rgba(255,220,0,0.9)';ctx.lineWidth=2;
+        ctx.shadowColor='rgba(255,200,0,0.8)';ctx.shadowBlur=10;
+        ctx.strokeRect(-MART_E_HB_H/2,-MART_E_HB_W/2,MART_E_HB_H,MART_E_HB_W);
+        ctx.shadowBlur=0;ctx.restore();
+      });
+    }
+
     // Players
     Object.values(W.players).forEach(p=>{
       if(!p.alive)return;
@@ -7415,33 +7418,49 @@ const Game={
         });
       }
     }
-    // ── MARTIN banana traps (visible to all) ──
+    // ── MARTIN banana traps (visible to all) — se pudren a negro en 15s ──
     Object.values(W.players).filter(p=>isMartin&&isMartin(p)&&p.martBananas&&p.martBananas.length).forEach(p=>{
       p.martBananas.forEach(bn=>{
         if(!bn.active)return;
         const {sx,sy}=toScreen(bn.x,bn.y);
         if(!onScreen(sx,sy))return;
+        const lifeRatio=Math.max(0,Math.min(1,(bn.life||0)/MART_Q_EXPIRE)); // 1=fresh, 0=expired
         const bob=Math.sin(Date.now()/300)*2;
-        const fadeAlpha=Math.min(1,(bn.life||MART_Q_EXPIRE)/MART_Q_EXPIRE*1.5); // fade as expiry nears
-        ctx.save();ctx.globalAlpha=Math.min(1,fadeAlpha);
+        ctx.save();
+        // Rot darkening: overlay a black tint that grows as lifeRatio → 0
+        const rotDark=1-lifeRatio; // 0=fresh(no dark), 1=fully rotten(black)
+        ctx.globalAlpha=Math.max(0.1,lifeRatio); // fades out gently
         ctx.font=`${TILE*sc*0.55}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.shadowColor='rgba(255,220,0,0.6)';ctx.shadowBlur=10;
+        // Healthy glow fades with life
+        ctx.shadowColor=`rgba(255,220,0,${lifeRatio*0.6})`;ctx.shadowBlur=10*lifeRatio;
         ctx.fillText('🍌',sx,sy+bob);
+        // Black rot overlay — grows from 0 to fully opaque
+        if(rotDark>0.1){
+          ctx.globalCompositeOperation='source-atop';
+          // draw a darkening rect over the emoji area
+          ctx.globalAlpha=rotDark*0.85;
+          ctx.fillStyle='rgba(0,0,0,1)';
+          ctx.fillRect(sx-TILE*sc*0.35,sy+bob-TILE*sc*0.35,TILE*sc*0.7,TILE*sc*0.7);
+          ctx.globalCompositeOperation='source-over';
+        }
         ctx.restore();
-        // Shadow glow under banana
-        ctx.save();ctx.globalAlpha=(0.18+Math.sin(Date.now()/400)*0.06)*fadeAlpha;
+        // Shadow glow under banana (fades with life)
+        ctx.save();ctx.globalAlpha=(0.18+Math.sin(Date.now()/400)*0.06)*lifeRatio;
         ctx.beginPath();ctx.ellipse(sx,sy+TILE*sc*0.3,TILE*sc*0.5,TILE*sc*0.2,0,0,Math.PI*2);
         ctx.fillStyle='rgba(255,220,0,1)';ctx.fill();ctx.restore();
       });
     });
-    // ── MARTIN banana indicator for survivors ──
+    // ── MARTIN banana indicator for survivors — solo si el platano sigue activo ──
     if(me.role==='survivor'){
       const cw2=canvas.width,ch2=canvas.height;
       Object.values(W.players).filter(p=>isMartin&&isMartin(p)&&p.martBananas&&p.martBananas.length).forEach(mp=>{
         mp.martBananas.forEach(bn=>{
           if(!bn.active)return;
+          // No mostrar el indicador si el plátano ya expiró
+          const lifeRatio=Math.max(0,(bn.life||0)/MART_Q_EXPIRE);
+          if(lifeRatio<=0)return;
           const {sx,sy}=toScreen(bn.x,bn.y);
-          const pulse=0.55+Math.sin(Date.now()/280)*0.45;
+          const pulse=(0.55+Math.sin(Date.now()/280)*0.45)*lifeRatio;
           if(onScreen(sx,sy)){
             // Pulsing golden circle marker above banana
             ctx.save();ctx.globalAlpha=pulse*0.85;
