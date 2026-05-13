@@ -247,32 +247,36 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .effect-pill.neutral{border-color:rgba(52,152,219,.4);color:rgba(140,200,255,.95);}
 
 /* Admin panel */
+#adminPanelWrap{
+  position:absolute;top:160px;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  z-index:50;pointer-events:all;
+}
 #adminPanelBtn{
-  position:absolute;top:12px;left:50%;transform:translateX(-50%);
-  background:rgba(0,0,0,.65);border:1.5px solid rgba(192,57,43,.6);
-  color:rgba(192,57,43,.9);font-family:'Share Tech Mono',monospace;font-size:.62rem;
-  letter-spacing:.22em;padding:6px 18px;cursor:pointer;border-radius:20px;
-  pointer-events:all;z-index:200;backdrop-filter:blur(4px);
-  transition:background .15s,border-color .15s;display:none;
+  display:none;
+  background:rgba(0,0,0,.7);border:1.5px solid rgba(192,57,43,.6);
+  color:rgba(192,57,43,.9);font-family:'Share Tech Mono',monospace;font-size:.58rem;
+  letter-spacing:.22em;padding:5px 16px;cursor:pointer;border-radius:20px;
+  transition:background .15s,border-color .15s;backdrop-filter:blur(4px);
+  white-space:nowrap;
 }
 #adminPanelBtn:hover{background:rgba(192,57,43,.18);border-color:var(--blood);}
 #adminPanel{
-  position:absolute;top:52px;left:50%;transform:translateX(-50%);
-  width:min(420px,88vw);max-height:70vh;overflow-y:auto;
+  display:none;margin-top:6px;
+  width:min(360px,80vw);
   background:rgba(5,5,14,.96);border:1px solid rgba(192,57,43,.35);
-  border-radius:8px;padding:20px 24px;z-index:190;
-  display:none;flex-direction:column;gap:10px;
-  backdrop-filter:blur(8px);pointer-events:all;
+  border-radius:8px;padding:14px 18px;
+  flex-direction:column;gap:10px;
+  backdrop-filter:blur(8px);
 }
 #adminPanel.open{display:flex;}
-.ap-title{font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.35em;color:rgba(192,57,43,.9);margin-bottom:6px;text-align:center;}
-.ap-row{display:flex;flex-direction:column;gap:5px;border-top:1px solid rgba(255,255,255,.07);padding-top:10px;}
-.ap-row:first-of-type{border-top:none;padding-top:0;}
-.ap-row-label{font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.45);}
+.ap-title{font-family:'Oswald',sans-serif;font-size:.9rem;letter-spacing:.35em;color:rgba(192,57,43,.9);margin-bottom:4px;text-align:center;}
+.ap-row{display:flex;flex-direction:column;gap:5px;}
+.ap-row-label{font-size:.55rem;letter-spacing:.12em;color:rgba(255,255,255,.4);line-height:1.5;}
 .ap-execute-btn{
   background:rgba(10,10,10,.8);border:1px solid rgba(192,57,43,.45);
-  color:rgba(192,57,43,.9);font-family:'Share Tech Mono',monospace;font-size:.62rem;
-  letter-spacing:.15em;padding:8px 16px;cursor:pointer;border-radius:4px;
+  color:rgba(192,57,43,.9);font-family:'Share Tech Mono',monospace;font-size:.6rem;
+  letter-spacing:.15em;padding:7px 14px;cursor:pointer;border-radius:4px;
   transition:background .15s,border-color .15s;text-align:center;
 }
 .ap-execute-btn:hover{background:rgba(192,57,43,.22);border-color:var(--blood);color:#fff;}
@@ -988,6 +992,18 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
       <div id="lobbyCDBig"></div>
       <div id="lobbyWaitMsg">necesitas al menos 2 jugadores activos</div>
     </div>
+
+    <!-- ══ ADMIN PANEL (host only, lobby) ══ -->
+    <div id="adminPanelWrap">
+      <button id="adminPanelBtn" onclick="AdminPanel.toggle()">⚙ PANEL</button>
+      <div id="adminPanel">
+        <div class="ap-title">⚙ PANEL DE ADMINISTRADOR</div>
+        <div class="ap-row">
+          <div class="ap-row-label">FORCE INTERMISSION END — inicia la ronda inmediatamente sin esperar el countdown</div>
+          <button class="ap-execute-btn" onclick="AdminPanel.forceIntermissionEnd()">Execute</button>
+        </div>
+      </div>
+    </div>
     <div id="lobbyBottomBar">
       <div id="lobbyPlayerList"></div>
       <div style="display:flex;gap:8px;align-items:center;">
@@ -1304,18 +1320,6 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
     <div id="hudAlivePanelWrap"></div>
     <!-- Effects panel (right center) -->
     <div id="effectsPanel"></div>
-    <!-- ══ ADMIN PANEL BUTTON (host only) ══ -->
-    <button id="adminPanelBtn" onclick="AdminPanel.toggle()">PANEL</button>
-
-    <!-- ══ ADMIN PANEL ══ -->
-    <div id="adminPanel">
-      <div class="ap-title">⚙ PANEL DE ADMINISTRADOR</div>
-      <div class="ap-row">
-        <div class="ap-row-label">FORCE INTERMISSION END — inicia la ronda inmediatamente</div>
-        <button class="ap-execute-btn" onclick="AdminPanel.forceIntermissionEnd()">Execute</button>
-      </div>
-    </div>
-
     <button id="hitboxToggleBtn" onclick="S.showHitbox=!S.showHitbox;this.classList.toggle('on',S.showHitbox);Stats.hitboxPref=S.showHitbox;Stats.save();const chk=document.getElementById('lobbyHitboxToggle');if(chk)chk.checked=S.showHitbox;">⚙</button>
     <div id="hudBottomBar">
       <div id="hudVitals">
@@ -2280,73 +2284,73 @@ function buildMap(){
   for(let x=0;x<MAP_W;x++){m[0][x]=1;m[MAP_H-1][x]=1;}
   for(let y=0;y<MAP_H;y++){m[y][0]=1;m[y][MAP_W-1]=1;}
 
-  // ── HORIZONTAL WALLS (redesigned — shorter segments, more gaps) ──
+  // ── HORIZONTAL WALLS (más abiertas — menos paredes, menos loops) ──
   const hWalls=[
-    // Top zone dividers — broken into shorter segments
-    {y:9, x1:1,  x2:13, gaps:[6,7]},
-    {y:9, x1:15, x2:25, gaps:[20,21]},
-    {y:9, x1:39, x2:49, gaps:[43,44]},
-    {y:9, x1:51, x2:63, gaps:[57,58]},
-    // Mid-top
-    {y:16,x1:1,  x2:18, gaps:[9,10,14,15]},
-    {y:16,x1:20, x2:44, gaps:[29,30,36,37]},
-    {y:16,x1:46, x2:63, gaps:[50,51,56,57]},
-    // Center
-    {y:22,x1:1,  x2:15, gaps:[7,8]},
-    {y:22,x1:17, x2:31, gaps:[24,25]},
-    {y:22,x1:33, x2:47, gaps:[39,40]},
-    {y:22,x1:49, x2:63, gaps:[55,56]},
+    // Top zone — segmentos más cortos con más huecos
+    {y:9, x1:1,  x2:11, gaps:[5,6,7]},
+    {y:9, x1:15, x2:23, gaps:[19,20]},
+    {y:9, x1:41, x2:49, gaps:[44,45]},
+    {y:9, x1:53, x2:63, gaps:[57,58,59]},
+    // Mid-top — más huecos para mayor apertura
+    {y:16,x1:1,  x2:16, gaps:[8,9,13,14]},
+    {y:16,x1:21, x2:43, gaps:[28,29,30,36,37,38]},
+    {y:16,x1:47, x2:63, gaps:[50,51,57,58]},
+    // Center — más cortas
+    {y:22,x1:1,  x2:13, gaps:[7,8]},
+    {y:22,x1:19, x2:29, gaps:[24,25]},
+    {y:22,x1:35, x2:45, gaps:[39,40]},
+    {y:22,x1:51, x2:63, gaps:[55,56]},
     // Mid-bottom
-    {y:28,x1:1,  x2:18, gaps:[9,10,14,15]},
-    {y:28,x1:20, x2:44, gaps:[29,30,36,37]},
-    {y:28,x1:46, x2:63, gaps:[50,51,56,57]},
+    {y:28,x1:1,  x2:16, gaps:[8,9,13,14]},
+    {y:28,x1:21, x2:43, gaps:[28,29,30,36,37,38]},
+    {y:28,x1:47, x2:63, gaps:[50,51,57,58]},
     // Bottom zone
-    {y:35,x1:1,  x2:13, gaps:[6,7]},
-    {y:35,x1:15, x2:25, gaps:[20,21]},
-    {y:35,x1:39, x2:49, gaps:[43,44]},
-    {y:35,x1:51, x2:63, gaps:[57,58]},
+    {y:35,x1:1,  x2:11, gaps:[5,6,7]},
+    {y:35,x1:15, x2:23, gaps:[19,20]},
+    {y:35,x1:41, x2:49, gaps:[44,45]},
+    {y:35,x1:53, x2:63, gaps:[57,58,59]},
   ];
   hWalls.forEach(({y,x1,x2,gaps})=>{for(let x=x1;x<=x2;x++) if(!gaps.includes(x)) m[y][x]=1;});
 
   // ── VERTICAL WALLS ──
   const vWalls=[
-    {x:13,y1:1, y2:9,  gaps:[4,5]},
-    {x:51,y1:1, y2:9,  gaps:[4,5]},
+    {x:13,y1:1, y2:9,  gaps:[4,5,6]},
+    {x:51,y1:1, y2:9,  gaps:[4,5,6]},
     {x:13,y1:9, y2:16, gaps:[12,13]},
     {x:51,y1:9, y2:16, gaps:[12,13]},
-    {x:19,y1:1, y2:16, gaps:[6,7,13,14]},
-    {x:45,y1:1, y2:16, gaps:[6,7,13,14]},
-    {x:32,y1:1, y2:16, gaps:[8,9]},
-    {x:32,y1:28,y2:44, gaps:[36,37]},
-    {x:13,y1:28,y2:44, gaps:[38,39]},
-    {x:51,y1:28,y2:44, gaps:[38,39]},
+    {x:19,y1:1, y2:16, gaps:[5,6,7,13,14]},
+    {x:45,y1:1, y2:16, gaps:[5,6,7,13,14]},
+    {x:32,y1:1, y2:16, gaps:[7,8,9]},
+    {x:32,y1:28,y2:44, gaps:[35,36,37]},
+    {x:13,y1:28,y2:44, gaps:[37,38,39]},
+    {x:51,y1:28,y2:44, gaps:[37,38,39]},
     {x:19,y1:28,y2:44, gaps:[31,32,38,39]},
     {x:45,y1:28,y2:44, gaps:[31,32,38,39]},
-    // Center vertical dividers (short — anti-loop)
-    {x:25,y1:16,y2:22, gaps:[19]},
-    {x:39,y1:16,y2:22, gaps:[19]},
-    {x:25,y1:22,y2:28, gaps:[25]},
-    {x:39,y1:22,y2:28, gaps:[25]},
+    // Center vertical dividers — más cortos (anti-loop) con huecos extra
+    {x:25,y1:17,y2:21, gaps:[19,20]},
+    {x:39,y1:17,y2:21, gaps:[19,20]},
+    {x:25,y1:23,y2:27, gaps:[24,25]},
+    {x:39,y1:23,y2:27, gaps:[24,25]},
   ];
   vWalls.forEach(({x,y1,y2,gaps})=>{for(let y=y1;y<=y2;y++) if(!gaps.includes(y)) m[y][x]=1;});
 
-  // ── INTERIOR OBSTACLE BOXES (break long corridors, force route variety) ──
+  // ── INTERIOR OBSTACLE BOXES ──
   const boxes=[
-    // Corner rooms
-    {x:2, y:2, w:5,h:4},{x:58,y:2, w:5,h:4},
-    {x:2, y:38,w:5,h:4},{x:58,y:38,w:5,h:4},
-    // Top corridors — asymmetric blockers
-    {x:22,y:2, w:4,h:3},{x:38,y:2, w:4,h:3},
-    {x:7, y:11,w:3,h:3},{x:55,y:11,w:3,h:3},
-    // Mid corridors
-    {x:7, y:19,w:3,h:3},{x:55,y:19,w:3,h:3},
-    {x:7, y:24,w:3,h:3},{x:55,y:24,w:3,h:3},
-    // Center room obstacles (4 pillars — create interesting routing)
+    // Corner boxes — REDUCIDOS de 5x4 a 2x2 para eliminar corner loops
+    {x:2, y:2, w:2,h:2},{x:61,y:2, w:2,h:2},
+    {x:2, y:41,w:2,h:2},{x:61,y:41,w:2,h:2},
+    // Top-center pillars — reducidos a 2x2
+    {x:23,y:2, w:3,h:2},{x:39,y:2, w:3,h:2},
+    // Top side blockers — mantenidos pero 2x2
+    {x:7, y:11,w:3,h:2},{x:55,y:11,w:3,h:2},
+    // Mid side — ELIMINADOS los de y:19 y y:24 (abrían loops laterales enormes)
+    // Solo se mantienen los de y:30
+    {x:7, y:30,w:3,h:2},{x:55,y:30,w:3,h:2},
+    // Center pillars — mantenidos (crean routing, no loops grandes)
     {x:27,y:19,w:2,h:2},{x:35,y:19,w:2,h:2},
     {x:27,y:24,w:2,h:2},{x:35,y:24,w:2,h:2},
-    // Bottom corridors
-    {x:7, y:30,w:3,h:3},{x:55,y:30,w:3,h:3},
-    {x:22,y:39,w:4,h:3},{x:38,y:39,w:4,h:3},
+    // Bottom-center pillars
+    {x:23,y:41,w:3,h:2},{x:39,y:41,w:3,h:2},
   ];
   boxes.forEach(({x,y,w,h})=>{
     for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++){
@@ -2354,16 +2358,46 @@ function buildMap(){
     }
   });
 
-  // ── KILLER-ONLY WALLS (tile=4, red) — strategic shortcuts only ──
-  // Only 2 pairs of vertical shortcuts on left and right flanks — minimal but impactful
+  // ── KILLER-ONLY WALLS (tile=4) — cortan todos los loops principales ──
   const redSegs=[
-    {x:16,y1:18,y2:20},  // left flank top shortcut (3 tiles)
-    {x:16,y1:24,y2:26},  // left flank bottom shortcut
-    {x:48,y1:18,y2:20},  // right flank top shortcut
-    {x:48,y1:24,y2:26},  // right flank bottom shortcut
+    // ── LOOPS LATERALES IZQUIERDOS ──
+    // Corredor izquierdo medio (y:16-28, x~7): corte horizontal que solo killer cruza
+    {y:19,x1:3, x2:6},   // corta el pasillo izq superior (y≈19)
+    {y:25,x1:3, x2:6},   // corta el pasillo izq inferior
+    // ── LOOPS LATERALES DERECHOS ──
+    {y:19,x1:58,x2:61},  // corta el pasillo der superior
+    {y:25,x1:58,x2:61},  // corta el pasillo der inferior
+    // ── LOOPS DE ESQUINA SUPERIOR IZQUIERDA (x:1-12, y:1-8) ──
+    {x:6, y1:3, y2:7},   // pared vertical que el killer puede cruzar (corta el loop de esquina)
+    // ── LOOPS DE ESQUINA SUPERIOR DERECHA ──
+    {x:58,y1:3, y2:7},
+    // ── LOOPS DE ESQUINA INFERIOR IZQUIERDA ──
+    {x:6, y1:37,y2:41},
+    // ── LOOPS DE ESQUINA INFERIOR DERECHA ──
+    {x:58,y1:37,y2:41},
+    // ── LOOPS TOP-CENTER (alrededor de pilares x:22-25 y x:38-41) ──
+    {y:5, x1:14,x2:18},  // corta el loop top entre el borde y pared y:9 (lado izq)
+    {y:5, x1:46,x2:50},  // lado derecho
+    // ── LOOPS BOTTOM-CENTER ──
+    {y:39,x1:14,x2:18},
+    {y:39,x1:46,x2:50},
+    // ── LOOP CENTRAL (alrededor del bloque central x:32) ──
+    {y:19,x1:30,x2:34},  // corta el loop top del centro
+    {y:25,x1:30,x2:34},  // corta el loop bottom del centro
+    // ── FLANCOS MID IZQUIERDO Y DERECHO (x:19-25, y:16-28) ──
+    {x:22,y1:17,y2:21},  // killer puede cruzar la zona flank izq top
+    {x:42,y1:17,y2:21},  // flank der top
+    {x:22,y1:23,y2:27},  // flank izq bottom
+    {x:42,y1:23,y2:27},  // flank der bottom
   ];
-  redSegs.forEach(({x,y1,y2})=>{
-    for(let y=y1;y<=y2;y++) if(m[y][x]===0) m[y][x]=4;
+  redSegs.forEach(seg=>{
+    if(seg.x1!==undefined){
+      // horizontal
+      for(let x=seg.x1;x<=seg.x2;x++) if(m[seg.y][x]===0) m[seg.y][x]=4;
+    } else {
+      // vertical
+      for(let y=seg.y1;y<=seg.y2;y++) if(m[y][seg.x]===0) m[y][seg.x]=4;
+    }
   });
 
   // ── GENERATORS (5) — distribuidos por todo el mapa, no en esquinas ──
@@ -2527,7 +2561,7 @@ const UI={
   showLobby(){
     S.inLobbyWorld=true;
     UI.resetRoundHUD();
-    AdminPanel.hide();
+    if(S.isHost)AdminPanel.show(); else AdminPanel.hide();
     Stats.startSession();
     GameAudio.playLobby();
     const badge=document.getElementById('lobbyCodeBadge');
@@ -4367,7 +4401,7 @@ const Game={
     document.getElementById('deathOv').classList.remove('show');
     document.getElementById('hudBottomBar').style.display='flex';
     document.getElementById('hitboxToggleBtn').style.display='block';
-    if(S.isHost)AdminPanel.show();
+    AdminPanel.hide(); // lobby-only — hide when game starts
     S.running=true;slashFX=[];S.lms=false;S.lmsTrackerT=0;
     // Map banner animation
     const mb=document.getElementById('mapBanner');
@@ -5579,29 +5613,30 @@ const Game={
     const p=W.players[pid];
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martECd>0)return;
-    // ── Frontal hitbox (like Slasher M1) — must connect to apply effects ──
+    // CD always consumed — Martin can activate whenever he wants
+    p.martECd=MART_E_CD;
+    // ── Frontal hitbox like Slasher M1 — check if killer is inside it ──
     const fx=Math.cos(p.facing), fy=Math.sin(p.facing);
     const hbCx=p.x+fx*MART_E_HB_OFFSET, hbCy=p.y+fy*MART_E_HB_OFFSET;
-    // Rotate world-point into hitbox local space
     const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
-    if(!kk)return;
+    if(!kk)return; // no killer alive — CD consumed but nothing happens
     const dx=kk.x-hbCx, dy=kk.y-hbCy;
-    const lx= dx*fx+dy*fy; // forward axis
-    const ly=-dx*fy+dy*fx; // lateral axis
+    const lx= dx*fx+dy*fy;
+    const ly=-dx*fy+dy*fx;
     const hit=Math.abs(lx)<=MART_E_HB_W*0.5&&Math.abs(ly)<=MART_E_HB_H*0.5;
-    if(!hit)return; // killer not inside hitbox — ability whiffs
-    p.martECd=MART_E_CD;
+    if(!hit)return; // missed — CD consumed, no effects applied
+    // ── Hit connected — apply all effects ──
     // Reveal killer to all survivors
     kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
-    // Lentitud I (×0.85) to killer for MART_E_SLOW_DUR
+    // Lentitud I (×0.85) to killer
     kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
     // Force field for Martin
     p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
-    // Velocidad I para Martin por 5s
+    // Velocidad I para Martin
     p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
     // Curar 10 HP
     p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
-    // Visual distraction: 4 large payasos + full-screen magenta tint for killer
+    // Visual distraction: 4 corner payasos + 1 giant center payaso + magenta tint
     kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=MART_E_DISTRACT_INTERVAL;
     kk.martEBigDistract=true;kk.martEBigDistractTimer=MART_E_DISTRACT_FADE;
     // Zone of impact visual at killer position
@@ -7498,7 +7533,7 @@ const Game={
         ctx.fillRect(0,0,cw,ch);
       }
       ctx.globalAlpha=fadeAlpha*0.88;
-      // 4 large clowns in screen corners
+      // 4 corner clowns
       const bigSz=Math.min(cw,ch)*0.28;
       ctx.font=`${bigSz}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.shadowColor='rgba(255,0,255,0.85)';ctx.shadowBlur=40;
@@ -7508,6 +7543,13 @@ const Game={
         ctx.globalAlpha=fadeAlpha*0.9;
         ctx.fillText('🤡',cw*fx+wa,ch*fy+wb);
       });
+      // ── GIANT CENTER clown — covers the center, bigger than the corner ones ──
+      const giantSz=Math.min(cw,ch)*0.62;
+      ctx.font=`${giantSz}px monospace`;
+      ctx.globalAlpha=fadeAlpha*0.92;
+      ctx.shadowBlur=60;ctx.shadowColor='rgba(255,0,255,1)';
+      const giantWa=Math.sin(t*0.9)*6;const giantWb=Math.cos(t*0.7)*5;
+      ctx.fillText('🤡',cw*0.5+giantWa,ch*0.5+giantWb);
       ctx.restore();
     }
     if(me.role==='killer'&&me.martEBigDistract&&me.martEBigDistractTimer>0){
@@ -8226,12 +8268,11 @@ const AdminPanel={
   },
   forceIntermissionEnd(){
     if(!S.isHost)return;
-    // Skip the countdown — send startRound immediately
-    if(typeof S.cdVal!=='undefined'){S.cdVal=0;}
-    // If host is waiting in intermission, trigger round start now
+    // Skip the countdown — force cdVal to 0 and fire startRound
+    S.cdVal=0;
     if(S._hostCdInterval){clearInterval(S._hostCdInterval);S._hostCdInterval=null;}
     if(typeof Game!=='undefined'&&typeof Game.startRound==='function'){Game.startRound();}
-    this.toggle(); // close panel after action
+    this.toggle();
   },
 };
 
