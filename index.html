@@ -1170,12 +1170,31 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
         <button class="store-close-btn" onclick="Inventory.close()">✕ CERRAR</button>
       </div>
       <div class="store-body">
-        <div class="store-left">
-          <div class="store-tabs">
-            <button class="store-tab active" id="invTabKillers" onclick="Inventory.setTab('killers')">KILLERS</button>
-            <button class="store-tab" id="invTabSurvivors" onclick="Inventory.setTab('survivors')">SURVIVORS</button>
+        <div class="store-left" style="position:relative;">
+          <!-- Vista normal: tabs + grid -->
+          <div id="invGridView">
+            <div class="store-tabs">
+              <button class="store-tab active" id="invTabKillers" onclick="Inventory.setTab('killers')">KILLERS</button>
+              <button class="store-tab" id="invTabSurvivors" onclick="Inventory.setTab('survivors')">SURVIVORS</button>
+            </div>
+            <div class="store-grid" id="invGrid"></div>
           </div>
-          <div class="store-grid" id="invGrid"></div>
+          <!-- Vista info (stats/habilidades/lore) -->
+          <div id="invInfoView" style="display:none;flex-direction:column;height:100%;overflow-y:auto;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <div class="store-detail-btn" onclick="Inventory.closeLeftPanel()" style="flex:0 0 auto;padding:6px 14px;">← VOLVER</div>
+              <div style="font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.2em;color:rgba(255,255,255,.5);" id="invInfoTitle">STATS</div>
+            </div>
+            <div id="invInfoContent"></div>
+          </div>
+          <!-- Vista skins -->
+          <div id="invSkinsView" style="display:none;flex-direction:column;height:100%;overflow-y:auto;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <div class="store-detail-btn" onclick="Inventory.closeLeftPanel()" style="flex:0 0 auto;padding:6px 14px;">← VOLVER</div>
+              <div style="font-family:'Oswald',sans-serif;font-size:.85rem;letter-spacing:.2em;color:rgba(255,255,255,.5);">MIS SKINS</div>
+            </div>
+            <div class="store-skins-grid" id="invSkinsGrid"></div>
+          </div>
         </div>
         <div class="store-right">
           <div class="store-right-empty" id="invRightEmpty">
@@ -1192,24 +1211,8 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
               <div class="store-detail-author" id="invDetailAuthor"></div>
               <div class="store-detail-tagline" id="invDetailTagline"></div>
               <div class="store-detail-btns">
-                <div class="store-detail-btn" onclick="Inventory.toggleStats()">📖 STATS</div>
-                <div class="store-detail-btn" onclick="Inventory.toggleSkins()">👕 MIS SKINS</div>
-              </div>
-              <div class="store-stats-panel" id="invStatsPanel" style="display:none">
-                <div class="store-stats-title">ESTADÍSTICAS</div>
-                <div id="invStatsRows"></div>
-              </div>
-              <div class="store-skins-panel" id="invSkinsPanel">
-                <div class="store-stats-title">MIS SKINS</div>
-                <div class="store-skins-grid" id="invSkinsGrid"></div>
-              </div>
-              <div class="store-ability-panel" id="invAbilityPanel">
-                <div class="store-ability-title">HABILIDADES</div>
-                <div id="invAbilityRows"></div>
-              </div>
-              <div class="store-ability-panel" id="invLorePanel" style="display:none">
-                <div class="store-ability-title">⚰ HISTORIA</div>
-                <div id="invLoreText" style="font-size:.6rem;color:rgba(255,255,255,.5);letter-spacing:.06em;line-height:1.75;font-style:italic;padding:4px 0;"></div>
+                <div class="store-detail-btn" onclick="Inventory.showLeftInfo()">📖 STATS</div>
+                <div class="store-detail-btn" onclick="Inventory.showLeftSkins()">👕 MIS SKINS</div>
               </div>
             </div>
             <div class="store-action-bar">
@@ -1217,6 +1220,13 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
               <button class="store-action-buy equip-btn" id="invActionBtn" onclick="Inventory.doEquip()">EQUIPAR</button>
             </div>
           </div>
+        </div>
+        <!-- Hidden panels for JS to read data (off-screen) -->
+        <div style="display:none">
+          <div id="invStatsPanel"><div id="invStatsRows"></div></div>
+          <div id="invAbilityPanel"><div id="invAbilityRows"></div></div>
+          <div id="invLorePanel"><div id="invLoreText"></div></div>
+          <div id="invSkinsPanel"><div></div></div>
         </div>
       </div>
       </div><!-- /store-modal-inner -->
@@ -8912,6 +8922,7 @@ const Inventory={
   close(){
     document.getElementById('inventoryModal').classList.remove('show');
     document.getElementById('llmInvBtn').classList.remove('active');
+    this.closeLeftPanel();
     setTimeout(()=>{document.getElementById('s-lobby').focus();},50);
   },
 
@@ -8921,6 +8932,7 @@ const Inventory={
     this._statsOpen=false;this._skinsOpen=false;
     document.getElementById('invTabKillers').classList.toggle('active',t==='killers');
     document.getElementById('invTabSurvivors').classList.toggle('active',t==='survivors');
+    this.closeLeftPanel();
     this._renderGrid();
     this._showRightEmpty();
   },
@@ -8962,8 +8974,8 @@ const Inventory={
 
   _select(id){
     this._selected=id;
-    this._statsOpen=false;this._skinsOpen=false;
     this._renderGrid();
+    this.closeLeftPanel(); // volver al grid al seleccionar personaje
     const c=this._getOwnedList().find(x=>x.id===id);
     if(!c)return;
     const isEquipped=this._getEquipped()===c.id;
@@ -8973,7 +8985,7 @@ const Inventory={
     document.getElementById('invDetailName').textContent=c.name;
     document.getElementById('invDetailAuthor').textContent='Made By: '+(c.author||'Forsaken');
     document.getElementById('invDetailTagline').textContent=c.tagline||'';
-    // Stats
+    // Pre-build stats/abilities/lore/skins in hidden divs for showLeftInfo/showLeftSkins
     const sr=document.getElementById('invStatsRows');sr.innerHTML='';
     (c.stats||[]).forEach(s=>{
       const colors=['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6'];
@@ -8990,14 +9002,12 @@ const Inventory={
         }
       });
     }
-    // Abilities
     const ar=document.getElementById('invAbilityRows');ar.innerHTML='';
     (c.abilities||[]).forEach(a=>{
       ar.innerHTML+=`<div class="store-ability-item"><div class="store-ability-key">${a.key}</div><div class="store-ability-desc">${a.desc}</div></div>`;
     });
-    // Skins (only owned skins)
     const sg=document.getElementById('invSkinsGrid');sg.innerHTML='';
-    const ownedSkins=(c.skins||[]);// filter to owned when skin system is added
+    const ownedSkins=(c.skins||[]);
     if(!ownedSkins.length){
       sg.innerHTML='<div style="font-size:.52rem;color:rgba(255,255,255,.3);letter-spacing:.1em;">No tienes skins para este personaje.</div>';
     } else {
@@ -9005,14 +9015,8 @@ const Inventory={
         sg.innerHTML+=`<div class="store-skin-slot" title="${sk.name||'Skin '+i}">${sk.icon||'🎨'}</div>`;
       });
     }
-    document.getElementById('invStatsPanel').style.display='none';
-    document.getElementById('invSkinsPanel').classList.remove('show');
-    document.getElementById('invAbilityPanel').style.display=(c.abilities&&c.abilities.length)?'block':'none';
-    // Lore
-    const lorePanel=document.getElementById('invLorePanel');
     const loreTxt=document.getElementById('invLoreText');
-    if(c.lore){lorePanel.style.display='block';loreTxt.textContent=c.lore;}
-    else{lorePanel.style.display='none';loreTxt.textContent='';}
+    loreTxt.textContent=c.lore||'';
     // Action btn
     const statusEl=document.getElementById('invActionStatus');
     const btn=document.getElementById('invActionBtn');
@@ -9030,14 +9034,70 @@ const Inventory={
     document.getElementById('invDetail').classList.remove('show');
   },
 
-  toggleStats(){
-    this._statsOpen=!this._statsOpen;
-    document.getElementById('invStatsPanel').style.display=this._statsOpen?'block':'none';
+  closeLeftPanel(){
+    document.getElementById('invGridView').style.display='';
+    document.getElementById('invInfoView').style.display='none';
+    document.getElementById('invSkinsView').style.display='none';
   },
-  toggleSkins(){
-    this._skinsOpen=!this._skinsOpen;
-    document.getElementById('invSkinsPanel').classList.toggle('show',this._skinsOpen);
+
+  showLeftInfo(){
+    if(!this._selected)return;
+    const c=this._getOwnedList().find(x=>x.id===this._selected);
+    if(!c)return;
+    document.getElementById('invGridView').style.display='none';
+    document.getElementById('invSkinsView').style.display='none';
+    const view=document.getElementById('invInfoView');
+    view.style.display='flex';
+    document.getElementById('invInfoTitle').textContent='STATS & HABILIDADES';
+    // Build content
+    const content=document.getElementById('invInfoContent');
+    content.innerHTML='';
+    // Stats bars
+    if(c.stats&&c.stats.length){
+      let html='<div class="store-ability-title" style="margin-bottom:6px;">ESTADÍSTICAS</div>';
+      c.stats.forEach(s=>{
+        const colors=['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6'];
+        const col=colors[Math.floor(Math.random()*colors.length)];
+        html+=`<div class="store-stat-row"><div class="store-stat-lbl">${s.lbl}</div><div class="store-stat-bar"><div class="store-stat-fill" style="width:${s.val}%;background:${col}"></div></div></div>`;
+      });
+      content.innerHTML+=html;
+    }
+    // Stats detail
+    if(c.statsDetail&&c.statsDetail.length){
+      let html='<div style="margin-top:8px;margin-bottom:4px;font-size:.44rem;letter-spacing:.3em;color:rgba(255,255,255,.25);border-top:1px solid rgba(255,255,255,.07);padding-top:7px;">DATOS EXACTOS</div>';
+      c.statsDetail.forEach(s=>{
+        if(!s.val&&s.val!==0){
+          html+=`<div style="margin:5px 0 2px;font-size:.44rem;letter-spacing:.2em;color:rgba(255,255,255,.35);">${s.lbl}</div>`;
+        } else {
+          html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:.5rem;letter-spacing:.06em;color:rgba(255,255,255,.4);">${s.lbl}</span><span style="font-size:.52rem;letter-spacing:.06em;color:rgba(255,255,255,.75);font-family:'Oswald',sans-serif;">${s.val}</span></div>`;
+        }
+      });
+      content.innerHTML+=html;
+    }
+    // Abilities
+    if(c.abilities&&c.abilities.length){
+      let html='<div class="store-ability-panel" style="margin-top:12px;"><div class="store-ability-title">HABILIDADES</div>';
+      c.abilities.forEach(a=>{
+        html+=`<div class="store-ability-item"><div class="store-ability-key">${a.key}</div><div class="store-ability-desc">${a.desc}</div></div>`;
+      });
+      html+='</div>';
+      content.innerHTML+=html;
+    }
+    // Lore
+    if(c.lore){
+      content.innerHTML+=`<div class="store-ability-panel" style="margin-top:12px;"><div class="store-ability-title">⚰ HISTORIA</div><div style="font-size:.6rem;color:rgba(255,255,255,.5);letter-spacing:.06em;line-height:1.75;font-style:italic;padding:4px 0;">${c.lore}</div></div>`;
+    }
   },
+
+  showLeftSkins(){
+    if(!this._selected)return;
+    document.getElementById('invGridView').style.display='none';
+    document.getElementById('invInfoView').style.display='none';
+    document.getElementById('invSkinsView').style.display='flex';
+  },
+
+  toggleStats(){this.showLeftInfo();},
+  toggleSkins(){this.showLeftSkins();},
 
   doEquip(){
     if(!this._selected)return;
