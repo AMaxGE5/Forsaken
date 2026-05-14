@@ -9049,43 +9049,55 @@ const Inventory={
     const view=document.getElementById('invInfoView');
     view.style.display='flex';
     document.getElementById('invInfoTitle').textContent='STATS & HABILIDADES';
-    // Build content
     const content=document.getElementById('invInfoContent');
     content.innerHTML='';
-    // Stats bars
+
+    // 1. STATS como números (label: valor)
     if(c.stats&&c.stats.length){
-      let html='<div class="store-ability-title" style="margin-bottom:6px;">ESTADÍSTICAS</div>';
+      let html='<div style="font-size:.62rem;letter-spacing:.3em;color:var(--dim);margin-bottom:10px;">ESTADÍSTICAS</div>';
       c.stats.forEach(s=>{
-        const colors=['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6'];
-        const col=colors[Math.floor(Math.random()*colors.length)];
-        html+=`<div class="store-stat-row"><div class="store-stat-lbl">${s.lbl}</div><div class="store-stat-bar"><div class="store-stat-fill" style="width:${s.val}%;background:${col}"></div></div></div>`;
+        html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+          <span style="font-size:.72rem;letter-spacing:.08em;color:rgba(255,255,255,.55);">${s.lbl}</span>
+          <span style="font-size:.85rem;letter-spacing:.06em;color:#fff;font-family:'Oswald',sans-serif;">${s.val}</span>
+        </div>`;
       });
-      content.innerHTML+=html;
+      content.innerHTML+=`<div style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);padding:12px 14px;margin-bottom:12px;">${html}</div>`;
     }
-    // Stats detail
+
+    // 2. LORE
+    if(c.lore){
+      content.innerHTML+=`<div style="background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);padding:12px 14px;margin-bottom:12px;">
+        <div style="font-size:.62rem;letter-spacing:.3em;color:var(--dim);margin-bottom:8px;">⚰ HISTORIA</div>
+        <div style="font-size:.7rem;color:rgba(255,255,255,.55);letter-spacing:.06em;line-height:1.85;font-style:italic;">${c.lore}</div>
+      </div>`;
+    }
+
+    // 3. HABILIDADES
+    if(c.abilities&&c.abilities.length){
+      let html='<div style="font-size:.62rem;letter-spacing:.3em;color:var(--dim);margin-bottom:10px;">HABILIDADES</div>';
+      c.abilities.forEach(a=>{
+        html+=`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">
+          <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);font-size:.65rem;letter-spacing:.1em;color:rgba(255,255,255,.8);padding:3px 9px;flex-shrink:0;font-family:'Oswald',sans-serif;">${a.key}</div>
+          <div style="font-size:.7rem;letter-spacing:.06em;color:rgba(255,255,255,.6);line-height:1.65;">${a.desc}</div>
+        </div>`;
+      });
+      content.innerHTML+=`<div style="background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);padding:12px 14px;margin-bottom:12px;">${html}</div>`;
+    }
+
+    // 4. DATOS EXACTOS
     if(c.statsDetail&&c.statsDetail.length){
-      let html='<div style="margin-top:8px;margin-bottom:4px;font-size:.44rem;letter-spacing:.3em;color:rgba(255,255,255,.25);border-top:1px solid rgba(255,255,255,.07);padding-top:7px;">DATOS EXACTOS</div>';
+      let html='<div style="font-size:.62rem;letter-spacing:.3em;color:var(--dim);margin-bottom:10px;">DATOS EXACTOS</div>';
       c.statsDetail.forEach(s=>{
         if(!s.val&&s.val!==0){
-          html+=`<div style="margin:5px 0 2px;font-size:.44rem;letter-spacing:.2em;color:rgba(255,255,255,.35);">${s.lbl}</div>`;
+          html+=`<div style="margin:8px 0 4px;font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.3);border-top:1px solid rgba(255,255,255,.06);padding-top:6px;">${s.lbl}</div>`;
         } else {
-          html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:.5rem;letter-spacing:.06em;color:rgba(255,255,255,.4);">${s.lbl}</span><span style="font-size:.52rem;letter-spacing:.06em;color:rgba(255,255,255,.75);font-family:'Oswald',sans-serif;">${s.val}</span></div>`;
+          html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:.68rem;letter-spacing:.06em;color:rgba(255,255,255,.45);">${s.lbl}</span>
+            <span style="font-size:.75rem;letter-spacing:.06em;color:rgba(255,255,255,.85);font-family:'Oswald',sans-serif;">${s.val}</span>
+          </div>`;
         }
       });
-      content.innerHTML+=html;
-    }
-    // Abilities
-    if(c.abilities&&c.abilities.length){
-      let html='<div class="store-ability-panel" style="margin-top:12px;"><div class="store-ability-title">HABILIDADES</div>';
-      c.abilities.forEach(a=>{
-        html+=`<div class="store-ability-item"><div class="store-ability-key">${a.key}</div><div class="store-ability-desc">${a.desc}</div></div>`;
-      });
-      html+='</div>';
-      content.innerHTML+=html;
-    }
-    // Lore
-    if(c.lore){
-      content.innerHTML+=`<div class="store-ability-panel" style="margin-top:12px;"><div class="store-ability-title">⚰ HISTORIA</div><div style="font-size:.6rem;color:rgba(255,255,255,.5);letter-spacing:.06em;line-height:1.75;font-style:italic;padding:4px 0;">${c.lore}</div></div>`;
+      content.innerHTML+=`<div style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.07);padding:12px 14px;">${html}</div>`;
     }
   },
 
