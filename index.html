@@ -4975,33 +4975,42 @@ const Game={
               if(!hitWallY)p.y=ny2;
               // Cancel charge on wall collision
               if((hitWallX||hitWallY)&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
-              // Hit check during charge
-              if(!p.nicoChargeHit){
-                Object.values(W.players).forEach(s=>{
-                  if(s.role!=='survivor'||!s.alive||p.nicoChargeHit)return;
-                  if(Math.hypot(s.x-p.x,s.y-p.y)<TILE*1.3){
-                    p.nicoChargeHit=true;
-                    p.nicoCharge=false;
-                    // Grab: 10 dmg + 20 slam = 30 total (no bleed on charge)
-                    applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
-                    // No bleed on charge attack
-                    if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
-                      // Track kill for berserk unlock (same as M1 kills)
-                      p.nicoKillCount=(p.nicoKillCount||0)+1;
-                      if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+              // ── Rectangular hitbox check every 0.5s (M1 size, charge effect) ──
+              if(!p.nicoChargeHit&&p.nicoCharge){
+                p.nicoChargeHbTimer=(p.nicoChargeHbTimer||0)-dt;
+                if(p.nicoChargeHbTimer<=0){
+                  p.nicoChargeHbTimer=0.5;
+                  // Spawn hitbox rectangle in front, same size as M1
+                  const cang=p.nicoChargeAng;
+                  const hbCx=p.x+Math.cos(cang)*(HB_OFFSET+HB_H/2);
+                  const hbCy=p.y+Math.sin(cang)*(HB_OFFSET+HB_H/2);
+                  // Visual FX for the hitbox pulse
+                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:HB_H/2,life:.25,maxLife:.25,idx:0,nicoChargePulse:true});
+                  // Check survivors in the rectangle
+                  Object.values(W.players).forEach(s=>{
+                    if(s.role!=='survivor'||!s.alive||p.nicoChargeHit)return;
+                    if(pointInRotRect(s.x,s.y,hbCx,hbCy,HB_W/2,HB_H/2,cang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
+                      p.nicoChargeHit=true;
+                      p.nicoCharge=false;
+                      // Apply charge damage (grab + slam, no bleed)
+                      applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
+                      if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                        p.nicoKillCount=(p.nicoKillCount||0)+1;
+                        if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
+                      }
+                      // Slam FX — knock survivor back
+                      const kbDist=TILE*2.8;
+                      s.comboKbVx=Math.cos(cang)*kbDist;
+                      s.comboKbVy=Math.sin(cang)*kbDist;
+                      s.comboKbTimer=0.22;
+                      // Nicostos slow
+                      p.nicoSlow=true;p.nicoSlowTimer=NICO_Q_SLOW_DUR;
+                      // Blood trail
+                      p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=8;
+                      Game.checkWin();
                     }
-                    // Slam FX — knock survivor back
-                    const kbDist=TILE*2.8;
-                    s.comboKbVx=Math.cos(p.nicoChargeAng)*kbDist;
-                    s.comboKbVy=Math.sin(p.nicoChargeAng)*kbDist;
-                    s.comboKbTimer=0.22;
-                    // Nicostos slow
-                    p.nicoSlow=true;p.nicoSlowTimer=NICO_Q_SLOW_DUR;
-                    // Blood trail to nearest
-                    p.nicoBloodTrailTarget=s.id;p.nicoBloodTrailTimer=8;
-                    Game.checkWin();
-                  }
-                });
+                  });
+                }
               }
               // Stop if no stamina
               if(p.stamina<=0&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
@@ -5837,6 +5846,7 @@ const Game={
     if(p.stamina<=0)return;
     nicoBreakInvis(p); // charge breaks invisibility
     p.nicoCharge=true;p.nicoChargeAng=p.facing;p.nicoChargeHit=false;
+    p.nicoChargeHbTimer=0; // fire first hitbox immediately
     p.qCd=NICO_Q_CD;
   },
 
@@ -6538,6 +6548,17 @@ const Game={
           ctx.beginPath();ctx.moveTo(-sf.hh*0.7,-sf.hw*0.4);ctx.lineTo(sf.hh*0.7,sf.hw*0.4);ctx.stroke();
           ctx.shadowBlur=0;
         }
+      } else if(sf.nicoChargePulse){
+        // Nicostos embestida hitbox pulse — morado, siempre visible
+        ctx.globalAlpha=alpha;
+        ctx.shadowColor='rgba(180,80,255,0.9)';ctx.shadowBlur=18;
+        ctx.fillStyle=`rgba(160,60,255,${alpha*0.3})`;
+        ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(200,100,255,${alpha*0.95})`;ctx.lineWidth=2.5;
+        ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(220,160,255,${alpha*0.5})`;ctx.lineWidth=1;
+        for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
+        ctx.shadowBlur=0;
       } else if(sf.martESlash){
         // Martin BLIPI — amarillo, siempre visible (como el M1 rojo pero dorado)
         ctx.globalAlpha=alpha;
@@ -6571,6 +6592,10 @@ const Game={
       const isGBInvis=(p.role==='survivor')&&(p.gbActive||p.gbEating)&&!isMe&&(me2&&me2.role==='killer');
       // Mankspe Pan con Sal — completamente invisible para killer, visible para sí mismo
       const isMankInvis=isMankspe(p)&&(p.mankRActive||p.mankREating)&&!isMe&&(me2&&me2.role==='killer');
+      // Nicostos invisible — oculto para todos excepto sí mismo (a bajo alpha)
+      const isNicoInvis=isNicostos(p)&&(p.nicoInvis||p.nicoInvisRevive)&&!isMe;
+      // Flag global: si este player es invisible para el visor actual → ocultar sombra, círculo sprint, etc.
+      const isHiddenFromViewer=isGBInvis||isMankInvis||isNicoInvis;
       const gbAlpha=isMankInvis?MANK_R_INVIS_ALPHA:isGBInvis?GB_INVIS_ALPHA:1;
       if(gbAlpha<1){ctx.save();ctx.globalAlpha=gbAlpha;}
       // Mankspe eating animation
@@ -6618,13 +6643,13 @@ const Game={
         ctx.beginPath();ctx.arc(p.x,p.y,r*1.2,0,Math.PI*2);
         ctx.strokeStyle=`rgba(180,100,255,${pulse*0.55})`;ctx.lineWidth=2;ctx.stroke();
       }
-      // Sprint aura
-      if(p.sprinting&&p.alive){
+      // Sprint aura — oculto si es invisible para el visor
+      if(p.sprinting&&p.alive&&!isHiddenFromViewer){
         ctx.beginPath();ctx.arc(p.x,p.y,r+6,0,Math.PI*2);
         ctx.fillStyle=p.role==='killer'?'rgba(231,76,60,.08)':'rgba(255,215,0,.07)';ctx.fill();
       }
-      // ENRAGED aura around killer
-      if(p.role==='killer'&&p.enraged&&p.alive){
+      // ENRAGED aura around killer — oculto si es invisible
+      if(p.role==='killer'&&p.enraged&&p.alive&&!isHiddenFromViewer){
         const t=Date.now()/400;
         const pulse=0.55+Math.sin(t)*0.3;
         ctx.beginPath();ctx.arc(p.x,p.y,r*2.2+Math.sin(t*1.7)*4,0,Math.PI*2);
@@ -6632,9 +6657,11 @@ const Game={
         ctx.beginPath();ctx.arc(p.x,p.y,r*1.5,0,Math.PI*2);
         ctx.strokeStyle=`rgba(255,80,0,${pulse*0.7})`;ctx.lineWidth=2.5;ctx.stroke();
       }
-      // Ground shadow
-      ctx.beginPath();ctx.ellipse(p.x,p.y+r*.55,r*.65,r*.22,0,0,Math.PI*2);
-      ctx.fillStyle='rgba(0,0,0,.38)';ctx.fill();
+      // Ground shadow — oculta si el jugador es invisible para el visor actual
+      if(!isHiddenFromViewer){
+        ctx.beginPath();ctx.ellipse(p.x,p.y+r*.55,r*.65,r*.22,0,0,Math.PI*2);
+        ctx.fillStyle='rgba(0,0,0,.38)';ctx.fill();
+      }
 
       // ── Roblox-style character ──
       ctx.save();
@@ -6763,16 +6790,18 @@ const Game={
             // Hitbox debug: show charge collision circle (only when S.showHitbox)
             if(S.showHitbox){
               const sc=sc2;
-              ctx.save();ctx.setTransform(1,0,0,1,0,0); // reset transform to world coords
+              ctx.save();ctx.setTransform(1,0,0,1,0,0);
               ctx.scale(sc,sc);ctx.translate(-CAM.x,-CAM.y);
-              ctx.beginPath();ctx.arc(p.x,p.y,TILE*0.9,0,Math.PI*2);
+              // Draw M1-sized rectangle hitbox in front
+              const dbAng=p.nicoChargeAng||p.facing;
+              const dbCx=p.x+Math.cos(dbAng)*(HB_OFFSET+HB_H/2);
+              const dbCy=p.y+Math.sin(dbAng)*(HB_OFFSET+HB_H/2);
+              ctx.save();ctx.translate(dbCx,dbCy);ctx.rotate(dbAng);
               ctx.strokeStyle='rgba(255,50,50,0.9)';ctx.lineWidth=2/sc;
-              ctx.shadowColor='rgba(255,0,0,0.7)';ctx.shadowBlur=8;ctx.stroke();
-              ctx.fillStyle='rgba(255,50,30,0.12)';ctx.fill();
-              // Draw direction arrow
-              const fx2=Math.cos(p.nicoChargeAng||p.facing),fy2=Math.sin(p.nicoChargeAng||p.facing);
-              ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+fx2*TILE*1.3,p.y+fy2*TILE*1.3);
-              ctx.strokeStyle='rgba(255,100,50,0.8)';ctx.lineWidth=2/sc;ctx.stroke();
+              ctx.shadowColor='rgba(255,0,0,0.7)';ctx.shadowBlur=8;
+              ctx.strokeRect(-HB_W/2,-HB_H/2,HB_W,HB_H);
+              ctx.fillStyle='rgba(255,50,30,0.12)';ctx.fillRect(-HB_W/2,-HB_H/2,HB_W,HB_H);
+              ctx.restore();
               ctx.shadowBlur=0;ctx.restore();
             }
           }
