@@ -349,6 +349,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .ability-cd-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:1.55rem;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9);z-index:2;pointer-events:none;}
 @keyframes enrageGlow{0%,100%{box-shadow:0 0 10px rgba(255,80,0,.6),0 0 25px rgba(255,0,0,.3);}50%{box-shadow:0 0 20px rgba(255,80,0,.9),0 0 50px rgba(255,0,0,.5);}}
 .ability-icon-wrap.enraged-active{border-color:#ff5500!important;animation:enrageGlow 0.7s infinite;}
+@keyframes helplessLock{0%,100%{border-color:rgba(255,200,0,.4);}50%{border-color:rgba(255,200,0,.9);box-shadow:0 0 12px rgba(255,200,0,.4);}}
 
 .ability-name{font-size:.55rem;letter-spacing:.1em;color:rgba(255,255,255,.55);}
 #hudVitalsRight{min-width:190px;}
@@ -2168,8 +2169,10 @@ const MART_E_SLOW_DUR = 8;         // lentitud I al killer por 8s
 const MART_E_SPEED_DUR = 5;        // velocidad I para Martín por 5s
 const MART_E_HEAL = 10;            // curación al activar E
 const MART_E_SHIELD_DUR = 2;       // campo de fuerza para Martín
-const MART_E_DISTRACT_COUNT = 4;   // 4 emojis payaso
-const MART_E_DISTRACT_INTERVAL = 0.6; // segundos entre cada emoji payaso
+const MART_E_DISTRACT_COUNT = 4;   // 4 apariciones de payasos
+const MART_E_DISTRACT_INTERVAL = 0.6; // (legacy — usado por martEDistract del survivor)
+const MART_E_DISTRACT_FLASH_ON  = 3.0; // segundos visible cada aparición de payasos
+const MART_E_DISTRACT_FLASH_OFF = 0.6; // segundos oculto entre apariciones
 
 const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
 // Hitbox frontal de la risa (idéntico al M1 del Slasher en tamaño y posición)
@@ -2688,9 +2691,11 @@ const UI={
         if(me.martEShieldActive&&me.martEShieldTimer>0)effects.push({icon:'🛡️',name:'CAMPO DE FUERZA',timer:me.martEShieldTimer,type:'positive'});
         if(me.martBananas&&me.martBananas.length)effects.push({icon:'🍌',name:`PLÁTANOS: ${me.martBananas.length}`,timer:0,type:'positive'});
       }
+      // Survivor: helpless debuff
+      if(me.role==='survivor'&&me.helpless&&me.helplessTimer>0)effects.push({icon:'🔒',name:'HELPLESS',timer:me.helplessTimer,type:'debuff'});
       // Killer: martin debuffs
       if(me.role==='killer'){
-        if(me.martHelpless&&me.martHelplessTimer>0)effects.push({icon:'🤡',name:'HELPLESS',timer:me.martHelplessTimer,type:'debuff'});
+        if(me.martHelpless&&me.martHelplessTimer>0)effects.push({icon:'🔒',name:'HELPLESS',timer:me.martHelplessTimer,type:'debuff'});
         if(me.martSlowed&&me.martSlowTimer>0)effects.push({icon:'🍌',name:'LENTITUD III',timer:me.martSlowTimer,type:'debuff'});
         if(me.martESlowed&&me.martESlowTimer>0)effects.push({icon:'😂',name:'LENTITUD I',timer:me.martESlowTimer,type:'debuff'});
       }
@@ -3003,6 +3008,16 @@ const UI={
         else if(gbCdPct>0)gbNum.textContent=Math.ceil(me.gbCd)+'s';
         const gbLabel=document.getElementById('gbName');
         if(gbLabel)gbLabel.textContent=isGBEating?'👻 COMIENDO...':(isGBActive?'👻 INVIS IV':'GHOST BURGER');
+      }
+      // ── HELPLESS: candado 🔒 en todas las habilidades del survivor ──
+      if(me.helpless){
+        const allSurvWrapIds=['amaxQWrap','amaxEWrap','amaxRWrap','mankQWrap','mankEWrap','mankRWrap','martQWrap','martEWrap','abilityBloxyWrap','abilitySSWrap','abilityGBWrap'];
+        const allSurvNumIds=['amaxQNum','amaxENum','amaxRNum','mankQNum','mankENum','mankRNum','martQNum','martENum','abilityBloxyNum','abilitySSNum','abilityGBNum'];
+        allSurvWrapIds.forEach(id=>{const el=document.getElementById(id);if(el&&el.style.display!=='none'&&el.offsetParent!==null){el.style.animation='helplessLock 0.6s infinite';el.style.borderColor='rgba(255,200,0,.8)';}});
+        allSurvNumIds.forEach(id=>{const el=document.getElementById(id);if(el&&el.closest&&el.closest('.ability-slot')&&el.closest('.ability-slot').style.display!=='none'){el.style.display='flex';el.textContent='🔒';}});
+      } else {
+        const allSurvWrapIds=['amaxQWrap','amaxEWrap','amaxRWrap','mankQWrap','mankEWrap','mankRWrap','martQWrap','martEWrap','abilityBloxyWrap','abilitySSWrap','abilityGBWrap'];
+        allSurvWrapIds.forEach(id=>{const el=document.getElementById(id);if(el&&el.style.animation)el.style.animation='';if(el&&el.style.borderColor)el.style.borderColor='';});
       }
     }
     // Bloxy buff bar
@@ -4691,6 +4706,11 @@ const Game={
             p.gbTimer=Math.max(0,p.gbTimer-dt);
             if(p.gbTimer<=0){p.gbActive=false;}
           }
+          // ── Helpless tick (survivors) — bloquea habilidades ──
+          if(p.role==='survivor'&&p.helpless){
+            p.helplessTimer=Math.max(0,(p.helplessTimer||0)-dt);
+            if(p.helplessTimer<=0)p.helpless=false;
+          }
           // ── Mankspe ticks ──
           if(isMankspe(p)){
             if(p.mankQCd>0)p.mankQCd=Math.max(0,p.mankQCd-dt);
@@ -4825,15 +4845,23 @@ const Game={
               p.martESlowTimer=Math.max(0,(p.martESlowTimer||0)-dt);
               if(p.martESlowTimer<=0){p.martESlowed=false;}
             }
-            // Killer: visual distraction from Martin E
+            // Killer: visual distraction from Martin E (flash on/off ×4)
             if(p.martDistractActive){
               p.martDistractTimer=Math.max(0,(p.martDistractTimer||0)-dt);
               if(p.martDistractTimer<=0){
-                p.martDistractCount=(p.martDistractCount||0)+1;
-                if(p.martDistractCount>=MART_E_DISTRACT_COUNT){
-                  p.martDistractActive=false;p.martDistractCount=0;
+                if(p.martDistractFlashOn){
+                  // Fin de aparición → ocultar y contar
+                  p.martDistractFlashOn=false;
+                  p.martDistractCount=(p.martDistractCount||0)+1;
+                  if(p.martDistractCount>=MART_E_DISTRACT_COUNT){
+                    p.martDistractActive=false;p.martDistractCount=0;
+                  } else {
+                    p.martDistractTimer=MART_E_DISTRACT_FLASH_OFF;
+                  }
                 } else {
-                  p.martDistractTimer=MART_E_DISTRACT_INTERVAL;
+                  // Fin de pausa → mostrar de nuevo
+                  p.martDistractFlashOn=true;
+                  p.martDistractTimer=MART_E_DISTRACT_FLASH_ON;
                 }
               }
             }
@@ -5458,6 +5486,7 @@ const Game={
       if(isNicostos(p))Game.nicoDoEmbestida(pid);
       else Game.doBehead(pid);
     } else {
+      if(p.helpless)return; // HELPLESS: habilidades bloqueadas
       if(isAMaxGE5(p)) Game.amaxDoQ(pid);
       else if(isMankspe(p)) Game.mankDoQ(pid);
       else if(isMartin(p)) Game.martDoQ(pid);
@@ -5493,6 +5522,7 @@ const Game={
       if(isNicostos(p))Game.nicoDoEstresAgudo(pid);
       else Game.doEnrage(pid);
     } else {
+      if(p.helpless)return; // HELPLESS: habilidades bloqueadas
       if(isAMaxGE5(p)) Game.amaxDoR(pid);
       else if(isMankspe(p)) Game.mankDoR(pid);
       else Game.doGhostBurger(pid);
@@ -5557,6 +5587,7 @@ const Game={
   doGhostBurger(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='survivor')return;
+    if(p.helpless)return; // HELPLESS: habilidades bloqueadas
     if(p.gbCd>0||p.gbEating||p.gbActive)return;
     p.gbEating=true;
     p.gbEatTimer=GB_EAT_DUR;
@@ -5630,7 +5661,7 @@ const Game={
         p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
         p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
         p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
-        kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractTimer=MART_E_DISTRACT_INTERVAL;
+        kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractFlashOn=true;kk.martDistractTimer=MART_E_DISTRACT_FLASH_ON;
         kk.martEBigDistract=true;kk.martEBigDistractTimer=MART_E_DISTRACT_FADE;
         p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
       }
@@ -5672,6 +5703,7 @@ const Game={
   doSlateSkin(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='survivor')return;
+    if(p.helpless)return; // HELPLESS: habilidades bloqueadas
     // If already active → cancel early → grant Speed I for SS_SPEED_DUR
     if(p.ssActive){
       p.ssActive=false;
@@ -5692,6 +5724,7 @@ const Game={
   doCombo(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer')return;
+    if(p.martHelpless)return; // HELPLESS: habilidades bloqueadas
     if(p.comboCd>0||p.comboActive)return;
     const enraged=p.enraged||false;
     breakEnrage(p); // ENRAGED termina al atacar
@@ -5769,6 +5802,7 @@ const Game={
       return;
     }
     if(p.role==='survivor'){
+      if(p.helpless)return; // HELPLESS: habilidades bloqueadas
       if(isAMaxGE5(p)){
         if(!p.amaxHealing&&p.amaxECd<=0){Game.amaxDoE(pid);return;}
         if(p.amaxHealing){return;} // Cannot cancel healing with E — only interrupted by damage
@@ -5798,6 +5832,7 @@ const Game={
   nicoDoEmbestida(pid){
     const p=W.players[pid];
     if(!p||!p.alive)return;
+    if(p.martHelpless)return; // HELPLESS: habilidades bloqueadas
     if(p.qCd>0||p.nicoCharge)return;
     if(p.stamina<=0)return;
     nicoBreakInvis(p); // charge breaks invisibility
@@ -5808,6 +5843,7 @@ const Game={
   nicoDoQuieres(pid){
     const p=W.players[pid];
     if(!p||!p.alive)return;
+    if(p.martHelpless)return; // HELPLESS: habilidades bloqueadas
     if(!p.nicoHasKnife)return; // no knife, can't throw
     if(p.nicoECd>0)return;
     nicoBreakInvis(p); // knife throw breaks invisibility
@@ -6000,6 +6036,7 @@ const Game={
         stamina:p.stamina,sprinting:p.sprinting,facing:p.facing,
         maxStamina:p.maxStamina||SMAX,
         m1Cd:p.m1Cd,bleedTicks:p.bleedTicks,bleedTimer:p.bleedTimer,
+        helpless:p.helpless||false,helplessTimer:p.helplessTimer||0,
         bloxyCd:p.bloxyCd||0,bloxyActive:p.bloxyActive||false,bloxyTimer:p.bloxyTimer||0,speedBuff:p.speedBuff||1,
         bloxyDrinking:p.bloxyDrinking||false,bloxyDrinkTimer:p.bloxyDrinkTimer||0,
         ssCd:p.ssCd||0,ssDrinking:p.ssDrinking||false,ssDrinkTimer:p.ssDrinkTimer||0,
@@ -6037,7 +6074,7 @@ const Game={
         martHelpless:p.martHelpless||false,martHelplessTimer:p.martHelplessTimer||0,
         martSlowed:p.martSlowed||false,martSlowTimer:p.martSlowTimer||0,
         martESlowed:p.martESlowed||false,martESlowTimer:p.martESlowTimer||0,
-        martDistractActive:p.martDistractActive||false,martDistractCount:p.martDistractCount||0,martDistractTimer:p.martDistractTimer||0,
+        martDistractActive:p.martDistractActive||false,martDistractCount:p.martDistractCount||0,martDistractTimer:p.martDistractTimer||0,martDistractFlashOn:p.martDistractFlashOn||false,
         martEBigDistract:p.martEBigDistract||false,martEBigDistractTimer:p.martEBigDistractTimer||0,
         nicoHasKnife:p.nicoHasKnife!==undefined?p.nicoHasKnife:true,
         nicoKnifeFlying:p.nicoKnifeFlying||false,nicoKnifeProjX:p.nicoKnifeProjX||0,nicoKnifeProjY:p.nicoKnifeProjY||0,
@@ -6084,6 +6121,7 @@ const Game={
       if(d.maxStamina)p.maxStamina=d.maxStamina;
       if(id!==S.myId)p.facing=d.facing;
       p.m1Cd=d.m1Cd;p.bleedTicks=d.bleedTicks;p.bleedTimer=d.bleedTimer;
+      p.helpless=d.helpless||false;p.helplessTimer=d.helplessTimer||0;
       if(d.bloxyCd!==undefined){p.bloxyCd=d.bloxyCd;p.bloxyActive=d.bloxyActive;p.bloxyTimer=d.bloxyTimer;p.speedBuff=d.speedBuff||1;p.bloxyDrinking=d.bloxyDrinking||false;p.bloxyDrinkTimer=d.bloxyDrinkTimer||0;
         p.ssCd=d.ssCd||0;p.ssDrinking=d.ssDrinking||false;p.ssDrinkTimer=d.ssDrinkTimer||0;
         p.ssActive=d.ssActive||false;p.ssTimer=d.ssTimer||0;p.ssShield=d.ssShield||0;
@@ -6136,7 +6174,7 @@ const Game={
           p.martHelpless=d.martHelpless||false;p.martHelplessTimer=d.martHelplessTimer||0;
           p.martSlowed=d.martSlowed||false;p.martSlowTimer=d.martSlowTimer||0;
           p.martESlowed=d.martESlowed||false;p.martESlowTimer=d.martESlowTimer||0;
-          p.martDistractActive=d.martDistractActive||false;p.martDistractCount=d.martDistractCount||0;p.martDistractTimer=d.martDistractTimer||0;
+          p.martDistractActive=d.martDistractActive||false;p.martDistractCount=d.martDistractCount||0;p.martDistractTimer=d.martDistractTimer||0;p.martDistractFlashOn=d.martDistractFlashOn||false;
           p.martEBigDistract=d.martEBigDistract||false;p.martEBigDistractTimer=d.martEBigDistractTimer||0;
         }
         if(d.nicoHasKnife!==undefined){
@@ -7128,23 +7166,12 @@ const Game={
       if(nicoAlphaSaved)ctx.restore(); // pop nicoVisibleAlpha save before the translate/rotate restore
       ctx.restore();
 
-      // Invisible check — hide name/HP for invisible players (not self)
+      // Invisible check — hide HP for invisible players (not self)
       const isInvisToViewer=!isMe&&(
         ((p.gbActive||p.gbEating)&&me2&&me2.role==='killer') ||  // Ghost Burger vs killer
         (isMankspe(p)&&(p.mankRActive||p.mankREating)&&me2&&me2.role==='killer') || // Mankspe R vs killer
-        (isNicostos(p)&&p.nicoInvisActive) // Nicostos invisible (vs everyone)
+        (isNicostos(p)&&(p.nicoInvis||p.nicoInvisStill||p.nicoInvisRevive)) // Nicostos invisible (vs everyone)
       );
-
-      // Name label
-      if(!dead&&!isInvisToViewer){
-        ctx.save();
-        ctx.fillStyle=isMe?'#fff':'#7a7a9a';
-        ctx.font=`${isMe?11:9}px 'Share Tech Mono',monospace`;
-        ctx.textAlign='center';ctx.textBaseline='bottom';
-        ctx.shadowColor=p.role==='killer'?'#ff0000':'#002244';ctx.shadowBlur=4;
-        ctx.fillText(isMe?'▶ TÚ':(p.username||p.name||'?').slice(0,12),p.x,p.y-r-14);
-        ctx.restore();
-      }
       // HP bar above player head
       if(!dead&&p.maxHp>0&&!isInvisToViewer){
         const bw=TILE*.9,bh=5,bx=p.x-bw/2,by=p.y-r-10;
@@ -7426,7 +7453,10 @@ const Game={
       const alpha=1;
       if(me.role==='survivor'){
         const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive);
-        if(killer){const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();}
+        // No mostrar el ring si el killer está invisible
+        if(killer&&!(isNicostos(killer)&&(killer.nicoInvis||killer.nicoInvisStill||killer.nicoInvisRevive))){
+          const {sx,sy}=toScreen(killer.x,killer.y);ctx.save();ctx.globalAlpha=alpha;if(onScreen(sx,sy))drawOnscreen(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');else drawEdgeArrow(killer.x,killer.y,'rgba(231,76,60,0.9)','⚔');ctx.restore();
+        }
       } else if(me.role==='killer'){
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
           // Indetectable: tracker expiró (7s) → no aparece
@@ -7522,7 +7552,9 @@ const Game={
     });
     if(me.role==='survivor'){
       const killer=Object.values(W.players).find(p=>p.role==='killer'&&p.alive&&p.amaxRevealed);
-      if(killer){
+      // Revelar no funciona contra invisibilidad de Nicostos
+      const killerInvis=killer&&isNicostos(killer)&&(killer.nicoInvis||killer.nicoInvisStill||killer.nicoInvisRevive);
+      if(killer&&!killerInvis){
         const {sx,sy}=toScreen(killer.x,killer.y);
         const pulse=0.6+Math.sin(Date.now()/160)*0.4;
         ctx.save();ctx.globalAlpha=pulse*0.88;
@@ -7559,11 +7591,14 @@ const Game={
       });
     }
     // ── MARTIN clown distraction overlay (killer screen only) ──
-    if(me.role==='killer'&&me.martDistractActive){
+    if(me.role==='killer'&&me.martDistractActive&&me.martDistractFlashOn){
       const t=Date.now()/400;
       const cw=canvas.width,ch=canvas.height;
-      const phase=me.martDistractTimer>0?(me.martDistractTimer/MART_E_DISTRACT_INTERVAL):0;
-      const fadeAlpha=phase<0.3?phase/0.3:1;
+      // Fade in primeros 0.3s, fade out últimos 0.5s de cada aparición de 3s
+      const flashRem=me.martDistractTimer||0;
+      const fadeIn=Math.min(1,(MART_E_DISTRACT_FLASH_ON-flashRem)/0.3);
+      const fadeOut=Math.min(1,flashRem/0.5);
+      const fadeAlpha=Math.min(fadeIn,fadeOut);
       ctx.save();
       // Full-screen magenta tint that fades out over MART_E_DISTRACT_FADE
       const tintFade=me.martEBigDistractTimer>0?Math.min(1,me.martEBigDistractTimer/MART_E_DISTRACT_FADE):0;
