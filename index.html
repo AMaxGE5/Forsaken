@@ -2128,6 +2128,7 @@ const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 5, M1_DELAY = 0.04, M1_DMG = 20; // 5 hitboxes en mismo tiempo total (3×0.08=0.24s → 5×0.04=0.2s ≈ igual)
 const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
 const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8*0.75, HB_H = TILE*2.0*0.75;  // M1 hitbox −25%
+const HB_M1_DIST = HB_H/2 * 0.55; // M1 hitbox ligeramente retrocedida (antes: HB_OFFSET+HB_H/2)
 const INTERACT_SEC = 15;
 const GEN_TIME_BONUS = 20;
 const LMS_TIME = 74, LMS_TRACKER_DUR = 7;
@@ -4333,8 +4334,8 @@ function applyShieldDamage(s, dmg){
 function doSlashHit(killerPid,ang,slashIdx,dmg){
   dmg=dmg||M1_DMG;
   const k=W.players[killerPid];if(!k||!k.alive)return;
-  const cx=k.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
-  const cy=k.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+  const cx=k.x+Math.cos(ang)*HB_M1_DIST;
+  const cy=k.y+Math.sin(ang)*HB_M1_DIST;
   slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.10,maxLife:.10,idx:slashIdx});
   if(!k.m1HitSet)k.m1HitSet=new Set();
   if(slashIdx===0)k.m1HitSet=new Set();
@@ -4897,8 +4898,8 @@ const Game={
             if(p.beheadHitTimer===0&&!p.beheadHit){
               // Fire the hit check now
               const ang=p.beheadDashAng;
-              const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
-              const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+              const cx=p.x+Math.cos(ang)*HB_M1_DIST;
+              const cy=p.y+Math.sin(ang)*HB_M1_DIST;
               slashFX.push({x:cx,y:cy,ang,hw:Q_HB_SIZE/2,hh:Q_HB_SIZE/2,life:.28,maxLife:.28,idx:0,behead:true});
               let hitSomeone=false;
               const beheadDmg=(p._beheadEnraged)?Q_DMG_ENRAGED:Q_DMG;
@@ -4984,9 +4985,9 @@ const Game={
                   // Spawn hitbox rectangle starting at killer body, 80% of M1 height
                   const cang=p.nicoChargeAng;
                   const nicoHbH=HB_H*0.8;
-                  // Center = nicoHbH/2 ahead so the near edge starts at the killer's body
-                  const hbCx=p.x+Math.cos(cang)*(nicoHbH/2);
-                  const hbCy=p.y+Math.sin(cang)*(nicoHbH/2);
+                  // Center = en la mitad del asesino (la hitbox se centra en el cuerpo)
+                  const hbCx=p.x;
+                  const hbCy=p.y;
                   // Visual FX — dura 0.1s pero solo hace daño en primeros 0.02s
                   const hbLife=0.1, hbDmgWindow=0.02;
                   slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:hbLife,maxLife:hbLife,idx:0,nicoChargePulse:true});
@@ -5435,8 +5436,8 @@ const Game={
     p.m1Cd=hasKnife?NICO_M1_CD:NICO_M1_CD_NO_KNIFE;
     const dmg=hasKnife?NICO_M1_DMG:NICO_M1_DMG_NO_KNIFE;
     const ang=p.facing;
-    const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
-    const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
+    const cx=p.x+Math.cos(ang)*HB_M1_DIST;
+    const cy=p.y+Math.sin(ang)*HB_M1_DIST;
     // Visual FX — 5 hitboxes salen escalonadas con setTimeout (0.05s delay inicial)
     for(let i=0;i<M1_SLASHES;i++){
       const delay=50+i*M1_DELAY*1000;
@@ -5444,8 +5445,8 @@ const Game={
         if(!S.running)return;
         const fk=W.players[pid];if(!fk||!fk.alive)return;
         const fang=fk.facing;
-        const fcx2=fk.x+Math.cos(fang)*(HB_OFFSET+HB_H/2);
-        const fcy2=fk.y+Math.sin(fang)*(HB_OFFSET+HB_H/2);
+        const fcx2=fk.x+Math.cos(fang)*HB_M1_DIST;
+        const fcy2=fk.y+Math.sin(fang)*HB_M1_DIST;
         slashFX.push({x:fcx2,y:fcy2,ang:fang,hw:HB_W/2,hh:HB_H/2,life:.10,maxLife:.10,idx:i,nicoSlash:true,hasKnife});
       },delay);
     }
@@ -5456,8 +5457,8 @@ const Game={
     const fireHit=(hitIdx)=>{
       if(!p||!p.alive)return false;
       const fang=p.facing;
-      const fcx=p.x+Math.cos(fang)*(HB_OFFSET+HB_H/2);
-      const fcy=p.y+Math.sin(fang)*(HB_OFFSET+HB_H/2);
+      const fcx=p.x+Math.cos(fang)*HB_M1_DIST;
+      const fcy=p.y+Math.sin(fang)*HB_M1_DIST;
       let didHit=false;
       Object.values(W.players).forEach(s=>{
         if(s.role!=='survivor'||!s.alive)return;
