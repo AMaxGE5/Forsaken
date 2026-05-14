@@ -4975,21 +4975,22 @@ const Game={
               if(!hitWallY)p.y=ny2;
               // Cancel charge on wall collision
               if((hitWallX||hitWallY)&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
-              // ── Rectangular hitbox check every 0.5s (M1 size, charge effect) ──
+              // ── Rectangular hitbox check every 0.2s (M1 width, 80% height) ──
               if(!p.nicoChargeHit&&p.nicoCharge){
                 p.nicoChargeHbTimer=(p.nicoChargeHbTimer||0)-dt;
                 if(p.nicoChargeHbTimer<=0){
-                  p.nicoChargeHbTimer=0.5;
-                  // Spawn hitbox rectangle in front, same size as M1
+                  p.nicoChargeHbTimer=0.2;
+                  // Spawn hitbox rectangle in front: M1 width, 80% of M1 height
                   const cang=p.nicoChargeAng;
-                  const hbCx=p.x+Math.cos(cang)*(HB_OFFSET+HB_H/2);
-                  const hbCy=p.y+Math.sin(cang)*(HB_OFFSET+HB_H/2);
-                  // Visual FX for the hitbox pulse
-                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:HB_H/2,life:.25,maxLife:.25,idx:0,nicoChargePulse:true});
-                  // Check survivors in the rectangle
+                  const nicoHbH=HB_H*0.8;
+                  const hbCx=p.x+Math.cos(cang)*(HB_OFFSET+nicoHbH/2);
+                  const hbCy=p.y+Math.sin(cang)*(HB_OFFSET+nicoHbH/2);
+                  // Visual FX for the hitbox pulse — visible for all players via slashFX sync
+                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:.2,maxLife:.2,idx:0,nicoChargePulse:true});
+                  // Check survivors in the rectangle (no circle fallback)
                   Object.values(W.players).forEach(s=>{
                     if(s.role!=='survivor'||!s.alive||p.nicoChargeHit)return;
-                    if(pointInRotRect(s.x,s.y,hbCx,hbCy,HB_W/2,HB_H/2,cang)||Math.hypot(s.x-p.x,s.y-p.y)<TILE*.9){
+                    if(pointInRotRect(s.x,s.y,hbCx,hbCy,HB_W/2,nicoHbH/2,cang)){
                       p.nicoChargeHit=true;
                       p.nicoCharge=false;
                       // Apply charge damage (grab + slam, no bleed)
@@ -6787,23 +6788,7 @@ const Game={
             ctx.strokeStyle=`rgba(200,100,255,${cPulse})`;ctx.lineWidth=3;
             ctx.beginPath();ctx.moveTo(-s*.6,0);ctx.lineTo(-s*1.2,s*.3);ctx.stroke();
             ctx.beginPath();ctx.moveTo(-s*.6,s*.2);ctx.lineTo(-s*1.1,s*.6);ctx.stroke();
-            // Hitbox debug: show charge collision circle (only when S.showHitbox)
-            if(S.showHitbox){
-              const sc=sc2;
-              ctx.save();ctx.setTransform(1,0,0,1,0,0);
-              ctx.scale(sc,sc);ctx.translate(-CAM.x,-CAM.y);
-              // Draw M1-sized rectangle hitbox in front
-              const dbAng=p.nicoChargeAng||p.facing;
-              const dbCx=p.x+Math.cos(dbAng)*(HB_OFFSET+HB_H/2);
-              const dbCy=p.y+Math.sin(dbAng)*(HB_OFFSET+HB_H/2);
-              ctx.save();ctx.translate(dbCx,dbCy);ctx.rotate(dbAng);
-              ctx.strokeStyle='rgba(255,50,50,0.9)';ctx.lineWidth=2/sc;
-              ctx.shadowColor='rgba(255,0,0,0.7)';ctx.shadowBlur=8;
-              ctx.strokeRect(-HB_W/2,-HB_H/2,HB_W,HB_H);
-              ctx.fillStyle='rgba(255,50,30,0.12)';ctx.fillRect(-HB_W/2,-HB_H/2,HB_W,HB_H);
-              ctx.restore();
-              ctx.shadowBlur=0;ctx.restore();
-            }
+
           }
 
           // ME indicator
