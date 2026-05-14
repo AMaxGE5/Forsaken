@@ -4979,15 +4979,16 @@ const Game={
               if(!p.nicoChargeHit&&p.nicoCharge){
                 p.nicoChargeHbTimer=(p.nicoChargeHbTimer||0)-dt;
                 if(p.nicoChargeHbTimer<=0){
-                  p.nicoChargeHbTimer=0.2;
-                  // Spawn hitbox rectangle in front: M1 width, 80% of M1 height
+                  p.nicoChargeHbTimer=0.05;
+                  // Spawn hitbox rectangle starting at killer body, 80% of M1 height
                   const cang=p.nicoChargeAng;
                   const nicoHbH=HB_H*0.8;
-                  const hbCx=p.x+Math.cos(cang)*(HB_OFFSET+nicoHbH/2);
-                  const hbCy=p.y+Math.sin(cang)*(HB_OFFSET+nicoHbH/2);
-                  // Visual FX for the hitbox pulse — visible for all players via slashFX sync
-                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:.2,maxLife:.2,idx:0,nicoChargePulse:true});
-                  // Check survivors in the rectangle (no circle fallback)
+                  // Center = nicoHbH/2 ahead so the near edge starts at the killer's body
+                  const hbCx=p.x+Math.cos(cang)*(nicoHbH/2);
+                  const hbCy=p.y+Math.sin(cang)*(nicoHbH/2);
+                  // Visual FX — brief flash (0.04s < 0.05s interval) so survivors see discrete pulses
+                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:.04,maxLife:.04,idx:0,nicoChargePulse:true});
+                  // Check survivors in the rectangle
                   Object.values(W.players).forEach(s=>{
                     if(s.role!=='survivor'||!s.alive||p.nicoChargeHit)return;
                     if(pointInRotRect(s.x,s.y,hbCx,hbCy,HB_W/2,nicoHbH/2,cang)){
@@ -7368,15 +7369,7 @@ const Game={
       ctx.beginPath();ctx.moveTo(-3,4);ctx.lineTo(3,4);ctx.lineTo(0,20);ctx.closePath();ctx.fill();
       ctx.fillStyle='rgba(170,0,0,0.8)';
       ctx.beginPath();ctx.moveTo(-2,9);ctx.lineTo(2,9);ctx.lineTo(0,18);ctx.closePath();ctx.fill();
-      // Hitbox circle debug (only when S.showHitbox enabled)
-      if(S.showHitbox){
-        ctx.rotate(-(ang+Math.PI/2)); // unrotate for circle
-        ctx.beginPath();ctx.arc(0,0,TILE*0.7,0,Math.PI*2);
-        ctx.strokeStyle='rgba(255,50,50,0.9)';ctx.lineWidth=2;
-        ctx.shadowColor='rgba(255,0,0,0.7)';ctx.shadowBlur=8;ctx.stroke();
-        ctx.fillStyle='rgba(255,30,30,0.15)';ctx.fill();
-        ctx.shadowBlur=0;
-      }
+
       ctx.restore();
     });
   },
