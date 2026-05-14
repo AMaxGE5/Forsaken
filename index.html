@@ -2128,8 +2128,7 @@ const SHP = 100, KHP = 110;
 const M1_CD = 1.9, M1_SLASHES = 5, M1_DELAY = 0.04, M1_DMG = 20; // 5 hitboxes en mismo tiempo total (3×0.08=0.24s → 5×0.04=0.2s ≈ igual)
 const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
 const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8*0.75, HB_H = TILE*2.0*0.75;  // M1 hitbox −25%
-const HB_M1_DIST = 0; // M1 hitbox centrada en el cuerpo del killer
-const HB_CHARGE_DIST = HB_H/2 * 0.35; // Embestida un poquito adelante del centro
+const HB_M1_DIST = HB_OFFSET+HB_H/2; // M1 hitbox posición original
 const INTERACT_SEC = 15;
 const GEN_TIME_BONUS = 20;
 const LMS_TIME = 74, LMS_TRACKER_DUR = 7;
@@ -4986,9 +4985,9 @@ const Game={
                   // Spawn hitbox rectangle starting at killer body, 80% of M1 height
                   const cang=p.nicoChargeAng;
                   const nicoHbH=HB_H*0.8;
-                  // Center = un poquito adelante del centro del killer
-                  const hbCx=p.x+Math.cos(cang)*HB_CHARGE_DIST;
-                  const hbCy=p.y+Math.sin(cang)*HB_CHARGE_DIST;
+                  // Center = nicoHbH/2 ahead so the near edge starts at the killer's body
+                  const hbCx=p.x+Math.cos(cang)*(nicoHbH/2);
+                  const hbCy=p.y+Math.sin(cang)*(nicoHbH/2);
                   // Visual FX — dura 0.1s pero solo hace daño en primeros 0.02s
                   const hbLife=0.1, hbDmgWindow=0.02;
                   slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:hbLife,maxLife:hbLife,idx:0,nicoChargePulse:true});
