@@ -2125,7 +2125,7 @@ const SW = 78, SR = 135;   // Survivor: walk 78, run 135
 const KW = 85, KR = 140;   // Slasher:  walk 85, run 140
 const SMAX=100, KSMAX=110, SDRAIN=10, KDRAIN=9.5, KREGEN=21, SREGEN=20, SREGEN_DEL=0.18, SREGEN_DEL_EMPTY=0.5, SMIN=0;
 const SHP = 100, KHP = 110;
-const M1_CD = 1.9, M1_SLASHES = 3, M1_DELAY = 0.08, M1_DMG = 20;
+const M1_CD = 1.9, M1_SLASHES = 5, M1_DELAY = 0.04, M1_DMG = 20; // 5 hitboxes en mismo tiempo total (3×0.08=0.24s → 5×0.04=0.2s ≈ igual)
 const BLEED_DMG = 5, BLEED_TICK = 1.2, BLEED_TICKS = 4, BLEED_MIN_HP = 1;
 const HB_OFFSET = TILE*0.2, HB_W = TILE*1.8*0.75, HB_H = TILE*2.0*0.75;  // M1 hitbox −25%
 const INTERACT_SEC = 15;
@@ -4296,12 +4296,13 @@ function fireM1(killerPid){
     if(!wallAt(k.x,k.y+lay,r,'killer'))k.y+=lay;
   }
   const dmg=enraged?M1_DMG_ENRAGED:M1_DMG;
+  // 0.05s de delay antes del primer golpe; hitboxes cada M1_DELAY después
   for(let i=0;i<M1_SLASHES;i++){
     setTimeout(()=>{
       if(!S.running)return;
       const fk=W.players[killerPid];if(!fk||!fk.alive)return;
       doSlashHit(killerPid,fk.facing,i,dmg);
-    },i*M1_DELAY*1000);
+    },50+i*M1_DELAY*1000);
   }
 }
 // ── Helper: aplica daño absorbiendo ssShield primero ──
@@ -4334,7 +4335,7 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
   const k=W.players[killerPid];if(!k||!k.alive)return;
   const cx=k.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
   const cy=k.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-  slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.15,maxLife:.15,idx:slashIdx});
+  slashFX.push({x:cx,y:cy,ang,hw:HB_W/2,hh:HB_H/2,life:.10,maxLife:.10,idx:slashIdx});
   if(!k.m1HitSet)k.m1HitSet=new Set();
   if(slashIdx===0)k.m1HitSet=new Set();
   Object.values(W.players).forEach(s=>{
@@ -4975,19 +4976,20 @@ const Game={
               if(!hitWallY)p.y=ny2;
               // Cancel charge on wall collision
               if((hitWallX||hitWallY)&&p.nicoCharge){p.nicoCharge=false;p.qCd=NICO_Q_CD;}
-              // ── Rectangular hitbox check every 0.2s (M1 width, 80% height) ──
+              // ── Rectangular hitbox check every 0.01s (M1 width, 80% height) ──
               if(!p.nicoChargeHit&&p.nicoCharge){
                 p.nicoChargeHbTimer=(p.nicoChargeHbTimer||0)-dt;
                 if(p.nicoChargeHbTimer<=0){
-                  p.nicoChargeHbTimer=0.05;
+                  p.nicoChargeHbTimer=0.01; // cada 0.01s
                   // Spawn hitbox rectangle starting at killer body, 80% of M1 height
                   const cang=p.nicoChargeAng;
                   const nicoHbH=HB_H*0.8;
                   // Center = nicoHbH/2 ahead so the near edge starts at the killer's body
                   const hbCx=p.x+Math.cos(cang)*(nicoHbH/2);
                   const hbCy=p.y+Math.sin(cang)*(nicoHbH/2);
-                  // Visual FX — brief flash (0.04s < 0.05s interval) so survivors see discrete pulses
-                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:.04,maxLife:.04,idx:0,nicoChargePulse:true});
+                  // Visual FX — dura 0.1s pero solo hace daño en primeros 0.02s
+                  const hbLife=0.1, hbDmgWindow=0.02;
+                  slashFX.push({x:hbCx,y:hbCy,ang:cang,hw:HB_W/2,hh:nicoHbH/2,life:hbLife,maxLife:hbLife,idx:0,nicoChargePulse:true});
                   // Check survivors in the rectangle
                   Object.values(W.players).forEach(s=>{
                     if(s.role!=='survivor'||!s.alive||p.nicoChargeHit)return;
@@ -5435,19 +5437,19 @@ const Game={
     const ang=p.facing;
     const cx=p.x+Math.cos(ang)*(HB_OFFSET+HB_H/2);
     const cy=p.y+Math.sin(ang)*(HB_OFFSET+HB_H/2);
-    // Visual FX — 3 hitboxes salen escalonadas con setTimeout
+    // Visual FX — 5 hitboxes salen escalonadas con setTimeout (0.05s delay inicial)
     for(let i=0;i<M1_SLASHES;i++){
-      const delay=i*100;
+      const delay=50+i*M1_DELAY*1000;
       setTimeout(()=>{
         if(!S.running)return;
         const fk=W.players[pid];if(!fk||!fk.alive)return;
         const fang=fk.facing;
         const fcx2=fk.x+Math.cos(fang)*(HB_OFFSET+HB_H/2);
         const fcy2=fk.y+Math.sin(fang)*(HB_OFFSET+HB_H/2);
-        slashFX.push({x:fcx2,y:fcy2,ang:fang,hw:HB_W/2,hh:HB_H/2,life:.18,maxLife:.18,idx:i,nicoSlash:true,hasKnife});
+        slashFX.push({x:fcx2,y:fcy2,ang:fang,hw:HB_W/2,hh:HB_H/2,life:.10,maxLife:.10,idx:i,nicoSlash:true,hasKnife});
       },delay);
     }
-    // ── Staggered hitbox queue: hit 0 fires immediately, hits 1-2 fire 0.1s later each ──
+    // ── Staggered hitbox queue: hit 0 fires a 0.05s, hits 1-4 cada M1_DELAY después ──
     p.m1HitSet=new Set();
     let firstHitConnected=false;
     // Hit 0 — fires now
@@ -5481,12 +5483,11 @@ const Game={
       });
       return didHit;
     };
-    // Fire hit 0 immediately
-    firstHitConnected=fireHit(0);
-    // Hits 1 and 2 only fire if first hit landed (Gashing Wound required)
-    if(firstHitConnected){
-      setTimeout(()=>{if(S.running)fireHit(1);},100);
-      setTimeout(()=>{if(S.running)fireHit(2);},200);
+    // Fire hit 0 at 0.05s delay
+    setTimeout(()=>{if(S.running){firstHitConnected=fireHit(0);}},50);
+    // Hits 1-4 only fire if first hit landed (Gashing Wound required)
+    for(let i=1;i<M1_SLASHES;i++){
+      setTimeout(()=>{if(S.running&&firstHitConnected)fireHit(i);},50+i*M1_DELAY*1000);
     }
   },
 
@@ -6551,14 +6552,14 @@ const Game={
           ctx.shadowBlur=0;
         }
       } else if(sf.nicoChargePulse){
-        // Nicostos embestida hitbox pulse — morado, siempre visible
+        // Nicostos embestida hitbox pulse — ROJO, siempre visible
         ctx.globalAlpha=alpha;
-        ctx.shadowColor='rgba(180,80,255,0.9)';ctx.shadowBlur=18;
-        ctx.fillStyle=`rgba(160,60,255,${alpha*0.3})`;
+        ctx.shadowColor='rgba(220,30,30,0.9)';ctx.shadowBlur=18;
+        ctx.fillStyle=`rgba(220,30,30,${alpha*0.3})`;
         ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        ctx.strokeStyle=`rgba(200,100,255,${alpha*0.95})`;ctx.lineWidth=2.5;
+        ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2.5;
         ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
-        ctx.strokeStyle=`rgba(220,160,255,${alpha*0.5})`;ctx.lineWidth=1;
+        ctx.strokeStyle=`rgba(255,180,180,${alpha*0.5})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
         ctx.shadowBlur=0;
       } else if(sf.martESlash){
@@ -6572,8 +6573,19 @@ const Game={
         ctx.strokeStyle=`rgba(255,240,120,${alpha*0.65})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
         ctx.shadowBlur=0;
+      } else if(sf.nicoSlash){
+        // Nicostos M1 slash — ROJO, siempre visible
+        ctx.globalAlpha=alpha;
+        ctx.shadowColor='rgba(220,30,30,0.9)';ctx.shadowBlur=14;
+        ctx.fillStyle=`rgba(220,30,30,${alpha*0.55})`;
+        ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
+        ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
+        for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
+        ctx.shadowBlur=0;
       } else if(S.showHitbox){
-        // Normal M1/Q hitbox debug — only visible when hitbox ON
+        // Normal M1/Q hitbox debug — only visible when hitbox ON — ROJO
         ctx.fillStyle=`rgba(220,30,30,${alpha*0.55})`;
         ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
         ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=2;
