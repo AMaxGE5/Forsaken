@@ -5033,11 +5033,22 @@ const Game={
               if(wallAt(p.nicoKnifeProjX,p.nicoKnifeProjY,4)){p.nicoKnifeFlying=false;p.nicoKnifeRecoverTimer=NICO_E_KNIFE_RECOVER;}
               // Range check (40 studs = 40*TILE px)
               if(Math.hypot(p.nicoKnifeProjX-p.x,p.nicoKnifeProjY-p.y)>40*TILE){p.nicoKnifeFlying=false;p.nicoKnifeRecoverTimer=NICO_E_KNIFE_RECOVER;}
-              // Hit check
+              // Hit check — hitbox rectangular pequeña siguiendo al cuchillo
               if(p.nicoKnifeFlying){
+                const kang=Math.atan2(p.nicoKnifeVy,p.nicoKnifeVx);
+                const KHW=TILE*0.22, KHH=TILE*0.38; // hitbox pequeña acorde al cuchillo
+                // Generar hitbox visual cada frame (siempre visible, roja)
+                p.nicoKnifeHbTimer=(p.nicoKnifeHbTimer||0)-dt;
+                if(p.nicoKnifeHbTimer<=0){
+                  p.nicoKnifeHbTimer=0.01;
+                  slashFX.push({x:p.nicoKnifeProjX,y:p.nicoKnifeProjY,ang:kang,hw:KHW,hh:KHH,life:0.08,maxLife:0.08,idx:0,nicoKnifeHb:true});
+                }
+                // Detección de golpe con hitbox rectangular
+                let knifeHit=false;
                 Object.values(W.players).forEach(s=>{
-                  if(s.role!=='survivor'||!s.alive)return;
-                  if(Math.hypot(s.x-p.nicoKnifeProjX,s.y-p.nicoKnifeProjY)<TILE*.7){
+                  if(knifeHit||s.role!=='survivor'||!s.alive)return;
+                  if(pointInRotRect(s.x,s.y,p.nicoKnifeProjX,p.nicoKnifeProjY,KHW,KHH,kang)){
+                    knifeHit=true;
                     p.nicoKnifeFlying=false;p.nicoKnifeRecoverTimer=NICO_E_KNIFE_RECOVER;
                     applyShieldDamage(s,NICO_E_DMG);
                     // Mark target: slow I for 10s
@@ -6574,6 +6585,15 @@ const Game={
         ctx.strokeStyle=`rgba(255,240,120,${alpha*0.65})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
         ctx.shadowBlur=0;
+      } else if(sf.nicoKnifeHb){
+        // Nicostos cuchillo hitbox — ROJO pequeño, siempre visible
+        ctx.globalAlpha=alpha;
+        ctx.shadowColor='rgba(220,30,30,0.9)';ctx.shadowBlur=10;
+        ctx.fillStyle=`rgba(220,30,30,${alpha*0.45})`;
+        ctx.fillRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.strokeStyle=`rgba(255,80,80,${alpha*0.95})`;ctx.lineWidth=1.5;
+        ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
+        ctx.shadowBlur=0;
       } else if(sf.nicoSlash){
         // Nicostos M1 slash — ROJO, siempre visible
         ctx.globalAlpha=alpha;
@@ -7479,8 +7499,6 @@ const Game={
         }
       } else if(me.role==='killer'){
         Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive).forEach(s=>{
-          // Indetectable: tracker expiró (7s) → no aparece
-          if(S.lmsTrackerT<=0)return;
           // Indetectable: Ghost Burger activo → no aparece en tracker
           if((s.gbActive||s.gbEating))return;
           // Mankspe Pan con Sal → indetectable
