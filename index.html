@@ -2172,7 +2172,7 @@ const MANK_R_FOOTPRINT_DUR = 1.5; // cuánto duran las pisadas en el suelo
 const MART_Q_CD = 18;              // Q: DAWN — plátano trampa (18s CD)
 const MART_Q_EXPIRE = 15;          // plátanos desaparecen después de 15s (se pudren)
 const MART_Q_SLOW_DUR = 5;         // lentitud II por 5s al killer
-const MART_Q_HELPLESS_DUR = 1;     // duración helpless al pisar plátano
+const MART_Q_HELPLESS_DUR = 1.5;     // duración helpless al pisar plátano
 const MART_E_CD = 35;              // E: BLIPI — risa de payaso (35s)
 const MART_E_RANGE = TILE * 5;     // rango de detección del killer
 const MART_E_REVEAL_DUR = 5;       // killer revelado para supervivientes
@@ -4295,6 +4295,7 @@ function breakEnrage(p){
 function fireM1(killerPid){
   const k=W.players[killerPid];
   if(!k||!k.alive||k.role!=='killer'||k.m1Cd>0)return;
+  if(k.martHelpless)return; // HELPLESS: bloqueado por plátano de Martin
   const enraged=k.enraged||false;
   breakEnrage(k); // ENRAGED termina al atacar
   k.m1Cd=enraged?M1_CD_ENRAGED:M1_CD;
@@ -5444,6 +5445,7 @@ const Game={
   tryM1(pid){
     const p=W.players[pid];
     if(!p||!p.alive||p.role!=='killer'||p.m1Cd>0)return;
+    if(p.martHelpless)return; // HELPLESS: bloqueado por plátano de Martin
     if(p.nicoCharge)return;
     if(isNicostos(p))Game.nicoFireM1(pid);
     else fireM1(pid);
@@ -8527,19 +8529,20 @@ const Economy={
 const STORE_KILLERS=[
   { id:'slasher', name:'SLASHER', price:0, free:true, icon:'🗡', author:'Forsaken',
     tagline:'El asesino original. Rápido, letal y sin piedad.',
-    stats:[{lbl:'VELOCIDAD',val:80},{lbl:'DAÑO',val:75},{lbl:'RESISTENCIA',val:60}],
-    statsDetail:[
-      {lbl:'Dificultad',val:'2/5'},
-      {lbl:'Vida',val:'110'},
-      {lbl:'Vel. normal',val:'16.0 u/s'},
-      {lbl:'Vel. sprint',val:'26.7 u/s'},
-      {lbl:'Vel. ENRAGED',val:'19.5 u/s (sin sprint)'},
+    stats:[
+      {lbl:'Dificultad',val:'⅖'},
+      {lbl:'Vida',val:'1110'},
+      {lbl:'Velocidad normal',val:'16.0 u/s'},
+      {lbl:'Velocidad sprint',val:'26.7 u/s'},
       {lbl:'Stamina total',val:'110'},
-      {lbl:'Stamina pérd/seg',val:'9.5'},
-      {lbl:'Stamina gan/seg',val:'21'},
+      {lbl:'Stamina pérdida/seg',val:'9.5'},
+      {lbl:'Stamina ganada/seg',val:'21'},
+    ],
+    statsDetail:[
+      {lbl:'Vel. ENRAGED',val:'19.5 u/s (sin sprint)'},
       {lbl:'── M1 TAJO ──',val:''},
       {lbl:'Daño',val:'20 (ENRAGED: 25)'},
-      {lbl:'Golpes',val:'3 seguidos'},
+      {lbl:'Golpes',val:'5 seguidos'},
       {lbl:'CD',val:'1.9s (ENRAGED: 0.8s)'},
       {lbl:'── Q BEHEAD ──',val:''},
       {lbl:'Daño',val:'20 (ENRAGED: 35)'},
@@ -8552,40 +8555,34 @@ const STORE_KILLERS=[
       {lbl:'Golpes',val:'5'},
       {lbl:'CD',val:'32s (ENRAGED: 24s)'},
     ],
-    abilities:[{key:'M1',desc:'Tajo — Ataca 3 veces seguidas con su machete.'},{key:'Q',desc:'Behead — Dash hacia adelante + golpe devastador.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño temporalmente.'}],
+    abilities:[{key:'M1',desc:'Tajo — Ataca 5 veces seguidas con su machete.'},{key:'Q',desc:'Behead — Dash hacia adelante + golpe devastador.'},{key:'R',desc:'Enraged — Aumenta velocidad y daño temporalmente.'}],
     skins:[] },
   { id:'nicostos', name:'NICOSTOS', price:1200, free:false, icon:'🔪', author:'nicolaselprocrack123',
     tagline:'Corrompido por el poder. El cuchillo ya no es suyo... es de él.',
     stats:[
-      {lbl:'DIFICULTAD',val:60},
-      {lbl:'VIDA',val:78},
-      {lbl:'VELOCIDAD',val:62},
-      {lbl:'DAÑO',val:70},
-      {lbl:'STAMINA',val:73}
+      {lbl:'Dificultad',val:'⅗'},
+      {lbl:'Vida',val:'1111'},
+      {lbl:'Velocidad normal (con cuchillo)',val:'15.5 u/s'},
+      {lbl:'Velocidad sprint (con cuchillo)',val:'26.7 u/s'},
+      {lbl:'Velocidad normal (sin cuchillo)',val:'17.1 u/s'},
+      {lbl:'Velocidad sprint (sin cuchillo)',val:'29.3 u/s'},
+      {lbl:'Stamina total',val:'110'},
+      {lbl:'Stamina pérdida/seg',val:'9.5'},
+      {lbl:'Stamina ganada/seg',val:'21'},
     ],
     statsDetail:[
-      {lbl:'Dificultad',val:'3/5'},
-      {lbl:'Vida',val:'110'},
-      {lbl:'── CON CUCHILLO ──',val:''},
-      {lbl:'Vel. normal',val:'15.51 u/s'},
-      {lbl:'Vel. sprint',val:'26.65 u/s'},
-      {lbl:'M1 daño',val:'22.5'},
-      {lbl:'── SIN CUCHILLO ──',val:''},
-      {lbl:'Vel. normal',val:'17.06 u/s (+10%)'},
-      {lbl:'Vel. sprint',val:'29.32 u/s (+10%)'},
-      {lbl:'M1 daño',val:'10'},
-      {lbl:'── GENERAL ──',val:''},
-      {lbl:'Stamina total',val:'110'},
-      {lbl:'Stamina pérd/seg',val:'9.5'},
-      {lbl:'Stamina gan/seg',val:'21'},
-      {lbl:'M1 CD',val:'1.9s'},
+      {lbl:'── M1 CUCHILLAZO ──',val:''},
+      {lbl:'Daño (con cuchillo)',val:'22.5'},
+      {lbl:'Daño (sin cuchillo)',val:'10'},
+      {lbl:'CD',val:'2.0s (sin cuchillo: 1.5s)'},
       {lbl:'── Q EMBESTIDA ──',val:''},
       {lbl:'Daño agarre',val:'10'},
       {lbl:'Daño slam',val:'20'},
+      {lbl:'Stamina drenada/seg',val:'15'},
       {lbl:'CD',val:'25s'},
       {lbl:'── E ¿QUIERES? ──',val:''},
       {lbl:'Daño cuchillo',val:'15'},
-      {lbl:'Recupera cuchillo',val:'20s'},
+      {lbl:'Recupera cuchillo en',val:'30s'},
       {lbl:'CD (al recuperar)',val:'10s'},
       {lbl:'── R ESTRÉS AGUDO ──',val:''},
       {lbl:'Duración máx',val:'10s'},
@@ -8597,11 +8594,11 @@ const STORE_KILLERS=[
       {lbl:'Stam máx berserk',val:'80'},
     ],
     abilities:[
-      {key:'M1',desc:'Cuchillazo — 22.5 de daño con cuchillo (19 sin él). CD: 1.9s. Sin cuchillo se mueve un 20% más veloz.'},
+      {key:'M1',desc:'Cuchillazo — 22.5 de daño con cuchillo (10 sin él). CD: 2.0s. Sin cuchillo se mueve un 10% más veloz.'},
       {key:'Q',desc:'Embestida — Se lanza en línea recta difícilmente girando. Gasta 15 stamina/seg. Si impacta: agarra al objetivo, 10 de daño + 20 al lanzarlo al suelo. Nicostos recibe Lentitud I por 1s. CD: 25s.'},
-      {key:'E',desc:'¿Quieres? — Lanza el cuchillo hacia donde mira. Si impacta: marca al objetivo por 10s con Lentitud I. Inflige 15 de daño. Al lanzarlo pierde el cuchillo y lo recupera en 20s; el CD de 10s inicia al recuperarlo.'},
+      {key:'E',desc:'¿Quieres? — Lanza el cuchillo hacia donde mira. Si impacta: marca al objetivo por 10s con Lentitud I. Inflige 15 de daño. Al lanzarlo pierde el cuchillo y lo recupera en 30s; el CD de 10s inicia al recuperarlo.'},
       {key:'R',desc:'Estrés Agudo — Se detiene 1s y se vuelve invisible progresivamente en 2s. Puede ver a todos los supervivientes. Dura máx 10s. Al volverse visible espera 0.5s antes de poder moverse. CD: 30s.'},
-      {key:'T',desc:'¿Conseguimos Berserk? — Se desbloquea al matar 2 personas (no acumulable). Recarga stamina a 35/seg (máx 85 en este modo), Invisibilidad II por 20s, invulnerable al aturdimiento y rango de detección +10%. Dura 20s.'},
+      {key:'T',desc:'¿Conseguimos Berserk? — Se desbloquea al matar 2 personas (no acumulable). Recarga stamina a 35/seg (máx 80 en este modo), Invisibilidad II por 20s, invulnerable al aturdimiento y rango de detección +10%. Dura 20s.'},
       {key:'PASIVA',desc:'Al golpear a alguien puede ver un rastro de sangre que lo guía hacia el superviviente más cercano.'}
     ],
     lore:'Nicolás siempre fue un chico amable, divertido y muy unido a sus amigos. Le gustaba pasar tiempo con ellos, hacerlos reír y nunca parecía tener problemas. Pero un día ocurrió una desgracia que lo cambió todo, algo que nadie logró entender del todo. Desde entonces, comenzó a escuchar una presencia que lo buscaba directamente. No lo insultaba ni lo rompía… lo intentó. Le prometía poder y agresividad. Poco a poco, Nicolás empezó a creer en esas palabras y a desear ese poder. Una noche, con la mente consumida por la ambición, tomó un cuchillo. Aceptó el trato sin saber realmente el precio. Y en ese momento, se corrompió.',
@@ -8610,63 +8607,122 @@ const STORE_KILLERS=[
 const STORE_SURVIVORS=[
   { id:'noob', name:'NOOB', price:0, free:true, icon:'🏃', author:'Forsaken',
     tagline:'El superviviente clásico. Ágil, resistente y lleno de trucos.',
-    stats:[{lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}],
-    abilities:[{key:'Q',desc:'Bloxy Cola — Bebe una cola que aumenta tu velocidad temporalmente.'},{key:'E',desc:'Slate Skin — Toma una poción que te hace sobrevivir a un golpe mortal.'},{key:'R',desc:'Ghost Burger — Come una hamburguesa que te vuelve casi invisible.'}],
+    stats:[
+      {lbl:'Dificultad',val:'⅕'},
+      {lbl:'Vida',val:'100'},
+      {lbl:'Velocidad normal',val:'14.9 u/s'},
+      {lbl:'Velocidad sprint',val:'25.7 u/s'},
+      {lbl:'Stamina total',val:'100'},
+      {lbl:'Stamina pérdida/seg',val:'10'},
+      {lbl:'Stamina ganada/seg',val:'20'},
+    ],
+    statsDetail:[
+      {lbl:'── Q BLOXY COLA ──',val:''},
+      {lbl:'Duración efecto',val:'8s'},
+      {lbl:'CD',val:'40s'},
+      {lbl:'── E SLATE SKIN ──',val:''},
+      {lbl:'Escudo HP',val:'45'},
+      {lbl:'Duración',val:'6s'},
+      {lbl:'CD',val:'30s'},
+      {lbl:'── R GHOST BURGER ──',val:''},
+      {lbl:'Duración invisibilidad',val:'10s'},
+      {lbl:'CD',val:'45s'},
+    ],
+    abilities:[{key:'Q',desc:'Bloxy Cola — Bebe una cola que aumenta tu velocidad temporalmente (Velocidad II por 8s, Velocidad I en LMS). CD: 40s.'},{key:'E',desc:'Slate Skin — Toma una poción que genera un escudo de 45 HP por 6s. Si aguanta hasta expirar: Velocidad II por 2s. CD: 30s.'},{key:'R',desc:'Ghost Burger — Come una hamburguesa que te vuelve casi invisible e indetectable por 10s. CD: 45s.'}],
     skins:[] },
   { id:'amaxge5', name:'AMAXGE5', price:500, free:false, icon:'🔨', author:'AMaxGe5',
     tagline:'Support. Protege a los demás y no se rinde jamás.',
     stats:[
-      {lbl:'DIFICULTAD',val:55},
-      {lbl:'VIDA',val:30},
-      {lbl:'VELOCIDAD',val:70},
-      {lbl:'STAMINA',val:80},
-      {lbl:'SOPORTE',val:95}
+      {lbl:'Dificultad',val:'⅘'},
+      {lbl:'Vida',val:'90'},
+      {lbl:'Velocidad normal',val:'14.9 u/s'},
+      {lbl:'Velocidad sprint',val:'25.7 u/s'},
+      {lbl:'Stamina total',val:'100'},
+      {lbl:'Stamina pérdida/seg',val:'10'},
+      {lbl:'Stamina ganada/seg',val:'20'},
     ],
     statsDetail:[
-      {lbl:'Tipo',val:'Support'},
-      {lbl:'Vida',val:'90'},
-      {lbl:'Velocidad normal',val:'igual a NOOB'},
-      {lbl:'Stamina total',val:'igual a NOOB'}
+      {lbl:'── Q TORRETA ──',val:''},
+      {lbl:'Tiempo construcción',val:'4.8s (quieto)'},
+      {lbl:'Rango',val:'12 studs'},
+      {lbl:'Cadencia de fuego',val:'cada 2s'},
+      {lbl:'CD',val:'35s'},
+      {lbl:'── E LORE DE FNAF ──',val:''},
+      {lbl:'Curación',val:'6 HP/seg (30 HP total)'},
+      {lbl:'Radio curación aliados',val:'6 tiles'},
+      {lbl:'Duración',val:'5s'},
+      {lbl:'CD',val:'20s'},
+      {lbl:'── R ESCUDITO ──',val:''},
+      {lbl:'Invulnerabilidad',val:'2.5s (LMS: 1s)'},
+      {lbl:'Stun contraataque',val:'2s'},
+      {lbl:'CD',val:'45s'},
     ],
     abilities:[
-      {key:'Q',desc:'Referencia?????!!!!! — Se queda quieto 5s construyendo una torreta de guisantes que dispara cada 2s a 40 studs. Si ya existe una, la destruye y construye una nueva en el sitio actual. Cada 3s se gira hacia el asesino para detectarlo. Si impacta: Blindness I por 0.8s + efecto "Revelado" (supervivientes lo ven) por 5s. Si hay más de un AMaxGE5 en partida, el rango se reduce un 20% por cada uno adicional. CD: 40s.'},
-      {key:'E',desc:'Lore de Fnaf — Saca un libro y genera una zona de curación de 6 HP/seg (30 HP total en 5s). Cura también a supervivientes aliados en un radio de 6 tiles. Máximo 5s por cooldown. Durante la curación AMaxGE5 no puede moverse y queda marcado para el killer y supervivientes. Si cura al menos 3s, desbloquea 1 uso de Escudito para siempre. CD: 20s.'},
-      {key:'R',desc:'Escudito para siempre — Solo disponible tras usar Lore de Fnaf con éxito. Usa el martillo como escudo: invulnerable 2.5s. Si el asesino golpea durante el escudo: contraataque automático que aleja 5 studs y stunea 2s. Si nadie ataca durante el escudo: Lentitud II por 3s y Mareo I por 2s. En LMS: invulnerabilidad reducida a 1s. CD: 45s.'}
+      {key:'Q',desc:'Referencia?????!!!!! — Se queda quieto 4.8s construyendo una torreta de guisantes que dispara cada 2s a 12 studs. Si ya existe una, la destruye. Cada 3s se gira hacia el asesino. Si impacta: Blindness I por 0.8s + Revelado 5s. CD: 35s.'},
+      {key:'E',desc:'Lore de Fnaf — Genera zona de curación de 6 HP/seg (30 HP total). Cura aliados en 6 tiles. 5s máx. No puede moverse y queda marcado. Si cura al menos 3s desbloquea Escudito. CD: 20s.'},
+      {key:'R',desc:'Escudito para siempre — Solo tras usar E con éxito. Escudo: invulnerable 2.5s. Si el killer golpea: lo aleja 5 studs y stunea 2s. Si nadie ataca: Lentitud II 3s + Mareo 2s al killer. LMS: 1s. CD: 45s.'}
     ],
     lore:'Alejandro estaba en su casa después de la piscina, listo para estudiar francés para su examen. De pronto, un fuerte dolor de cabeza lo interrumpió y no lo dejó concentrarse. Cansado, decidió recostarse y se quedó dormido. Al despertar, sintió que algo no estaba bien, como si el ambiente hubiera cambiado. Se levantó lentamente y, sin saber por qué, tomó un martillo cerca de su cuarto. Al salir, ya no estaba en su mundo, sino en un lugar extraño y oscuro. Allí encontró a otros supervivientes igual de confundidos. A pesar del miedo, Alejandro se mantuvo positivo y animó al grupo. Desde ese momento, decidió proteger a los demás y no rendirse.',
     skins:[] },
   { id:'mankspe', name:'MANKSPE', price:500, free:false, icon:'🃏', author:'Mankspe',
     tagline:'El superviviente que nunca es su culpa. Siempre.',
     stats:[
-      {lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}
+      {lbl:'Dificultad',val:'⅗'},
+      {lbl:'Vida',val:'100'},
+      {lbl:'Velocidad normal',val:'14.9 u/s'},
+      {lbl:'Velocidad sprint',val:'25.7 u/s'},
+      {lbl:'Stamina total',val:'100'},
+      {lbl:'Stamina pérdida/seg',val:'10'},
+      {lbl:'Stamina ganada/seg',val:'20'},
     ],
     statsDetail:[
-      {lbl:'Tipo',val:'Evasivo'},
-      {lbl:'Vida',val:'igual a NOOB'},
-      {lbl:'Velocidad normal',val:'igual a NOOB'},
-      {lbl:'Stamina total',val:'igual a NOOB'}
+      {lbl:'── Q NO ES MI CULPA ──',val:''},
+      {lbl:'Distancia dash',val:'9 studs'},
+      {lbl:'Stamina costo',val:'10'},
+      {lbl:'Velocidad I si atraviesa',val:'5s'},
+      {lbl:'CD',val:'25s'},
+      {lbl:'── E TENÍA QUE SER NEGRO ──',val:''},
+      {lbl:'Velocidad III',val:'3s'},
+      {lbl:'Descanso tras efecto',val:'1s sin moverse'},
+      {lbl:'CD',val:'30s'},
+      {lbl:'── R PAN CON SAL ──',val:''},
+      {lbl:'Invisibilidad',val:'completa (pisadas visibles)'},
+      {lbl:'Duración',val:'6s'},
+      {lbl:'CD',val:'38s'},
     ],
     abilities:[
-      {key:'Q',desc:'No es mi culpa — Hace un sprint rápido avanzando 9 studs en la dirección que mira. Si atraviesa al enemigo, le da Velocidad I por 5 segundos. CD: 25s.'},
-      {key:'E',desc:'Tenia que ser negro — Obtiene Velocidad III por 3 segundos. Durante este estado no puede recargar stamina. Al terminar, descansa quieto 1 segundo sin poder moverse. CD: 30s.'},
-      {key:'R',desc:'Pan con Sal — Matias se come un pan con sal y se vuelve indetectable y completamente invisible, pero sus pisadas se ven en el suelo. CD: 38s.'}
+      {key:'Q',desc:'No es mi culpa — Dash de 9 studs hacia donde mira. Cuesta 10 stamina. Si atraviesa al killer: Velocidad I por 5s. CD: 25s.'},
+      {key:'E',desc:'Tenía que ser negro — Velocidad III por 3s. Sin recarga de stamina durante el efecto. Al terminar: 1s sin poder moverse. CD: 30s.'},
+      {key:'R',desc:'Pan con Sal — Se vuelve completamente invisible e indetectable. Sus pisadas siguen siendo visibles en el suelo. Dura 6s. CD: 38s.'}
     ],
     lore:'Mankspe era un niñito fracasado que se la pasaba jugando "Balatro" gastando el tiempo de su vida pasando de nivel en nivel, mientras su perro Cosmo lo miraba con una cara de genuina decepción. Por ello, su perro buscó a un mago llamado "José Carlos Milla de la Torre", quien le dio una pócima que se suponía le quitaría sus vicios. Esa misma noche, Cosmo se la puso en su comida, lo que causó que a Matias le diera un ataque y terminara siendo transportado a otra dimensión.',
     skins:[] },
   { id:'martin', name:'MARTIN', price:650, free:false, icon:'🤡', author:'Martin',
     tagline:'Poyoooos — centinela del caos.',
     stats:[
-      {lbl:'VELOCIDAD',val:70},{lbl:'STAMINA',val:80},{lbl:'RESISTENCIA',val:65}
+      {lbl:'Dificultad',val:'⅗'},
+      {lbl:'Vida',val:'100'},
+      {lbl:'Velocidad normal',val:'14.9 u/s'},
+      {lbl:'Velocidad sprint',val:'25.7 u/s'},
+      {lbl:'Stamina total',val:'100'},
+      {lbl:'Stamina pérdida/seg',val:'10'},
+      {lbl:'Stamina ganada/seg',val:'20'},
     ],
     statsDetail:[
-      {lbl:'Tipo',val:'Control / Soporte'},
-      {lbl:'Vida',val:'igual a NOOB'},
-      {lbl:'Velocidad normal',val:'igual a NOOB'},
-      {lbl:'Stamina total',val:'igual a NOOB'}
+      {lbl:'── Q DAWN ──',val:''},
+      {lbl:'Lentitud killer al pisar',val:'III + HELPLESS 1s'},
+      {lbl:'CD',val:'18s'},
+      {lbl:'Expiración trampa',val:'15s'},
+      {lbl:'── E BLIPI ──',val:''},
+      {lbl:'Revelado killer',val:'5s'},
+      {lbl:'Lentitud killer',val:'II por 8s'},
+      {lbl:'Campo de fuerza Martín',val:'2s'},
+      {lbl:'Curación al activar',val:'10 HP'},
+      {lbl:'CD',val:'35s'},
     ],
     abilities:[
-      {key:'Q',desc:'DAWN — Lanza un plátano trampa. Si el killer lo pisa: Lentitud III + HELPLESS 1s (bloquea habilidades). Solo puede haber uno en campo; colocar otro elimina el anterior. CD: 30s.'},
-      {key:'E',desc:'BLIPI — Si el killer está cerca en la dirección que mira: lo revela para todos 5s, Lentitud II 4s, Campo de Fuerza 2s para Martín, distracciones visuales 🤡 en la pantalla del killer (5×) y zona de impacto expandiéndose. CD: 20s.'}
+      {key:'Q',desc:'DAWN — Lanza un plátano trampa. Si el killer lo pisa: Lentitud III + HELPLESS 1.5s (bloquea M1 y todas las habilidades). Solo puede haber uno en campo. CD: 18s, expira en 15s.'},
+      {key:'E',desc:'BLIPI — Si el killer está cerca: lo revela 5s, Lentitud II 8s, Campo de Fuerza 2s para Martín, +10 HP, distracciones visuales 🤡 en pantalla del killer. CD: 35s.'}
     ],
     lore:'Lore próximamente...',
     skins:[] }
