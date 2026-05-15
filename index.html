@@ -747,6 +747,30 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 }
 .store-detail-author{font-size:.55rem;letter-spacing:.15em;color:rgba(255,255,255,.35);margin-bottom:8px;}
 .store-detail-tagline{font-size:.62rem;letter-spacing:.1em;color:rgba(255,255,255,.6);margin-bottom:14px;line-height:1.6;}
+/* ── LEVEL UP NOTIFICATION ── */
+#levelUpNotif{
+  position:fixed;top:18px;right:18px;z-index:99999;
+  background:linear-gradient(135deg,rgba(10,5,15,.97) 0%,rgba(25,10,10,.97) 100%);
+  border:1.5px solid rgba(192,57,43,.7);
+  padding:12px 20px 12px 16px;
+  min-width:230px;max-width:300px;
+  display:flex;align-items:center;gap:12px;
+  opacity:0;transform:translateX(60px);
+  transition:opacity .35s ease,transform .35s ease;
+  pointer-events:none;
+}
+#levelUpNotif.show{opacity:1;transform:translateX(0);}
+.lvlup-icon{font-size:2rem;line-height:1;flex-shrink:0;}
+.lvlup-text{display:flex;flex-direction:column;gap:2px;}
+.lvlup-title{font-family:'Oswald',sans-serif;font-size:.95rem;letter-spacing:.18em;color:#e8c26a;text-transform:uppercase;}
+.lvlup-sub{font-size:.62rem;letter-spacing:.12em;color:rgba(255,255,255,.55);}
+/* ── XP BAR in inventory detail ── */
+.inv-xp-wrap{margin:6px 0 10px;}
+.inv-xp-level{font-family:'Oswald',sans-serif;font-size:.78rem;letter-spacing:.15em;color:rgba(255,255,255,.75);margin-bottom:4px;}
+.inv-xp-bar{width:100%;height:5px;background:rgba(255,255,255,.08);}
+.inv-xp-fill{height:100%;background:linear-gradient(90deg,#c0392b,#e8c26a);transition:width .4s ease;}
+.inv-xp-nums{font-size:.55rem;letter-spacing:.1em;color:rgba(255,255,255,.35);margin-top:3px;}
+.store-card-level{font-size:.5rem;letter-spacing:.12em;color:rgba(255,255,255,.4);margin-top:1px;}
 .store-detail-btns{display:flex;gap:8px;margin-bottom:14px;}
 .store-detail-btn{
   flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.15);
@@ -1210,6 +1234,11 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
               <div class="store-detail-name" id="invDetailName">—</div>
               <div class="store-detail-author" id="invDetailAuthor"></div>
               <div class="store-detail-tagline" id="invDetailTagline"></div>
+              <div class="inv-xp-wrap" id="invXpWrap">
+                <div class="inv-xp-level" id="invXpLevel">Level 0</div>
+                <div class="inv-xp-bar"><div class="inv-xp-fill" id="invXpFill" style="width:0%"></div></div>
+                <div class="inv-xp-nums" id="invXpNums">0 / 50 XP</div>
+              </div>
               <div class="store-detail-btns">
                 <div class="store-detail-btn" onclick="Inventory.showLeftInfo()">📖 STATS</div>
                 <div class="store-detail-btn" onclick="Inventory.showLeftSkins()">👕 MIS SKINS</div>
@@ -1779,7 +1808,7 @@ const Auth={
       const exists=await PersistDB.usernameExists(userKey);
       if(exists){this.msg('Ese usuario ya existe — inicia sesión');return;}
       // Crear nueva cuenta
-      const newAcc={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false};
+      const newAcc={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false,charXP:{},charLevel:{}};
       this.msg('☁ Guardando cuenta en la nube...',true);
       await PersistDB.saveUser(userKey,newAcc);
       Stats.load(userKey);
@@ -1859,6 +1888,8 @@ const Stats={
     this.equippedSurvivor=acc.equippedSurvivor||'';
     this.hitboxPref=acc.hitboxPref||false;
     this.redeemedCodes=acc.redeemedCodes||[];
+    this.charXP=acc.charXP||{};
+    this.charLevel=acc.charLevel||{};
   },
   save(){
     if(!this._key)return;
@@ -1878,6 +1909,8 @@ const Stats={
     db[this._key].equippedSurvivor=this.equippedSurvivor||'';
     db[this._key].hitboxPref=this.hitboxPref||false;
     db[this._key].redeemedCodes=this.redeemedCodes||[];
+    db[this._key].charXP=this.charXP||{};
+    db[this._key].charLevel=this.charLevel||{};
     // Guardar en Firebase (async, no bloquea)
     PersistDB.saveUser(this._key, db[this._key]);
   },
@@ -2088,6 +2121,8 @@ const SaveFile = {
           Stats.equippedSurvivor= d.equippedSurvivor|| '';
           Stats.hitboxPref      = d.hitboxPref      || false;
           Stats.redeemedCodes   = d.redeemedCodes   || [];
+          Stats.charXP          = d.charXP          || {};
+          Stats.charLevel       = d.charLevel       || {};
           // Sincronizar con localStorage
           const acc = {user:d.user, pass:'', ...d};
           const loc = JSON.parse(localStorage.getItem('fsk_users')||'{}');
@@ -2177,13 +2212,17 @@ const MART_E_CD = 35;              // E: BLIPI — risa de payaso (35s)
 const MART_E_RANGE = TILE * 5;     // rango de detección del killer
 const MART_E_REVEAL_DUR = 5;       // killer revelado para supervivientes
 const MART_E_SLOW_DUR = 8;         // lentitud I al killer por 8s
-const MART_E_SPEED_DUR = 5;        // velocidad I para Martín por 5s
-const MART_E_HEAL = 10;            // curación al activar E
-const MART_E_SHIELD_DUR = 2;       // campo de fuerza para Martín
+const MART_E_SPEED_DUR = 6;        // velocidad I para Martín por 6s
+const MART_E_HEAL = 0;             // curación instantánea desactivada (usa regen)
+const MART_E_SHIELD_DUR = 1;       // campo de fuerza base (siempre): 1s
+const MART_E_SHIELD_HIT_DUR = 2;   // campo de fuerza si conecta: 2s
+const MART_E_REGEN_TICK = 2;       // HP regenerados por tick
+const MART_E_REGEN_INTERVAL = 1.5; // segundos entre ticks
+const MART_E_REGEN_MAX = 10;       // HP máximo a regenerar en total
 const MART_E_DISTRACT_COUNT = 4;   // 4 apariciones de payasos
-const MART_E_DISTRACT_INTERVAL = 0.6; // (legacy — usado por martEDistract del survivor)
+const MART_E_DISTRACT_INTERVAL = 0.7; // (legacy — usado por martEDistract del survivor)
 const MART_E_DISTRACT_FLASH_ON  = 3.0; // segundos visible cada aparición de payasos
-const MART_E_DISTRACT_FLASH_OFF = 0.6; // segundos oculto entre apariciones
+const MART_E_DISTRACT_FLASH_OFF = 0.7; // segundos oculto entre apariciones
 
 const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
 // Hitbox frontal de la risa (idéntico al M1 del Slasher en tamaño y posición)
@@ -4331,6 +4370,8 @@ function applyShieldDamage(s, dmg){
   // Martin force field: bloquea todo daño
   if(isMartin&&isMartin(s)&&s.martEShieldActive)return;
   if(!s||!s.alive)return;
+  // Cancelar regen de Martin si recibe daño
+  if(isMartin&&isMartin(s)&&s.martERegenActive){s.martERegenActive=false;s.martERegenTotal=0;}
   if((s.ssShield||0)>0&&s.ssActive){
     const absorbed=Math.min(s.ssShield,dmg);
     s.ssShield=Math.max(0,s.ssShield-dmg);
@@ -4810,6 +4851,18 @@ const Game={
             if(p.martESpeedActive){
               p.martESpeedTimer=Math.max(0,(p.martESpeedTimer||0)-dt);
               if(p.martESpeedTimer<=0)p.martESpeedActive=false;
+            }
+            // Martin BLIPI regen: 2hp cada 1.5s hasta 10hp total, cancela si recibe daño
+            if(p.martERegenActive){
+              p.martERegenTickTimer=Math.max(0,(p.martERegenTickTimer||0)-dt);
+              if(p.martERegenTickTimer<=0){
+                p.martERegenTickTimer=MART_E_REGEN_INTERVAL;
+                const healed=Math.min(MART_E_REGEN_TICK, (p.maxHp||SHP)-p.hp, MART_E_REGEN_MAX-(p.martERegenTotal||0));
+                if(healed>0){p.hp=Math.min(p.maxHp||SHP,p.hp+healed);p.martERegenTotal=(p.martERegenTotal||0)+healed;}
+                if((p.martERegenTotal||0)>=MART_E_REGEN_MAX||(p.maxHp||SHP)-p.hp<=0){
+                  p.martERegenActive=false;p.martERegenTotal=0;
+                }
+              }
             }
             // E visual distraction countdown (sent to killer via state)
             if(p.martEDistractActive){
@@ -5675,6 +5728,8 @@ const Game={
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martECd>0)return;
     p.martECd=MART_E_CD;
+    // Escudo base: siempre al usar BLIPI (1s)
+    p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
     let hitConnected=false;
     const doHit=(hitIdx)=>{
       if(!p||!p.alive)return;
@@ -5694,9 +5749,11 @@ const Game={
         // ── Hit conectado — aplicar efectos ──
         kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
         kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
-        p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
+        // Escudo mejorado: 2s (sobreescribe el base de 1s)
+        p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_HIT_DUR;
         p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
-        p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
+        // Iniciar regen: 2hp cada 1.5s hasta 10hp total
+        p.martERegenActive=true;p.martERegenTotal=0;p.martERegenTickTimer=MART_E_REGEN_INTERVAL;
         kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractFlashOn=true;kk.martDistractTimer=MART_E_DISTRACT_FLASH_ON;
         kk.martEBigDistract=true;kk.martEBigDistractTimer=MART_E_DISTRACT_FADE;
         p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
@@ -6106,6 +6163,7 @@ const Game={
         martQCd:p.martQCd||0,martBananas:p.martBananas||[],
         martECd:p.martECd||0,martEShieldActive:p.martEShieldActive||false,martEShieldTimer:p.martEShieldTimer||0,
         martESpeedActive:p.martESpeedActive||false,martESpeedTimer:p.martESpeedTimer||0,
+        martERegenActive:p.martERegenActive||false,martERegenTotal:p.martERegenTotal||0,martERegenTickTimer:p.martERegenTickTimer||0,
         martEDistractActive:p.martEDistractActive||false,martEDistractCount:p.martEDistractCount||0,martEDistractTimer:p.martEDistractTimer||0,
         martEZoneActive:p.martEZoneActive||false,martEZoneTimer:p.martEZoneTimer||0,martEZoneX:p.martEZoneX||0,martEZoneY:p.martEZoneY||0,
         martHelpless:p.martHelpless||false,martHelplessTimer:p.martHelplessTimer||0,
@@ -6206,6 +6264,7 @@ const Game={
           p.martQCd=d.martQCd||0;p.martBananas=d.martBananas||[];
           p.martECd=d.martECd||0;p.martEShieldActive=d.martEShieldActive||false;p.martEShieldTimer=d.martEShieldTimer||0;
           p.martESpeedActive=d.martESpeedActive||false;p.martESpeedTimer=d.martESpeedTimer||0;
+          p.martERegenActive=d.martERegenActive||false;p.martERegenTotal=d.martERegenTotal||0;p.martERegenTickTimer=d.martERegenTickTimer||0;
           p.martEDistractActive=d.martEDistractActive||false;p.martEDistractCount=d.martEDistractCount||0;p.martEDistractTimer=d.martEDistractTimer||0;
           p.martEZoneActive=d.martEZoneActive||false;p.martEZoneTimer=d.martEZoneTimer||0;p.martEZoneX=d.martEZoneX||0;p.martEZoneY=d.martEZoneY||0;
           p.martHelpless=d.martHelpless||false;p.martHelplessTimer=d.martHelplessTimer||0;
@@ -8952,6 +9011,79 @@ const Shop={
 };
 
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  XP & LEVEL SYSTEM
+// ══════════════════════════════════════════
+const XP = {
+  // XP requerida para pasar del nivel N al N+1
+  // Keyframes: lvl→xpNeeded  (1:50, 10:200, 20:300, 30:400, 40:500, 50:600, 60:700, 70:800, 80:900, 90:1000, 100:1250)
+  // Interpolación lineal entre keyframes
+  _keyframes:[
+    [0,50],[1,50],[10,200],[20,300],[30,400],[40,500],
+    [50,600],[60,700],[70,800],[80,900],[90,1000],[100,1250]
+  ],
+
+  xpForLevel(lvl){
+    if(lvl>=100)return 1250;
+    const kf=this._keyframes;
+    for(let i=0;i<kf.length-1;i++){
+      const [l0,x0]=kf[i],[l1,x1]=kf[i+1];
+      if(lvl>=l0&&lvl<l1){
+        const t=(lvl-l0)/(l1-l0);
+        return Math.round(x0+(x1-x0)*t);
+      }
+    }
+    return 50;
+  },
+
+  // Obtener nivel y xp actual de un personaje
+  getCharData(charId){
+    const xpMap=Stats.charXP||{};
+    const lvMap=Stats.charLevel||{};
+    return {xp:xpMap[charId]||0, level:lvMap[charId]||0};
+  },
+
+  // Otorgar XP a un personaje — retorna true si subió de nivel
+  grant(charId, amount){
+    if(!Stats._key)return;
+    if(!Stats.charXP)Stats.charXP={};
+    if(!Stats.charLevel)Stats.charLevel={};
+    let xp=Stats.charXP[charId]||0;
+    let lvl=Stats.charLevel[charId]||0;
+    if(lvl>=100)return;
+    xp+=amount;
+    let leveledUp=false;
+    while(lvl<100){
+      const needed=this.xpForLevel(lvl);
+      if(xp>=needed){xp-=needed;lvl++;leveledUp=true;}
+      else break;
+    }
+    Stats.charXP[charId]=xp;
+    Stats.charLevel[charId]=lvl;
+    Stats.save();
+    if(leveledUp)this._showNotif(charId,lvl);
+    // Si el inventario está abierto y tiene este char seleccionado, actualizar XP bar
+    if(Inventory._selected===charId)Inventory._updateXpBar(charId);
+    return leveledUp;
+  },
+
+  // Notificación top-right
+  _notifTimer:null,
+  _showNotif(charId,newLevel){
+    // Buscar nombre del personaje
+    const all=[...STORE_KILLERS,...STORE_SURVIVORS];
+    const c=all.find(x=>x.id===charId);
+    const name=c?c.name:charId.toUpperCase();
+    const el=document.getElementById('levelUpNotif');
+    if(!el)return;
+    document.getElementById('levelUpTitle').textContent=`¡${name} subió de nivel!`;
+    document.getElementById('levelUpSub').textContent=`Level ${newLevel-1} → Level ${newLevel}`;
+    el.classList.add('show');
+    if(this._notifTimer)clearTimeout(this._notifTimer);
+    this._notifTimer=setTimeout(()=>{el.classList.remove('show');},3500);
+  },
+};
+
 //  INVENTORY
 // ══════════════════════════════════════════
 const Inventory={
@@ -9012,6 +9144,7 @@ const Inventory={
     }
     list.forEach(c=>{
       const isEquipped=equipped===c.id;
+      const {level}=XP.getCharData(c.id);
       const card=document.createElement('div');
       card.className='store-card'+(this._selected===c.id?' selected':'');
       card.innerHTML=`
@@ -9020,6 +9153,7 @@ const Inventory={
           <span style="position:relative;z-index:1">${c.icon||'🗡'}</span>
         </div>
         <div class="store-card-name">${c.name}</div>
+        <div class="store-card-level">Level ${level}</div>
         <div class="store-card-price owned">${isEquipped?'EQUIPADO':'OBTENIDO'}</div>
         ${isEquipped?'<div class="store-card-equipped-badge">✓ EQUIPADO</div>':''}
       `;
@@ -9041,6 +9175,7 @@ const Inventory={
     document.getElementById('invDetailName').textContent=c.name;
     document.getElementById('invDetailAuthor').textContent='Made By: '+(c.author||'Forsaken');
     document.getElementById('invDetailTagline').textContent=c.tagline||'';
+    this._updateXpBar(id);
     // Pre-build stats/abilities/lore/skins in hidden divs for showLeftInfo/showLeftSkins
     const sr=document.getElementById('invStatsRows');sr.innerHTML='';
     (c.stats||[]).forEach(s=>{
@@ -9164,6 +9299,19 @@ const Inventory={
     document.getElementById('invSkinsView').style.display='flex';
   },
 
+  _updateXpBar(charId){
+    const {xp,level}=XP.getCharData(charId);
+    const needed=XP.xpForLevel(level);
+    const pct=level>=100?100:Math.min(100,(xp/needed)*100);
+    const lvlEl=document.getElementById('invXpLevel');
+    const fillEl=document.getElementById('invXpFill');
+    const numsEl=document.getElementById('invXpNums');
+    if(!lvlEl)return;
+    lvlEl.textContent=`Level ${level}`;
+    fillEl.style.width=pct+'%';
+    numsEl.textContent=level>=100?`MAX LEVEL`:`${xp} / ${needed} XP`;
+  },
+
   toggleStats(){this.showLeftInfo();},
   toggleSkins(){this.showLeftSkins();},
 
@@ -9275,5 +9423,13 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
   });
 })();
 </script>
+<!-- Level Up Notification -->
+<div id="levelUpNotif">
+  <div class="lvlup-icon">⬆️</div>
+  <div class="lvlup-text">
+    <div class="lvlup-title" id="levelUpTitle">¡Subiste de nivel!</div>
+    <div class="lvlup-sub" id="levelUpSub">Level 1 → Level 2</div>
+  </div>
+</div>
 </body>
 </html>
