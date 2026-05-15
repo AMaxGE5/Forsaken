@@ -5879,11 +5879,11 @@ const Game={
     const p=W.players[pid];if(!p||!p.alive||p.role!=='survivor')return;
     if(pid!==S.myId)return; // solo el jugador local abre su propio UI
     // Si el puzzle ya está abierto, cerrarlo
-    if(GenPuzzle.isOpen()){GenPuzzle.close();return;}
+    if(typeof GenPuzzle!=='undefined'&&GenPuzzle.isOpen()){GenPuzzle.close();return;}
     for(const g of W.gens){
       if(g.on)continue;
       if(dst(p,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6){
-        GenPuzzle.open(g.id);
+        if(typeof GenPuzzle!=='undefined')GenPuzzle.open(g.id);
         return;
       }
     }
@@ -9426,7 +9426,7 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
 })();
 </script>
 <!-- Generator Flow Free Puzzle Modal -->
-<div id="genPuzzleModal" style="display:none;position:fixed;inset:0;z-index:88888;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;">
+<div id="genPuzzleModal" style="display:none;position:fixed;inset:0;z-index:88888;background:rgba(0,0,0,.82);align-items:center;justify-content:center;flex-direction:column;gap:14px;">
   <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:.18em;color:rgba(255,255,255,.5);text-align:center;line-height:1.8;max-width:480px;">
     Conecta todos los puntos del mismo color para completar el puzzle.<br>
     Completar cuatro puzzles arreglará el generador.<br>
