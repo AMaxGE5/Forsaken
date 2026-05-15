@@ -1232,7 +1232,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
             </div>
             <div class="store-detail-info">
               <div class="store-detail-name" id="invDetailName">—</div>
-              <div class="store-detail-author" id="invDetailAuthor"></div>
+              
               <div class="inv-xp-wrap" id="invXpWrap">
                 <div class="inv-xp-level" id="invXpLevel">Level 0</div>
                 <div class="inv-xp-bar"><div class="inv-xp-fill" id="invXpFill" style="width:0%"></div></div>
@@ -4268,6 +4268,15 @@ const Net={
     } else if(d.t==='maliciaGen'){
       // +1 malicia for the survivor who completed the generator
       if(d.pid===S.myId)Stats.addMalicia(1);
+    } else if(d.t==='genDone'){
+      // Otro jugador completó el generador — sincronizar estado
+      if(W.gens){
+        const g=W.gens.find(x=>x.id===d.genId);
+        if(g){g.prog=100;g.on=true;}
+      }
+    } else if(d.t==='genLayerDone'){
+      // Otro jugador completó una capa — reducir tiempo
+      if(W.time)W.time=Math.max(1,W.time-3);
     }
   },
 
@@ -5320,22 +5329,8 @@ const Game={
           }
         }); // end forEach players (timers)
 
-        Object.values(W.players).forEach(p=>{
-          if(!p.alive||p.role!=='survivor'||!p.interacting)return;
-          const g=W.gens.find(x=>x.id===p.interactTarget&&!x.on);
-          if(!g){p.interacting=false;p.interactTarget=null;return;}
-          const holding=p.id===S.myId?Inp.f:!!(p.inp&&p.inp.f);
-          if(!holding){p.interacting=false;p.interactTarget=null;return;}
-          g.prog+=dt*(100/INTERACT_SEC);
-          if(g.prog>=100){
-            g.prog=100;g.on=true;p.interacting=false;p.interactTarget=null;
-            if(!S.lms)W.time=Math.max(1,W.time-GEN_TIME_BONUS);
-            if(W.gens.every(g=>g.on)){/* all gens done — sin salida */}
-            // +1 malicia al superviviente que completó el generador
-            Net.broadcast({t:'maliciaGen',pid:p.id});
-            if(p.id===S.myId)Stats.addMalicia(1);
-          }
-        });
+        // Generator progress now handled by Flow Free puzzle (GenPuzzle)
+        // Old hold-F system removed
 
         if(!S.lms){
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
@@ -5433,6 +5428,8 @@ const Game={
     if(inp['d']||inp['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     const moving=dx!==0||dy!==0;
+    // Moverse cierra el puzzle Flow Free
+    if(moving&&pid===S.myId&&typeof GenPuzzle!=='undefined'&&GenPuzzle.isOpen()){GenPuzzle.close();}
     const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking&&!p.gbEating;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
@@ -5878,12 +5875,17 @@ const Game={
   },
 
   doActionF(pid){
-    // F key: reparar generador
+    // F key: abrir puzzle Flow Free del generador
     const p=W.players[pid];if(!p||!p.alive||p.role!=='survivor')return;
-    if(p.interacting){p.interacting=false;p.interactTarget=null;return;}
+    if(pid!==S.myId)return; // solo el jugador local abre su propio UI
+    // Si el puzzle ya está abierto, cerrarlo
+    if(GenPuzzle.isOpen()){GenPuzzle.close();return;}
     for(const g of W.gens){
       if(g.on)continue;
-      if(dst(p,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6){p.interacting=true;p.interactTarget=g.id;return;}
+      if(dst(p,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6){
+        GenPuzzle.open(g.id);
+        return;
+      }
     }
   },
 
@@ -9173,7 +9175,7 @@ const Inventory={
     const det=document.getElementById('invDetail');det.classList.add('show');
     document.getElementById('invDetailIcon').textContent=c.icon||'🗡';
     document.getElementById('invDetailName').textContent=c.name;
-    document.getElementById('invDetailAuthor').textContent='Made By: '+(c.author||'Forsaken');
+    
     document.getElementById('invDetailTagline').textContent=c.tagline||'';
     this._updateXpBar(id);
     // Pre-build stats/abilities/lore/skins in hidden divs for showLeftInfo/showLeftSkins
@@ -9423,7 +9425,417 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
   });
 })();
 </script>
-<!-- Level Up Notification -->
+<!-- Generator Flow Free Puzzle Modal -->
+<div id="genPuzzleModal" style="display:none;position:fixed;inset:0;z-index:88888;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;">
+  <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:.18em;color:rgba(255,255,255,.5);text-align:center;line-height:1.8;max-width:480px;">
+    Conecta todos los puntos del mismo color para completar el puzzle.<br>
+    Completar cuatro puzzles arreglará el generador.<br>
+    <span style="color:rgba(255,255,255,.3);">Muévete para salir del puzzle.</span>
+  </div>
+  <!-- Layer progress bar -->
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.4);font-family:'Share Tech Mono',monospace;">GENERADOR</span>
+    <div style="width:180px;height:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);">
+      <div id="genLayerBar" style="height:100%;background:linear-gradient(90deg,#00aa33,#00ff66);width:0%;transition:width .4s ease;"></div>
+    </div>
+    <span id="genLayerLabel" style="font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.4);font-family:'Share Tech Mono',monospace;">0/4</span>
+  </div>
+  <!-- 6x6 grid canvas -->
+  <canvas id="genPuzzleCanvas" width="390" height="390" style="border:2px solid rgba(255,255,255,.15);background:#0a0a0a;cursor:pointer;touch-action:none;"></canvas>
+  <div id="genPuzzleStatus" style="font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.4);height:16px;"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  FLOW FREE GENERATOR PUZZLE SYSTEM
+// ══════════════════════════════════════════
+const GenPuzzle = (()=>{
+  const GRID = 6;
+  const CELL = 65; // px per cell
+  const PAD  = 0;
+  // Colors for up to 13 pairs — matches reference image style
+  const PAIR_COLORS = [
+    '#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db',
+    '#9b59b6','#e91e8c','#ff6b9d','#00bcd4','#ff5722',
+    '#8bc34a','#ff9800','#795548'
+  ];
+
+  let state = null; // current puzzle state
+
+  // ── Puzzle Generator ──
+  // Generates a solvable Flow Free puzzle on a 6x6 grid
+  function generatePuzzle(){
+    const numPairs = 4 + Math.floor(Math.random() * 5); // 4–8 pairs for 6x6
+    for(let attempt=0; attempt<200; attempt++){
+      const result = tryGenerate(numPairs);
+      if(result) return result;
+    }
+    return tryGenerate(3) || fallbackPuzzle();
+  }
+
+  function tryGenerate(numPairs){
+    const grid = Array.from({length:GRID},()=>Array(GRID).fill(0));
+    const pairs = [];
+    const used = new Set();
+    // Place pairs by random walking paths, then only keep endpoints
+    const paths = [];
+    for(let p=0; p<numPairs; p++){
+      const path = randomPath(grid, used);
+      if(!path || path.length < 2) return null;
+      const a = path[0], b = path[path.length-1];
+      pairs.push({id:p+1, color:PAIR_COLORS[p], a, b});
+      paths.push(path);
+      path.forEach(([r,c])=>used.add(r+','+c));
+    }
+    return {pairs, numPairs};
+  }
+
+  function randomPath(grid, used){
+    // Pick random free start
+    const free = [];
+    for(let r=0;r<GRID;r++) for(let c=0;c<GRID;c++) if(!used.has(r+','+c)) free.push([r,c]);
+    if(free.length < 2) return null;
+    const start = free[Math.floor(Math.random()*free.length)];
+    const path = [start];
+    const visitedInPath = new Set([start[0]+','+start[1]]);
+    const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+    const minLen = 2, maxLen = 8;
+    for(let step=0; step<maxLen; step++){
+      const [cr,cc] = path[path.length-1];
+      const neighbors = dirs.map(([dr,dc])=>[cr+dr,cc+dc])
+        .filter(([nr,nc])=>nr>=0&&nr<GRID&&nc>=0&&nc<GRID&&!used.has(nr+','+nc)&&!visitedInPath.has(nr+','+nc));
+      if(!neighbors.length) break;
+      const next = neighbors[Math.floor(Math.random()*neighbors.length)];
+      path.push(next);
+      visitedInPath.add(next[0]+','+next[1]);
+      if(path.length >= minLen && Math.random() < 0.35) break;
+    }
+    return path.length >= 2 ? path : null;
+  }
+
+  function fallbackPuzzle(){
+    // Hardcoded solvable 6x6 puzzle
+    return {
+      pairs:[
+        {id:1,color:PAIR_COLORS[0],a:[0,0],b:[5,5]},
+        {id:2,color:PAIR_COLORS[1],a:[0,5],b:[5,0]},
+        {id:3,color:PAIR_COLORS[2],a:[2,2],b:[3,3]},
+        {id:4,color:PAIR_COLORS[3],a:[0,2],b:[5,2]},
+      ],
+      numPairs:4
+    };
+  }
+
+  // ── Canvas Drawing ──
+  function draw(){
+    if(!state) return;
+    const cv = document.getElementById('genPuzzleCanvas');
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0,0,cv.width,cv.height);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,.07)';
+    ctx.lineWidth = 1;
+    for(let i=0;i<=GRID;i++){
+      ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,GRID*CELL);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(GRID*CELL,i*CELL);ctx.stroke();
+    }
+
+    // Draw completed paths
+    state.paths.forEach((path,pid)=>{
+      if(!path || path.length < 2) return;
+      const pair = state.puzzle.pairs[pid];
+      ctx.strokeStyle = pair.color;
+      ctx.lineWidth = 18;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      path.forEach(([r,c],i)=>{
+        const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+
+    // Draw active (being drawn) path
+    if(state.drawing !== null){
+      const pid = state.drawing;
+      const path = state.activePath;
+      if(path && path.length >= 2){
+        const pair = state.puzzle.pairs[pid];
+        ctx.strokeStyle = pair.color;
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        path.forEach(([r,c],i)=>{
+          const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Draw dot endpoints
+    state.puzzle.pairs.forEach((pair, pid)=>{
+      [pair.a, pair.b].forEach(([r,c])=>{
+        const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+        ctx.beginPath();
+        ctx.arc(x,y,CELL*0.38,0,Math.PI*2);
+        ctx.fillStyle = pair.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Number label
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.round(CELL*0.3)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pair.id, x, y);
+      });
+    });
+  }
+
+  // ── Input Handling ──
+  function cellFromEvent(e){
+    const cv = document.getElementById('genPuzzleCanvas');
+    const rect = cv.getBoundingClientRect();
+    const scaleX = cv.width / rect.width;
+    const scaleY = cv.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    const c = Math.floor(x / CELL);
+    const r = Math.floor(y / CELL);
+    if(r<0||r>=GRID||c<0||c>=GRID) return null;
+    return [r,c];
+  }
+
+  function pairAt(r,c){
+    if(!state) return -1;
+    return state.puzzle.pairs.findIndex(p=>
+      (p.a[0]===r&&p.a[1]===c)||(p.b[0]===r&&p.b[1]===c)
+    );
+  }
+
+  function pathContains(path, r, c){
+    return path && path.some(([pr,pc])=>pr===r&&pc===c);
+  }
+
+  function isAdjacentToLast(r,c){
+    if(!state.activePath || !state.activePath.length) return false;
+    const [lr,lc] = state.activePath[state.activePath.length-1];
+    return (Math.abs(r-lr)+Math.abs(c-lc))===1;
+  }
+
+  function cellOccupied(r,c){
+    // Check if cell is occupied by a completed path
+    for(let pid=0;pid<state.paths.length;pid++){
+      const path = state.paths[pid];
+      if(path && pathContains(path,r,c)){
+        // Don't block endpoints of same pair
+        const pair = state.puzzle.pairs[pid];
+        const isEndpoint = (pair.a[0]===r&&pair.a[1]===c)||(pair.b[0]===r&&pair.b[1]===c);
+        if(!isEndpoint) return {pid, isEndpoint:false};
+        return {pid, isEndpoint:true};
+      }
+    }
+    return null;
+  }
+
+  function onMouseDown(e){
+    if(!state) return;
+    const cell = cellFromEvent(e);
+    if(!cell) return;
+    const [r,c] = cell;
+    // Check if clicking on a dot endpoint → start drawing from there
+    const pid = pairAt(r,c);
+    if(pid >= 0){
+      // Clear existing path for this pair
+      state.paths[pid] = null;
+      state.completed[pid] = false;
+      state.drawing = pid;
+      state.activePath = [[r,c]];
+      draw(); return;
+    }
+    // Check if clicking on an existing path → reset that path
+    for(let i=0;i<state.paths.length;i++){
+      if(pathContains(state.paths[i],r,c)){
+        state.paths[i] = null;
+        state.completed[i] = false;
+        draw(); return;
+      }
+    }
+  }
+
+  function onMouseMove(e){
+    if(!state || state.drawing === null) return;
+    const cell = cellFromEvent(e);
+    if(!cell) return;
+    const [r,c] = cell;
+    const path = state.activePath;
+    if(!path || !path.length) return;
+
+    // If cell is already in activePath → retrace (move backwards)
+    const idx = path.findIndex(([pr,pc])=>pr===r&&pc===c);
+    if(idx >= 0){
+      state.activePath = path.slice(0, idx+1);
+      draw(); return;
+    }
+
+    // Must be adjacent to last cell
+    if(!isAdjacentToLast(r,c)) return;
+
+    // Check occupation
+    const occ = cellOccupied(r,c);
+    if(occ && !occ.isEndpoint) return; // blocked by another wire
+
+    // Check if hitting the matching endpoint → complete
+    const pid = state.drawing;
+    const pair = state.puzzle.pairs[pid];
+    const isMatchEnd = (pair.b[0]===r&&pair.b[1]===c) || (pair.a[0]===r&&pair.a[1]===c);
+    // Only complete if this is the OTHER endpoint (not the start)
+    const startCell = path[0];
+    const isStart = startCell[0]===r&&startCell[1]===c;
+    if(isMatchEnd && !isStart && path.length >= 1){
+      state.activePath.push([r,c]);
+      state.paths[pid] = [...state.activePath];
+      state.completed[pid] = true;
+      state.drawing = null;
+      state.activePath = [];
+      draw();
+      checkLayerComplete();
+      return;
+    }
+
+    // Block going to other pair's endpoint
+    const otherPid = pairAt(r,c);
+    if(otherPid >= 0 && otherPid !== pid) return;
+
+    state.activePath.push([r,c]);
+    draw();
+  }
+
+  function onMouseUp(){
+    if(!state || state.drawing === null) return;
+    // Abandon incomplete draw — don't save
+    state.drawing = null;
+    state.activePath = [];
+    draw();
+  }
+
+  function checkLayerComplete(){
+    if(!state) return;
+    const allDone = state.completed.every(Boolean);
+    if(allDone){
+      const label = document.getElementById('genLayerLabel');
+      const bar = document.getElementById('genLayerBar');
+      state.layer++;
+      const pct = (state.layer/4)*100;
+      if(bar) bar.style.width = pct+'%';
+      if(label) label.textContent = state.layer+'/4';
+      // Remove 3s from timer
+      if(typeof W !== 'undefined' && W.time) W.time = Math.max(1, W.time - 3);
+      // Notify via network
+      if(typeof Net !== 'undefined') Net.broadcast({t:'genLayerDone', genId: state.genId, layer: state.layer});
+      const statusEl = document.getElementById('genPuzzleStatus');
+      if(state.layer >= 4){
+        // Generator complete!
+        if(statusEl) statusEl.textContent = '✅ ¡GENERADOR COMPLETADO! −12s del tiempo';
+        completeGenerator();
+      } else {
+        if(statusEl) statusEl.textContent = `✅ Capa ${state.layer}/4 completada — −3s del tiempo`;
+        setTimeout(()=>{
+          if(statusEl) statusEl.textContent = '';
+          startNewLayer();
+        }, 1200);
+      }
+    }
+  }
+
+  function startNewLayer(){
+    if(!state) return;
+    const puzzle = generatePuzzle();
+    state.puzzle = puzzle;
+    state.paths = Array(puzzle.numPairs).fill(null);
+    state.completed = Array(puzzle.numPairs).fill(false);
+    state.drawing = null;
+    state.activePath = [];
+    draw();
+  }
+
+  function completeGenerator(){
+    // Mark generator as on
+    if(typeof W !== 'undefined' && state.genId !== null){
+      const g = W.gens.find(x=>x.id===state.genId);
+      if(g){
+        g.prog = 100; g.on = true;
+        if(typeof S !== 'undefined' && !S.lms && typeof W !== 'undefined')
+          W.time = Math.max(1, W.time - 0); // already removed 12s via layers
+        if(typeof Net !== 'undefined') Net.broadcast({t:'genDone', genId: state.genId});
+        // +1 malicia
+        if(typeof Stats !== 'undefined') Stats.addMalicia(1);
+      }
+    }
+    setTimeout(()=>GenPuzzle.close(), 1800);
+  }
+
+  // ── Public API ──
+  return {
+    open(genId){
+      const modal = document.getElementById('genPuzzleModal');
+      if(!modal) return;
+      const puzzle = generatePuzzle();
+      state = {
+        genId,
+        layer: 0,
+        puzzle,
+        paths: Array(puzzle.numPairs).fill(null),
+        completed: Array(puzzle.numPairs).fill(false),
+        drawing: null,
+        activePath: [],
+      };
+      const bar = document.getElementById('genLayerBar');
+      const label = document.getElementById('genLayerLabel');
+      if(bar) bar.style.width = '0%';
+      if(label) label.textContent = '0/4';
+      const statusEl = document.getElementById('genPuzzleStatus');
+      if(statusEl) statusEl.textContent = '';
+      modal.style.display = 'flex';
+      draw();
+
+      // Bind canvas events
+      const cv = document.getElementById('genPuzzleCanvas');
+      cv.onmousedown = onMouseDown;
+      cv.onmousemove = onMouseMove;
+      cv.onmouseup = onMouseUp;
+      cv.onmouseleave = onMouseUp;
+      // Touch support
+      cv.ontouchstart = (e)=>{e.preventDefault();onMouseDown(e.touches[0]);};
+      cv.ontouchmove = (e)=>{e.preventDefault();onMouseMove(e.touches[0]);};
+      cv.ontouchend = onMouseUp;
+    },
+
+    close(){
+      const modal = document.getElementById('genPuzzleModal');
+      if(modal) modal.style.display = 'none';
+      state = null;
+    },
+
+    isOpen(){
+      const modal = document.getElementById('genPuzzleModal');
+      return modal && modal.style.display !== 'none';
+    },
+
+    getState(){ return state; },
+  };
+})();
+</script>
+
 <div id="levelUpNotif">
   <div class="lvlup-icon">⬆️</div>
   <div class="lvlup-text">
