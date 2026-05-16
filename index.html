@@ -4654,7 +4654,6 @@ const Game={
     if(S.raf)cancelAnimationFrame(S.raf);
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
     const tick=ts=>{
-      try{
       if(!S.running)return;
       const dt=Math.min((ts-last)/1000,.05);last=ts;
       S._dt=dt;
@@ -4671,7 +4670,7 @@ const Game={
         if(!S.isHost)return;
         const inp=p.id===S.myId?Inp.k:p.inp;
         const sh=p.id===S.myId?Inp.sh:p.shift;
-        Game.moveP(p,dt,inp,sh);
+        try{Game.moveP(p,dt,inp,sh);}catch(e){console.error('[moveP ERROR] pid='+p.id,e);}
         if(p.m1Cd>0)p.m1Cd=Math.max(0,p.m1Cd-dt);
         // qCd ticks for everyone; Nicostos: paused while charge is active
         const nicoCharging=isNicostos(p)&&p.nicoCharge;
@@ -5394,7 +5393,6 @@ const Game={
       }
 
       S.raf=requestAnimationFrame(tick);
-      }catch(e){console.error('[MAIN LOOP ERROR]',e);S.raf=requestAnimationFrame(tick);}
     };
     S.raf=requestAnimationFrame(tick);
   },
@@ -5435,7 +5433,7 @@ const Game={
     if(dx&&dy){dx*=.707;dy*=.707;}
     const moving=dx!==0||dy!==0;
     // Moverse cierra el puzzle Flow Free
-    if(moving&&pid===S.myId&&typeof GenPuzzle!=='undefined'&&GenPuzzle.isOpen()){GenPuzzle.close();}
+    if(moving&&p.id===S.myId&&typeof GenPuzzle!=='undefined'&&GenPuzzle.isOpen()){GenPuzzle.close();}
     const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking&&!p.gbEating;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
