@@ -747,6 +747,30 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 }
 .store-detail-author{font-size:.55rem;letter-spacing:.15em;color:rgba(255,255,255,.35);margin-bottom:8px;}
 .store-detail-tagline{font-size:.62rem;letter-spacing:.1em;color:rgba(255,255,255,.6);margin-bottom:14px;line-height:1.6;}
+/* ── LEVEL UP NOTIFICATION ── */
+#levelUpNotif{
+  position:fixed;top:18px;right:18px;z-index:99999;
+  background:linear-gradient(135deg,rgba(10,5,15,.97) 0%,rgba(25,10,10,.97) 100%);
+  border:1.5px solid rgba(192,57,43,.7);
+  padding:12px 20px 12px 16px;
+  min-width:230px;max-width:300px;
+  display:flex;align-items:center;gap:12px;
+  opacity:0;transform:translateX(60px);
+  transition:opacity .35s ease,transform .35s ease;
+  pointer-events:none;
+}
+#levelUpNotif.show{opacity:1;transform:translateX(0);}
+.lvlup-icon{font-size:2rem;line-height:1;flex-shrink:0;}
+.lvlup-text{display:flex;flex-direction:column;gap:2px;}
+.lvlup-title{font-family:'Oswald',sans-serif;font-size:.95rem;letter-spacing:.18em;color:#e8c26a;text-transform:uppercase;}
+.lvlup-sub{font-size:.62rem;letter-spacing:.12em;color:rgba(255,255,255,.55);}
+/* ── XP BAR in inventory detail ── */
+.inv-xp-wrap{margin:8px 0 12px;display:flex;flex-direction:column;gap:4px;}
+.inv-xp-level{font-family:'Oswald',sans-serif;font-size:1rem;letter-spacing:.12em;color:#fff;line-height:1;}
+.inv-xp-bar{width:100%;height:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.08);}
+.inv-xp-fill{height:100%;background:linear-gradient(90deg,#8B0000,#c0392b,#e8c26a);transition:width .5s ease;}
+.inv-xp-nums{font-size:.6rem;letter-spacing:.12em;color:rgba(255,255,255,.45);}
+.store-card-level{font-size:.5rem;letter-spacing:.12em;color:rgba(255,255,255,.4);margin-top:1px;}
 .store-detail-btns{display:flex;gap:8px;margin-bottom:14px;}
 .store-detail-btn{
   flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.15);
@@ -1208,7 +1232,12 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
             </div>
             <div class="store-detail-info">
               <div class="store-detail-name" id="invDetailName">—</div>
-              <div class="store-detail-author" id="invDetailAuthor"></div>
+              
+              <div class="inv-xp-wrap" id="invXpWrap">
+                <div class="inv-xp-level" id="invXpLevel">Level 0</div>
+                <div class="inv-xp-bar"><div class="inv-xp-fill" id="invXpFill" style="width:0%"></div></div>
+                <div class="inv-xp-nums" id="invXpNums">0/50 EXP</div>
+              </div>
               <div class="store-detail-tagline" id="invDetailTagline"></div>
               <div class="store-detail-btns">
                 <div class="store-detail-btn" onclick="Inventory.showLeftInfo()">📖 STATS</div>
@@ -1779,7 +1808,7 @@ const Auth={
       const exists=await PersistDB.usernameExists(userKey);
       if(exists){this.msg('Ese usuario ya existe — inicia sesión');return;}
       // Crear nueva cuenta
-      const newAcc={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false};
+      const newAcc={user,pass,timePlayed:0,survWins:0,killWins:0,malicia:0,coins:100,ownedKillers:[],ownedSurvivors:[],equippedKiller:'',equippedSurvivor:'',hitboxPref:false,charXP:{},charLevel:{}};
       this.msg('☁ Guardando cuenta en la nube...',true);
       await PersistDB.saveUser(userKey,newAcc);
       Stats.load(userKey);
@@ -1859,6 +1888,8 @@ const Stats={
     this.equippedSurvivor=acc.equippedSurvivor||'';
     this.hitboxPref=acc.hitboxPref||false;
     this.redeemedCodes=acc.redeemedCodes||[];
+    this.charXP=acc.charXP||{};
+    this.charLevel=acc.charLevel||{};
   },
   save(){
     if(!this._key)return;
@@ -1878,6 +1909,8 @@ const Stats={
     db[this._key].equippedSurvivor=this.equippedSurvivor||'';
     db[this._key].hitboxPref=this.hitboxPref||false;
     db[this._key].redeemedCodes=this.redeemedCodes||[];
+    db[this._key].charXP=this.charXP||{};
+    db[this._key].charLevel=this.charLevel||{};
     // Guardar en Firebase (async, no bloquea)
     PersistDB.saveUser(this._key, db[this._key]);
   },
@@ -2088,6 +2121,8 @@ const SaveFile = {
           Stats.equippedSurvivor= d.equippedSurvivor|| '';
           Stats.hitboxPref      = d.hitboxPref      || false;
           Stats.redeemedCodes   = d.redeemedCodes   || [];
+          Stats.charXP          = d.charXP          || {};
+          Stats.charLevel       = d.charLevel       || {};
           // Sincronizar con localStorage
           const acc = {user:d.user, pass:'', ...d};
           const loc = JSON.parse(localStorage.getItem('fsk_users')||'{}');
@@ -2177,13 +2212,17 @@ const MART_E_CD = 35;              // E: BLIPI — risa de payaso (35s)
 const MART_E_RANGE = TILE * 5;     // rango de detección del killer
 const MART_E_REVEAL_DUR = 5;       // killer revelado para supervivientes
 const MART_E_SLOW_DUR = 8;         // lentitud I al killer por 8s
-const MART_E_SPEED_DUR = 5;        // velocidad I para Martín por 5s
-const MART_E_HEAL = 10;            // curación al activar E
-const MART_E_SHIELD_DUR = 2;       // campo de fuerza para Martín
+const MART_E_SPEED_DUR = 6;        // velocidad I para Martín por 6s
+const MART_E_HEAL = 0;             // curación instantánea desactivada (usa regen)
+const MART_E_SHIELD_DUR = 1;       // campo de fuerza base (siempre): 1s
+const MART_E_SHIELD_HIT_DUR = 2;   // campo de fuerza si conecta: 2s
+const MART_E_REGEN_TICK = 2;       // HP regenerados por tick
+const MART_E_REGEN_INTERVAL = 1.5; // segundos entre ticks
+const MART_E_REGEN_MAX = 10;       // HP máximo a regenerar en total
 const MART_E_DISTRACT_COUNT = 4;   // 4 apariciones de payasos
-const MART_E_DISTRACT_INTERVAL = 0.6; // (legacy — usado por martEDistract del survivor)
+const MART_E_DISTRACT_INTERVAL = 0.7; // (legacy — usado por martEDistract del survivor)
 const MART_E_DISTRACT_FLASH_ON  = 3.0; // segundos visible cada aparición de payasos
-const MART_E_DISTRACT_FLASH_OFF = 0.6; // segundos oculto entre apariciones
+const MART_E_DISTRACT_FLASH_OFF = 0.7; // segundos oculto entre apariciones
 
 const MART_E_DISTRACT_FADE = 2.5;  // cada emoji dura 2.5s (fade out)
 // Hitbox frontal de la risa (idéntico al M1 del Slasher en tamaño y posición)
@@ -3253,6 +3292,7 @@ const LobbyWorld={
   loop(){
     let last=0,sendT=0,statsT=0;
     const tick=ts=>{
+      try{
       if(document.getElementById('s-lobby').classList.contains('active')){
         const dt=Math.min((ts-last)/1000,.05);last=ts;
         LobbyWorld.update(dt);
@@ -3262,6 +3302,7 @@ const LobbyWorld={
         if(statsT>=2){statsT=0;UI.renderStatsPanel();}
       }
       LobbyWorld.raf=requestAnimationFrame(tick);
+      }catch(e){console.error('[LOBBY LOOP ERROR]',e);LobbyWorld.raf=requestAnimationFrame(tick);}
     };
     LobbyWorld.raf=requestAnimationFrame(tick);
   },
@@ -4229,6 +4270,15 @@ const Net={
     } else if(d.t==='maliciaGen'){
       // +1 malicia for the survivor who completed the generator
       if(d.pid===S.myId)Stats.addMalicia(1);
+    } else if(d.t==='genDone'){
+      // Otro jugador completó el generador — sincronizar estado
+      if(W.gens){
+        const g=W.gens.find(x=>x.id===d.genId);
+        if(g){g.prog=100;g.on=true;}
+      }
+    } else if(d.t==='genLayerDone'){
+      // Otro jugador completó una capa — reducir tiempo
+      if(W.time)W.time=Math.max(1,W.time-3);
     }
   },
 
@@ -4331,6 +4381,8 @@ function applyShieldDamage(s, dmg){
   // Martin force field: bloquea todo daño
   if(isMartin&&isMartin(s)&&s.martEShieldActive)return;
   if(!s||!s.alive)return;
+  // Cancelar regen de Martin si recibe daño
+  if(isMartin&&isMartin(s)&&s.martERegenActive){s.martERegenActive=false;s.martERegenTotal=0;}
   if((s.ssShield||0)>0&&s.ssActive){
     const absorbed=Math.min(s.ssShield,dmg);
     s.ssShield=Math.max(0,s.ssShield-dmg);
@@ -4602,6 +4654,7 @@ const Game={
     if(S.raf)cancelAnimationFrame(S.raf);
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
     const tick=ts=>{
+      try{
       if(!S.running)return;
       const dt=Math.min((ts-last)/1000,.05);last=ts;
       S._dt=dt;
@@ -4810,6 +4863,18 @@ const Game={
             if(p.martESpeedActive){
               p.martESpeedTimer=Math.max(0,(p.martESpeedTimer||0)-dt);
               if(p.martESpeedTimer<=0)p.martESpeedActive=false;
+            }
+            // Martin BLIPI regen: 2hp cada 1.5s hasta 10hp total, cancela si recibe daño
+            if(p.martERegenActive){
+              p.martERegenTickTimer=Math.max(0,(p.martERegenTickTimer||0)-dt);
+              if(p.martERegenTickTimer<=0){
+                p.martERegenTickTimer=MART_E_REGEN_INTERVAL;
+                const healed=Math.min(MART_E_REGEN_TICK, (p.maxHp||SHP)-p.hp, MART_E_REGEN_MAX-(p.martERegenTotal||0));
+                if(healed>0){p.hp=Math.min(p.maxHp||SHP,p.hp+healed);p.martERegenTotal=(p.martERegenTotal||0)+healed;}
+                if((p.martERegenTotal||0)>=MART_E_REGEN_MAX||(p.maxHp||SHP)-p.hp<=0){
+                  p.martERegenActive=false;p.martERegenTotal=0;
+                }
+              }
             }
             // E visual distraction countdown (sent to killer via state)
             if(p.martEDistractActive){
@@ -5267,22 +5332,8 @@ const Game={
           }
         }); // end forEach players (timers)
 
-        Object.values(W.players).forEach(p=>{
-          if(!p.alive||p.role!=='survivor'||!p.interacting)return;
-          const g=W.gens.find(x=>x.id===p.interactTarget&&!x.on);
-          if(!g){p.interacting=false;p.interactTarget=null;return;}
-          const holding=p.id===S.myId?Inp.f:!!(p.inp&&p.inp.f);
-          if(!holding){p.interacting=false;p.interactTarget=null;return;}
-          g.prog+=dt*(100/INTERACT_SEC);
-          if(g.prog>=100){
-            g.prog=100;g.on=true;p.interacting=false;p.interactTarget=null;
-            if(!S.lms)W.time=Math.max(1,W.time-GEN_TIME_BONUS);
-            if(W.gens.every(g=>g.on)){/* all gens done — sin salida */}
-            // +1 malicia al superviviente que completó el generador
-            Net.broadcast({t:'maliciaGen',pid:p.id});
-            if(p.id===S.myId)Stats.addMalicia(1);
-          }
-        });
+        // Generator progress now handled by Flow Free puzzle (GenPuzzle)
+        // Old hold-F system removed
 
         if(!S.lms){
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
@@ -5343,6 +5394,7 @@ const Game={
       }
 
       S.raf=requestAnimationFrame(tick);
+      }catch(e){console.error('[MAIN LOOP ERROR]',e);S.raf=requestAnimationFrame(tick);}
     };
     S.raf=requestAnimationFrame(tick);
   },
@@ -5350,11 +5402,13 @@ const Game={
   specLoop(){
     if(S.raf)cancelAnimationFrame(S.raf);
     const tick=()=>{
+      try{
       if(!S.running)return;
       Game.updateCameraSpec();
       Game.renderSpec();
       UI.updateHUD();
       S.raf=requestAnimationFrame(tick);
+      }catch(e){console.error('[SPEC LOOP ERROR]',e);S.raf=requestAnimationFrame(tick);}
     };
     S.raf=requestAnimationFrame(tick);
   },
@@ -5380,6 +5434,8 @@ const Game={
     if(inp['d']||inp['arrowright'])dx=1;
     if(dx&&dy){dx*=.707;dy*=.707;}
     const moving=dx!==0||dy!==0;
+    // Moverse cierra el puzzle Flow Free
+    if(moving&&pid===S.myId&&typeof GenPuzzle!=='undefined'&&GenPuzzle.isOpen()){GenPuzzle.close();}
     const canSprint=p.stamina>0&&!p.bloxyDrinking&&!p.ssDrinking&&!p.gbEating;
     const isSprint=!!(sprinting&&canSprint&&moving);
     p.sprinting=isSprint;
@@ -5675,6 +5731,8 @@ const Game={
     if(!p||!p.alive||!isMartin(p))return;
     if(p.martECd>0)return;
     p.martECd=MART_E_CD;
+    // Escudo base: siempre al usar BLIPI (1s)
+    p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
     let hitConnected=false;
     const doHit=(hitIdx)=>{
       if(!p||!p.alive)return;
@@ -5694,9 +5752,11 @@ const Game={
         // ── Hit conectado — aplicar efectos ──
         kk.amaxRevealed=true;kk.amaxRevealTimer=MART_E_REVEAL_DUR;
         kk.martESlowed=true;kk.martESlowTimer=MART_E_SLOW_DUR;
-        p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_DUR;
+        // Escudo mejorado: 2s (sobreescribe el base de 1s)
+        p.martEShieldActive=true;p.martEShieldTimer=MART_E_SHIELD_HIT_DUR;
         p.martESpeedActive=true;p.martESpeedTimer=MART_E_SPEED_DUR;
-        p.hp=Math.min(p.maxHp||SHP,p.hp+MART_E_HEAL);
+        // Iniciar regen: 2hp cada 1.5s hasta 10hp total
+        p.martERegenActive=true;p.martERegenTotal=0;p.martERegenTickTimer=MART_E_REGEN_INTERVAL;
         kk.martDistractActive=true;kk.martDistractCount=0;kk.martDistractFlashOn=true;kk.martDistractTimer=MART_E_DISTRACT_FLASH_ON;
         kk.martEBigDistract=true;kk.martEBigDistractTimer=MART_E_DISTRACT_FADE;
         p.martEZoneActive=true;p.martEZoneTimer=MART_E_ZONE_DUR;p.martEZoneX=kk.x;p.martEZoneY=kk.y;
@@ -5821,12 +5881,17 @@ const Game={
   },
 
   doActionF(pid){
-    // F key: reparar generador
+    // F key: abrir puzzle Flow Free del generador
     const p=W.players[pid];if(!p||!p.alive||p.role!=='survivor')return;
-    if(p.interacting){p.interacting=false;p.interactTarget=null;return;}
+    if(pid!==S.myId)return; // solo el jugador local abre su propio UI
+    // Si el puzzle ya está abierto, cerrarlo
+    if(typeof GenPuzzle!=='undefined'&&GenPuzzle.isOpen()){GenPuzzle.close();return;}
     for(const g of W.gens){
       if(g.on)continue;
-      if(dst(p,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6){p.interacting=true;p.interactTarget=g.id;return;}
+      if(dst(p,{x:g.x*TILE+TILE/2,y:g.y*TILE+TILE/2})<TILE*1.6){
+        if(typeof GenPuzzle!=='undefined')GenPuzzle.open(g.id);
+        return;
+      }
     }
   },
 
@@ -6106,6 +6171,7 @@ const Game={
         martQCd:p.martQCd||0,martBananas:p.martBananas||[],
         martECd:p.martECd||0,martEShieldActive:p.martEShieldActive||false,martEShieldTimer:p.martEShieldTimer||0,
         martESpeedActive:p.martESpeedActive||false,martESpeedTimer:p.martESpeedTimer||0,
+        martERegenActive:p.martERegenActive||false,martERegenTotal:p.martERegenTotal||0,martERegenTickTimer:p.martERegenTickTimer||0,
         martEDistractActive:p.martEDistractActive||false,martEDistractCount:p.martEDistractCount||0,martEDistractTimer:p.martEDistractTimer||0,
         martEZoneActive:p.martEZoneActive||false,martEZoneTimer:p.martEZoneTimer||0,martEZoneX:p.martEZoneX||0,martEZoneY:p.martEZoneY||0,
         martHelpless:p.martHelpless||false,martHelplessTimer:p.martHelplessTimer||0,
@@ -6206,6 +6272,7 @@ const Game={
           p.martQCd=d.martQCd||0;p.martBananas=d.martBananas||[];
           p.martECd=d.martECd||0;p.martEShieldActive=d.martEShieldActive||false;p.martEShieldTimer=d.martEShieldTimer||0;
           p.martESpeedActive=d.martESpeedActive||false;p.martESpeedTimer=d.martESpeedTimer||0;
+          p.martERegenActive=d.martERegenActive||false;p.martERegenTotal=d.martERegenTotal||0;p.martERegenTickTimer=d.martERegenTickTimer||0;
           p.martEDistractActive=d.martEDistractActive||false;p.martEDistractCount=d.martEDistractCount||0;p.martEDistractTimer=d.martEDistractTimer||0;
           p.martEZoneActive=d.martEZoneActive||false;p.martEZoneTimer=d.martEZoneTimer||0;p.martEZoneX=d.martEZoneX||0;p.martEZoneY=d.martEZoneY||0;
           p.martHelpless=d.martHelpless||false;p.martHelplessTimer=d.martHelplessTimer||0;
@@ -8952,6 +9019,79 @@ const Shop={
 };
 
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  XP & LEVEL SYSTEM
+// ══════════════════════════════════════════
+const XP = {
+  // XP requerida para pasar del nivel N al N+1
+  // Keyframes: lvl→xpNeeded  (1:50, 10:200, 20:300, 30:400, 40:500, 50:600, 60:700, 70:800, 80:900, 90:1000, 100:1250)
+  // Interpolación lineal entre keyframes
+  _keyframes:[
+    [0,50],[1,50],[10,200],[20,300],[30,400],[40,500],
+    [50,600],[60,700],[70,800],[80,900],[90,1000],[100,1250]
+  ],
+
+  xpForLevel(lvl){
+    if(lvl>=100)return 1250;
+    const kf=this._keyframes;
+    for(let i=0;i<kf.length-1;i++){
+      const [l0,x0]=kf[i],[l1,x1]=kf[i+1];
+      if(lvl>=l0&&lvl<l1){
+        const t=(lvl-l0)/(l1-l0);
+        return Math.round(x0+(x1-x0)*t);
+      }
+    }
+    return 50;
+  },
+
+  // Obtener nivel y xp actual de un personaje
+  getCharData(charId){
+    const xpMap=Stats.charXP||{};
+    const lvMap=Stats.charLevel||{};
+    return {xp:xpMap[charId]||0, level:lvMap[charId]||0};
+  },
+
+  // Otorgar XP a un personaje — retorna true si subió de nivel
+  grant(charId, amount){
+    if(!Stats._key)return;
+    if(!Stats.charXP)Stats.charXP={};
+    if(!Stats.charLevel)Stats.charLevel={};
+    let xp=Stats.charXP[charId]||0;
+    let lvl=Stats.charLevel[charId]||0;
+    if(lvl>=100)return;
+    xp+=amount;
+    let leveledUp=false;
+    while(lvl<100){
+      const needed=this.xpForLevel(lvl);
+      if(xp>=needed){xp-=needed;lvl++;leveledUp=true;}
+      else break;
+    }
+    Stats.charXP[charId]=xp;
+    Stats.charLevel[charId]=lvl;
+    Stats.save();
+    if(leveledUp)this._showNotif(charId,lvl);
+    // Si el inventario está abierto y tiene este char seleccionado, actualizar XP bar
+    if(Inventory._selected===charId)Inventory._updateXpBar(charId);
+    return leveledUp;
+  },
+
+  // Notificación top-right
+  _notifTimer:null,
+  _showNotif(charId,newLevel){
+    // Buscar nombre del personaje
+    const all=[...STORE_KILLERS,...STORE_SURVIVORS];
+    const c=all.find(x=>x.id===charId);
+    const name=c?c.name:charId.toUpperCase();
+    const el=document.getElementById('levelUpNotif');
+    if(!el)return;
+    document.getElementById('levelUpTitle').textContent=`¡${name} subió de nivel!`;
+    document.getElementById('levelUpSub').textContent=`Level ${newLevel-1} → Level ${newLevel}`;
+    el.classList.add('show');
+    if(this._notifTimer)clearTimeout(this._notifTimer);
+    this._notifTimer=setTimeout(()=>{el.classList.remove('show');},3500);
+  },
+};
+
 //  INVENTORY
 // ══════════════════════════════════════════
 const Inventory={
@@ -9012,6 +9152,7 @@ const Inventory={
     }
     list.forEach(c=>{
       const isEquipped=equipped===c.id;
+      const {level}=XP.getCharData(c.id);
       const card=document.createElement('div');
       card.className='store-card'+(this._selected===c.id?' selected':'');
       card.innerHTML=`
@@ -9020,6 +9161,7 @@ const Inventory={
           <span style="position:relative;z-index:1">${c.icon||'🗡'}</span>
         </div>
         <div class="store-card-name">${c.name}</div>
+        <div class="store-card-level">Level ${level}</div>
         <div class="store-card-price owned">${isEquipped?'EQUIPADO':'OBTENIDO'}</div>
         ${isEquipped?'<div class="store-card-equipped-badge">✓ EQUIPADO</div>':''}
       `;
@@ -9039,8 +9181,9 @@ const Inventory={
     const det=document.getElementById('invDetail');det.classList.add('show');
     document.getElementById('invDetailIcon').textContent=c.icon||'🗡';
     document.getElementById('invDetailName').textContent=c.name;
-    document.getElementById('invDetailAuthor').textContent='Made By: '+(c.author||'Forsaken');
+    
     document.getElementById('invDetailTagline').textContent=c.tagline||'';
+    this._updateXpBar(id);
     // Pre-build stats/abilities/lore/skins in hidden divs for showLeftInfo/showLeftSkins
     const sr=document.getElementById('invStatsRows');sr.innerHTML='';
     (c.stats||[]).forEach(s=>{
@@ -9164,6 +9307,19 @@ const Inventory={
     document.getElementById('invSkinsView').style.display='flex';
   },
 
+  _updateXpBar(charId){
+    const {xp,level}=XP.getCharData(charId);
+    const needed=XP.xpForLevel(level);
+    const pct=level>=100?100:Math.min(100,(xp/needed)*100);
+    const lvlEl=document.getElementById('invXpLevel');
+    const fillEl=document.getElementById('invXpFill');
+    const numsEl=document.getElementById('invXpNums');
+    if(!lvlEl)return;
+    lvlEl.textContent=`Level ${level}`;
+    fillEl.style.width=pct+'%';
+    numsEl.textContent=level>=100?`MAX LEVEL`:`${xp}/${needed} EXP`;
+  },
+
   toggleStats(){this.showLeftInfo();},
   toggleSkins(){this.showLeftSkins();},
 
@@ -9275,5 +9431,423 @@ document.getElementById('s-lobby').addEventListener('click',function(e){
   });
 })();
 </script>
+<!-- Generator Flow Free Puzzle Modal -->
+<div id="genPuzzleModal" style="display:none;position:fixed;inset:0;z-index:88888;background:rgba(0,0,0,.82);align-items:center;justify-content:center;flex-direction:column;gap:14px;">
+  <div style="font-family:'Share Tech Mono',monospace;font-size:.75rem;letter-spacing:.18em;color:rgba(255,255,255,.5);text-align:center;line-height:1.8;max-width:480px;">
+    Conecta todos los puntos del mismo color para completar el puzzle.<br>
+    Completar cuatro puzzles arreglará el generador.<br>
+    <span style="color:rgba(255,255,255,.3);">Muévete para salir del puzzle.</span>
+  </div>
+  <!-- Layer progress bar -->
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.4);font-family:'Share Tech Mono',monospace;">GENERADOR</span>
+    <div style="width:180px;height:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);">
+      <div id="genLayerBar" style="height:100%;background:linear-gradient(90deg,#00aa33,#00ff66);width:0%;transition:width .4s ease;"></div>
+    </div>
+    <span id="genLayerLabel" style="font-size:.6rem;letter-spacing:.2em;color:rgba(255,255,255,.4);font-family:'Share Tech Mono',monospace;">0/4</span>
+  </div>
+  <!-- 6x6 grid canvas -->
+  <canvas id="genPuzzleCanvas" width="390" height="390" style="border:2px solid rgba(255,255,255,.15);background:#0a0a0a;cursor:pointer;touch-action:none;"></canvas>
+  <div id="genPuzzleStatus" style="font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.4);height:16px;"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  FLOW FREE GENERATOR PUZZLE SYSTEM
+// ══════════════════════════════════════════
+const GenPuzzle = (()=>{
+  const GRID = 6;
+  const CELL = 65; // px per cell
+  const PAD  = 0;
+  // Colors for up to 13 pairs — matches reference image style
+  const PAIR_COLORS = [
+    '#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db',
+    '#9b59b6','#e91e8c','#ff6b9d','#00bcd4','#ff5722',
+    '#8bc34a','#ff9800','#795548'
+  ];
+
+  let state = null; // current puzzle state
+
+  // ── Puzzle Generator ──
+  // Generates a solvable Flow Free puzzle on a 6x6 grid
+  function generatePuzzle(){
+    const numPairs = 4 + Math.floor(Math.random() * 5); // 4–8 pairs for 6x6
+    for(let attempt=0; attempt<200; attempt++){
+      const result = tryGenerate(numPairs);
+      if(result) return result;
+    }
+    return tryGenerate(3) || fallbackPuzzle();
+  }
+
+  function tryGenerate(numPairs){
+    const grid = Array.from({length:GRID},()=>Array(GRID).fill(0));
+    const pairs = [];
+    const used = new Set();
+    // Place pairs by random walking paths, then only keep endpoints
+    const paths = [];
+    for(let p=0; p<numPairs; p++){
+      const path = randomPath(grid, used);
+      if(!path || path.length < 2) return null;
+      const a = path[0], b = path[path.length-1];
+      pairs.push({id:p+1, color:PAIR_COLORS[p], a, b});
+      paths.push(path);
+      path.forEach(([r,c])=>used.add(r+','+c));
+    }
+    return {pairs, numPairs};
+  }
+
+  function randomPath(grid, used){
+    // Pick random free start
+    const free = [];
+    for(let r=0;r<GRID;r++) for(let c=0;c<GRID;c++) if(!used.has(r+','+c)) free.push([r,c]);
+    if(free.length < 2) return null;
+    const start = free[Math.floor(Math.random()*free.length)];
+    const path = [start];
+    const visitedInPath = new Set([start[0]+','+start[1]]);
+    const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+    const minLen = 2, maxLen = 8;
+    for(let step=0; step<maxLen; step++){
+      const [cr,cc] = path[path.length-1];
+      const neighbors = dirs.map(([dr,dc])=>[cr+dr,cc+dc])
+        .filter(([nr,nc])=>nr>=0&&nr<GRID&&nc>=0&&nc<GRID&&!used.has(nr+','+nc)&&!visitedInPath.has(nr+','+nc));
+      if(!neighbors.length) break;
+      const next = neighbors[Math.floor(Math.random()*neighbors.length)];
+      path.push(next);
+      visitedInPath.add(next[0]+','+next[1]);
+      if(path.length >= minLen && Math.random() < 0.35) break;
+    }
+    return path.length >= 2 ? path : null;
+  }
+
+  function fallbackPuzzle(){
+    // Hardcoded solvable 6x6 puzzle
+    return {
+      pairs:[
+        {id:1,color:PAIR_COLORS[0],a:[0,0],b:[5,5]},
+        {id:2,color:PAIR_COLORS[1],a:[0,5],b:[5,0]},
+        {id:3,color:PAIR_COLORS[2],a:[2,2],b:[3,3]},
+        {id:4,color:PAIR_COLORS[3],a:[0,2],b:[5,2]},
+      ],
+      numPairs:4
+    };
+  }
+
+  // ── Canvas Drawing ──
+  function draw(){
+    if(!state) return;
+    const cv = document.getElementById('genPuzzleCanvas');
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0,0,cv.width,cv.height);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,.07)';
+    ctx.lineWidth = 1;
+    for(let i=0;i<=GRID;i++){
+      ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,GRID*CELL);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(GRID*CELL,i*CELL);ctx.stroke();
+    }
+
+    // Draw completed paths
+    state.paths.forEach((path,pid)=>{
+      if(!path || path.length < 2) return;
+      const pair = state.puzzle.pairs[pid];
+      ctx.strokeStyle = pair.color;
+      ctx.lineWidth = 18;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      path.forEach(([r,c],i)=>{
+        const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+
+    // Draw active (being drawn) path
+    if(state.drawing !== null){
+      const pid = state.drawing;
+      const path = state.activePath;
+      if(path && path.length >= 2){
+        const pair = state.puzzle.pairs[pid];
+        ctx.strokeStyle = pair.color;
+        ctx.lineWidth = 18;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        path.forEach(([r,c],i)=>{
+          const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Draw dot endpoints
+    state.puzzle.pairs.forEach((pair, pid)=>{
+      [pair.a, pair.b].forEach(([r,c])=>{
+        const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+        ctx.beginPath();
+        ctx.arc(x,y,CELL*0.38,0,Math.PI*2);
+        ctx.fillStyle = pair.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Number label
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.round(CELL*0.3)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pair.id, x, y);
+      });
+    });
+  }
+
+  // ── Input Handling ──
+  function cellFromEvent(e){
+    const cv = document.getElementById('genPuzzleCanvas');
+    const rect = cv.getBoundingClientRect();
+    const scaleX = cv.width / rect.width;
+    const scaleY = cv.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    const c = Math.floor(x / CELL);
+    const r = Math.floor(y / CELL);
+    if(r<0||r>=GRID||c<0||c>=GRID) return null;
+    return [r,c];
+  }
+
+  function pairAt(r,c){
+    if(!state) return -1;
+    return state.puzzle.pairs.findIndex(p=>
+      (p.a[0]===r&&p.a[1]===c)||(p.b[0]===r&&p.b[1]===c)
+    );
+  }
+
+  function pathContains(path, r, c){
+    return path && path.some(([pr,pc])=>pr===r&&pc===c);
+  }
+
+  function isAdjacentToLast(r,c){
+    if(!state.activePath || !state.activePath.length) return false;
+    const [lr,lc] = state.activePath[state.activePath.length-1];
+    return (Math.abs(r-lr)+Math.abs(c-lc))===1;
+  }
+
+  function cellOccupied(r,c){
+    // Check if cell is occupied by a completed path
+    for(let pid=0;pid<state.paths.length;pid++){
+      const path = state.paths[pid];
+      if(path && pathContains(path,r,c)){
+        // Don't block endpoints of same pair
+        const pair = state.puzzle.pairs[pid];
+        const isEndpoint = (pair.a[0]===r&&pair.a[1]===c)||(pair.b[0]===r&&pair.b[1]===c);
+        if(!isEndpoint) return {pid, isEndpoint:false};
+        return {pid, isEndpoint:true};
+      }
+    }
+    return null;
+  }
+
+  function onMouseDown(e){
+    if(!state) return;
+    const cell = cellFromEvent(e);
+    if(!cell) return;
+    const [r,c] = cell;
+    // Check if clicking on a dot endpoint → start drawing from there
+    const pid = pairAt(r,c);
+    if(pid >= 0){
+      // Clear existing path for this pair
+      state.paths[pid] = null;
+      state.completed[pid] = false;
+      state.drawing = pid;
+      state.activePath = [[r,c]];
+      draw(); return;
+    }
+    // Check if clicking on an existing path → reset that path
+    for(let i=0;i<state.paths.length;i++){
+      if(pathContains(state.paths[i],r,c)){
+        state.paths[i] = null;
+        state.completed[i] = false;
+        draw(); return;
+      }
+    }
+  }
+
+  function onMouseMove(e){
+    if(!state || state.drawing === null) return;
+    const cell = cellFromEvent(e);
+    if(!cell) return;
+    const [r,c] = cell;
+    const path = state.activePath;
+    if(!path || !path.length) return;
+
+    // If cell is already in activePath → retrace (move backwards)
+    const idx = path.findIndex(([pr,pc])=>pr===r&&pc===c);
+    if(idx >= 0){
+      state.activePath = path.slice(0, idx+1);
+      draw(); return;
+    }
+
+    // Must be adjacent to last cell
+    if(!isAdjacentToLast(r,c)) return;
+
+    // Check occupation
+    const occ = cellOccupied(r,c);
+    if(occ && !occ.isEndpoint) return; // blocked by another wire
+
+    // Check if hitting the matching endpoint → complete
+    const pid = state.drawing;
+    const pair = state.puzzle.pairs[pid];
+    const isMatchEnd = (pair.b[0]===r&&pair.b[1]===c) || (pair.a[0]===r&&pair.a[1]===c);
+    // Only complete if this is the OTHER endpoint (not the start)
+    const startCell = path[0];
+    const isStart = startCell[0]===r&&startCell[1]===c;
+    if(isMatchEnd && !isStart && path.length >= 1){
+      state.activePath.push([r,c]);
+      state.paths[pid] = [...state.activePath];
+      state.completed[pid] = true;
+      state.drawing = null;
+      state.activePath = [];
+      draw();
+      checkLayerComplete();
+      return;
+    }
+
+    // Block going to other pair's endpoint
+    const otherPid = pairAt(r,c);
+    if(otherPid >= 0 && otherPid !== pid) return;
+
+    state.activePath.push([r,c]);
+    draw();
+  }
+
+  function onMouseUp(){
+    if(!state || state.drawing === null) return;
+    // Abandon incomplete draw — don't save
+    state.drawing = null;
+    state.activePath = [];
+    draw();
+  }
+
+  function checkLayerComplete(){
+    if(!state) return;
+    const allDone = state.completed.every(Boolean);
+    if(allDone){
+      const label = document.getElementById('genLayerLabel');
+      const bar = document.getElementById('genLayerBar');
+      state.layer++;
+      const pct = (state.layer/4)*100;
+      if(bar) bar.style.width = pct+'%';
+      if(label) label.textContent = state.layer+'/4';
+      // Remove 3s from timer
+      if(typeof W !== 'undefined' && W.time) W.time = Math.max(1, W.time - 3);
+      // Notify via network
+      if(typeof Net !== 'undefined') Net.broadcast({t:'genLayerDone', genId: state.genId, layer: state.layer});
+      const statusEl = document.getElementById('genPuzzleStatus');
+      if(state.layer >= 4){
+        // Generator complete!
+        if(statusEl) statusEl.textContent = '✅ ¡GENERADOR COMPLETADO! −12s del tiempo';
+        completeGenerator();
+      } else {
+        if(statusEl) statusEl.textContent = `✅ Capa ${state.layer}/4 completada — −3s del tiempo`;
+        setTimeout(()=>{
+          if(statusEl) statusEl.textContent = '';
+          startNewLayer();
+        }, 1200);
+      }
+    }
+  }
+
+  function startNewLayer(){
+    if(!state) return;
+    const puzzle = generatePuzzle();
+    state.puzzle = puzzle;
+    state.paths = Array(puzzle.numPairs).fill(null);
+    state.completed = Array(puzzle.numPairs).fill(false);
+    state.drawing = null;
+    state.activePath = [];
+    draw();
+  }
+
+  function completeGenerator(){
+    // Mark generator as on
+    if(typeof W !== 'undefined' && state.genId !== null){
+      const g = W.gens.find(x=>x.id===state.genId);
+      if(g){
+        g.prog = 100; g.on = true;
+        if(typeof S !== 'undefined' && !S.lms && typeof W !== 'undefined')
+          W.time = Math.max(1, W.time - 0); // already removed 12s via layers
+        if(typeof Net !== 'undefined') Net.broadcast({t:'genDone', genId: state.genId});
+        // +1 malicia
+        if(typeof Stats !== 'undefined') Stats.addMalicia(1);
+      }
+    }
+    setTimeout(()=>GenPuzzle.close(), 1800);
+  }
+
+  // ── Public API ──
+  return {
+    open(genId){
+      const modal = document.getElementById('genPuzzleModal');
+      if(!modal) return;
+      const puzzle = generatePuzzle();
+      state = {
+        genId,
+        layer: 0,
+        puzzle,
+        paths: Array(puzzle.numPairs).fill(null),
+        completed: Array(puzzle.numPairs).fill(false),
+        drawing: null,
+        activePath: [],
+      };
+      const bar = document.getElementById('genLayerBar');
+      const label = document.getElementById('genLayerLabel');
+      if(bar) bar.style.width = '0%';
+      if(label) label.textContent = '0/4';
+      const statusEl = document.getElementById('genPuzzleStatus');
+      if(statusEl) statusEl.textContent = '';
+      modal.style.display = 'flex';
+      draw();
+
+      // Bind canvas events
+      const cv = document.getElementById('genPuzzleCanvas');
+      cv.onmousedown = onMouseDown;
+      cv.onmousemove = onMouseMove;
+      cv.onmouseup = onMouseUp;
+      cv.onmouseleave = onMouseUp;
+      // Touch support
+      cv.ontouchstart = (e)=>{e.preventDefault();onMouseDown(e.touches[0]);};
+      cv.ontouchmove = (e)=>{e.preventDefault();onMouseMove(e.touches[0]);};
+      cv.ontouchend = onMouseUp;
+    },
+
+    close(){
+      const modal = document.getElementById('genPuzzleModal');
+      if(modal) modal.style.display = 'none';
+      state = null;
+    },
+
+    isOpen(){
+      const modal = document.getElementById('genPuzzleModal');
+      return modal && modal.style.display !== 'none';
+    },
+
+    getState(){ return state; },
+  };
+})();
+</script>
+
+<div id="levelUpNotif">
+  <div class="lvlup-icon">⬆️</div>
+  <div class="lvlup-text">
+    <div class="lvlup-title" id="levelUpTitle">¡Subiste de nivel!</div>
+    <div class="lvlup-sub" id="levelUpSub">Level 1 → Level 2</div>
+  </div>
+</div>
 </body>
 </html>
