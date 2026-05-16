@@ -4277,8 +4277,8 @@ const Net={
         if(g){g.prog=100;g.on=true;}
       }
     } else if(d.t==='genLayerDone'){
-      // Otro jugador completó una capa — reducir tiempo
-      if(W.time)W.time=Math.max(1,W.time-3);
+      // Otro jugador completó una capa — reducir tiempo (no aplica en LMS)
+      if(W.time&&!S.lms)W.time=Math.max(1,W.time-3);
     }
   },
 
@@ -9742,8 +9742,8 @@ const GenPuzzle = (()=>{
       const pct = (state.layer/4)*100;
       if(bar) bar.style.width = pct+'%';
       if(label) label.textContent = state.layer+'/4';
-      // Remove 3s from timer
-      if(typeof W !== 'undefined' && W.time) W.time = Math.max(1, W.time - 3);
+      // Remove 3s from timer (no aplica en LMS)
+      if(typeof W !== 'undefined' && W.time && !(typeof S !== 'undefined' && S.lms)) W.time = Math.max(1, W.time - 3);
       // Notify via network
       if(typeof Net !== 'undefined') Net.broadcast({t:'genLayerDone', genId: state.genId, layer: state.layer});
       const statusEl = document.getElementById('genPuzzleStatus');
