@@ -4227,7 +4227,7 @@ const Net={
     } else if(d.t==='over'){
       // Forzar running=true para clientes (no host) por si el guard lo bloqueaba
       if(!S.running&&!S.isHost) S.running=true;
-      Game.handleRoundEnd(d.winner,d.reason,d.lmsLastSurvivorId||null);
+      Game.handleRoundEnd(d.winner,d.reason,d.lmsLastSurvivorId||null,d.survAliveTime||{});
 
     } else if(d.t==='lobbyPos'){
       LobbyWorld.lobbyPlayers[d.id]={
@@ -4270,6 +4270,9 @@ const Net={
     } else if(d.t==='maliciaGen'){
       // +1 malicia for the survivor who completed the generator
       if(d.pid===S.myId)Stats.addMalicia(1);
+    } else if(d.t==='killCoin'){
+      // Killer earned 15$ for killing a survivor
+      if(S.myRole==='killer'&&!S.lateJoin) Stats.addCoins(15);
     } else if(d.t==='genDone'){
       // Otro jugador completó el generador — sincronizar estado
       if(W.gens){
@@ -4409,7 +4412,7 @@ function doSlashHit(killerPid,ang,slashIdx,dmg){
       k.m1HitSet.add(s.id);
       applyShieldDamage(s, dmg);
       if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
-        if(S.isHost){W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);}
+        if(S.isHost){W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);Net.broadcast({t:'killCoin'});}
       }
       else{s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;}
       if(S.isHost)Game.checkWin();
@@ -4469,7 +4472,7 @@ const Game={
     document.getElementById('hudBottomBar').style.display='flex';
     document.getElementById('hitboxToggleBtn').style.display='block';
     AdminPanel.hide(); // lobby-only — hide when game starts
-    S.running=true;slashFX=[];S.lms=false;S.lmsTrackerT=0;
+    S.running=true;slashFX=[];S.lms=false;S.lmsTrackerT=0;S._survAliveTime={};
     // Map banner animation
     const mb=document.getElementById('mapBanner');
     mb.classList.remove('show');void mb.offsetWidth;
@@ -4986,6 +4989,7 @@ const Game={
                   s.helpless=true;s.helplessTimer=Q_HELPLESS_DUR;
                   if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
                     W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                    if(S.isHost)Net.broadcast({t:'killCoin'});
                   } else {
                     s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
                   }
@@ -5075,6 +5079,7 @@ const Game={
                       // Apply charge damage (grab + slam, no bleed)
                       applyShieldDamage(s,NICO_Q_DMG_GRAB+NICO_Q_DMG_SLAM);
                       if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+                        if(S.isHost)Net.broadcast({t:'killCoin'});
                         p.nicoKillCount=(p.nicoKillCount||0)+1;
                         if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
                       }
@@ -5347,6 +5352,12 @@ const Game={
         }
         if(S.lms&&S.lmsTrackerT>0)S.lmsTrackerT=Math.max(0,S.lmsTrackerT-dt);
 
+        // Track how long each survivor stays alive (for 10$ survived-60s reward)
+        if(S._survAliveTime){
+          Object.values(W.players).forEach(p=>{
+            if(p.role==='survivor'&&p.alive)S._survAliveTime[p.id]=(S._survAliveTime[p.id]||0)+dt;
+          });
+        }
         W.time-=dt;
         if(W.time<=0){
           const aliveSurv=Object.values(W.players).filter(p=>p.role==='survivor'&&p.alive);
@@ -5551,6 +5562,7 @@ const Game={
           applyShieldDamage(s,dmg);
           if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
             W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+            if(S.isHost)Net.broadcast({t:'killCoin'});
             p.nicoKillCount=(p.nicoKillCount||0)+1;
             if(p.nicoKillCount>0&&p.nicoKillCount%NICO_T_KILLS_REQ===0){p.nicoBerserkReady=Math.min((p.nicoBerserkReady||0)+1,1);}
           } else {
@@ -5859,6 +5871,7 @@ const Game={
               s.hp=0;s.alive=false;s.bleedTicks=0;
               s.comboStunned=false;
               W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
+              if(S.isHost)Net.broadcast({t:'killCoin'});
               pk.comboHitSet.add(s.id);
             } else {
               s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
@@ -5965,7 +5978,7 @@ const Game={
   },
 
   // ── ROUND END: show overlay then return to lobby ──
-  handleRoundEnd(winner,reason,lmsLastSurvivorId){
+  handleRoundEnd(winner,reason,lmsLastSurvivorId,survAliveTime){
     if(!S.running)return;
     S.running=false;
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
@@ -5975,7 +5988,16 @@ const Game={
     if(!S.lateJoin){ // don't count stats for mid-game spectators
     if((winner==='killer'&&myRole==='killer')||(winner==='survivors'&&myRole==='survivor')){
       Stats.addWin(myRole);
-      Stats.addCoins(30); // +30 coins for winning
+      if(myRole==='killer') Stats.addCoins(60); // Killer win: 60$
+      else Stats.addCoins(40);                  // Survivor win: 40$
+    } else {
+      if(myRole==='killer') Stats.addCoins(15); // Killer loss: 15$
+      // Survivor loss: 10$ if survived >= 60s
+      if(myRole==='survivor'){
+        const aliveMap=survAliveTime||(S.isHost?S._survAliveTime||{}:{});
+        const mySurvTime=aliveMap[S.myId]||0;
+        if(mySurvTime>=60) Stats.addCoins(10);
+      }
     }
 
     // ── Malicia ──
@@ -5989,7 +6011,7 @@ const Game={
     }
     } // end !lateJoin
 
-    if(S.isHost)Net.broadcast({t:'over',winner,reason,lmsLastSurvivorId:S.lmsLastSurvivorId||null});
+    if(S.isHost)Net.broadcast({t:'over',winner,reason,lmsLastSurvivorId:S.lmsLastSurvivorId||null,survAliveTime:S._survAliveTime||{}});
 
     let _endOverlayShown=false;
     const showEndOverlay=()=>{
@@ -9782,7 +9804,7 @@ const GenPuzzle = (()=>{
           W.time = Math.max(1, W.time - 0); // already removed 12s via layers
         if(typeof Net !== 'undefined') Net.broadcast({t:'genDone', genId: state.genId});
         // +1 malicia
-        if(typeof Stats !== 'undefined') Stats.addMalicia(1);
+        if(typeof Stats !== 'undefined'){Stats.addMalicia(1);Stats.addCoins(5);} // +5$ for completing objective
       }
     }
     setTimeout(()=>GenPuzzle.close(), 1800);
