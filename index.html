@@ -3849,15 +3849,9 @@ async function fskCreatePrivate(){
     S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, afk:false, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
-    // NOTE: fskWirePeer (called inside fskEnsurePeer) already registers peer.on('connection').
-    // Do NOT add another handler here — it causes duplicate fskWireConn calls per connection.
+    PeerRT.peer.on('connection', conn=>fskWireConn(conn));
     MP.setStatus('', '');
-    // Immediately enter the lobby so the host is ready to receive connections.
-    // MP.createPrivate() will also show the code badge and "Enter Lobby" button.
-    const badge=document.getElementById('lobbyCodeBadge');
-    if(badge) badge.textContent=code;
-    UI.showLobby();
-    // Returns code — MP.createPrivate() will also show it in the UI
+    // Returns code — MP.createPrivate() will show it and offer "Entrar al lobby"
     return code;
   }catch(e){
     MP.setStatus('Error al crear sala: '+String(e.message||e),'#e74c3c');
@@ -4013,12 +4007,22 @@ const MP={
       if(codeEl) codeEl.textContent=code;
       if(box){
         box.style.display='flex';
-        // Remove old "Enter Lobby" button if it exists — host is already in lobby
-        const oldBtn=box.querySelector('#privEnterLobbyBtn');
-        if(oldBtn) oldBtn.remove();
+        // Add "Enter Lobby" button if not already there
+        if(!box.querySelector('#privEnterLobbyBtn')){
+          const btn=document.createElement('button');
+          btn.id='privEnterLobbyBtn';
+          btn.textContent='🚪 ENTRAR AL LOBBY';
+          btn.style.cssText='background:var(--blood);border:none;color:#fff;font-family:"Share Tech Mono",monospace;font-size:.65rem;letter-spacing:.2em;padding:9px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;';
+          btn.onclick=()=>{
+            const badge=document.getElementById('lobbyCodeBadge');
+            if(badge) badge.textContent=code;
+            UI.showLobby();
+          };
+          box.appendChild(btn);
+        }
       }
-      // Host is already in lobby (fskCreatePrivate calls UI.showLobby())
-      // Badge is also already set — nothing else needed
+      const badge=document.getElementById('lobbyCodeBadge');
+      if(badge) badge.textContent=code;
     }
   },
 
@@ -5638,6 +5642,12 @@ const Game={
             // First hit: apply Gashing Wound stun
             s.gashingWound=true;s.gashingWoundTimer=GASHING_WOUND_DUR;
             s.comboStunned=true;s.comboStunTimer=GASHING_WOUND_DUR;
+            // Gashing Wound hit: +8 coins +24 XP
+            if(S.myRole==='killer'&&!S.lateJoin){
+              if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',24);
+              Stats.addCoins(8);
+              showReward(8,24,0,'Golpeaste a un Superviviente con Gashing Wound');
+            }
           }
           applyShieldDamage(s,dmg);
           if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
@@ -5948,12 +5958,6 @@ const Game={
           if(pointInRotRect(s.x,s.y,cx,cy,COMBO_HB_W/2,COMBO_HB_H/2,ang)){
             s.comboStunned=true;
             s.comboStunTimer=comboDur-delay+0.10;
-            // First hit (i===0) = Gashing Wound: +8 coins +24 XP
-            if(i===0&&S.myRole==='killer'&&!S.lateJoin){
-              if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',24);
-              Stats.addCoins(8);
-              showReward(8,24,0,'Golpeaste a un Superviviente con Gashing Wound');
-            }
             applyShieldDamage(s, hitDmg);
             if(s.hp<=0){
               s.hp=0;s.alive=false;s.bleedTicks=0;
@@ -8585,10 +8589,10 @@ const AdminPanel={
   },
   forceIntermissionEnd(){
     if(!S.isHost)return;
-    // Skip the countdown — clear interval and fire hostStart immediately
+    // Skip the countdown — force cdVal to 0 and fire startRound
     S.cdVal=0;
-    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
-    Game.hostStart();
+    if(S._hostCdInterval){clearInterval(S._hostCdInterval);S._hostCdInterval=null;}
+    if(typeof Game!=='undefined'&&typeof Game.startRound==='function'){Game.startRound();}
     this.toggle();
   },
 };
