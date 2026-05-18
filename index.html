@@ -159,11 +159,7 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 
 #s-lobby{background:#000;overflow:hidden;}
 #lobbyCanvas{position:absolute;top:0;left:0;image-rendering:pixelated;}
-/* ── Reward Feed ── */
-#rewardFeed{position:fixed;top:54px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;z-index:9200;}
-.reward-entry{font-family:'Share Tech Mono',monospace;font-size:.82rem;font-weight:700;color:#ffe066;text-shadow:0 0 8px rgba(0,0,0,.9),0 1px 3px #000;padding:2px 10px;letter-spacing:.04em;white-space:nowrap;animation:rewardFadeOut 3s forwards;}
-@keyframes rewardFadeOut{0%{opacity:1;transform:translateY(0);}70%{opacity:1;transform:translateY(-6px);}100%{opacity:0;transform:translateY(-14px);}}
-/* ── Lobby HUD overlay ── */
+/* Lobby HUD overlay */
 #lobbyHUD{position:absolute;inset:0;pointer-events:none;}
 #lobbyTopBar{
   position:absolute;top:0;left:0;right:0;
@@ -1347,7 +1343,6 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 <!-- GAME -->
 <div id="s-game" class="screen">
   <canvas id="gameCanvas"></canvas>
-  <div id="rewardFeed"></div>
   <div id="mapBanner">
     <div id="mapBannerSub">▸ ESCENARIO ▸</div>
     <div id="mapBannerLine"></div>
@@ -2321,7 +2316,7 @@ const AMAX_Q_PEA_SPEED = 34;    // pea projectile speed in tiles/s (más rápido
 const AMAX_Q_PEA_SLOW_DUR = 2.5; // Slow II duration on killer
 const AMAX_Q_PEA_SLOW_VAL = 0.5; // Slow II = 50% speed
 const AMAX_Q_HP = 80;           // lanzaguisantes hitpoints (2 golpes: 40+40)
-const AMAX_E_CD = 25;
+const AMAX_E_CD = 22;
 const AMAX_E_RANGE = 5.1; // tiles — radio de curación reducido 15% (era 6)
 const AMAX_E_HEAL_RATE = 6.0;   // HP per second (6 × 6s = 36 HP max)
 const AMAX_E_MAX_DUR = 6;       // max heal duration per use (6 seconds)
@@ -4276,12 +4271,8 @@ const Net={
       // +1 malicia for the survivor who completed the generator
       if(d.pid===S.myId)Stats.addMalicia(1);
     } else if(d.t==='killCoin'){
-      // Killer earned 15$ and 45 XP for killing a survivor
-      if(S.myRole==='killer'&&!S.lateJoin){
-        Stats.addCoins(15);
-        if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',45);
-        showReward(15,45,0,'Mataste a un Superviviente');
-      }
+      // Killer earned 15$ for killing a survivor
+      if(S.myRole==='killer'&&!S.lateJoin) Stats.addCoins(15);
     } else if(d.t==='genDone'){
       // Otro jugador completó el generador — sincronizar estado
       if(W.gens){
@@ -4729,21 +4720,7 @@ const Game={
           }
           if(p.bloxyActive){
             p.bloxyTimer=Math.max(0,p.bloxyTimer-dt);
-            // Track pixels run while Bloxy active
-            if(p.id===S.myId){
-              const bspd=SW*(p.speedBuff||1); // survivor walk speed * speed buff
-              p._bloxyDistPx=(p._bloxyDistPx||0)+bspd*dt;
-            }
-            if(p.bloxyTimer<=0){
-              p.bloxyActive=false;p.speedBuff=1;
-              // Award XP if ran more than 140 px with Bloxy Cola
-              if(p.id===S.myId&&(p._bloxyDistPx||0)>=140){
-                if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'noob',12);
-                Stats.addCoins(3);Stats.addMalicia(0.25);
-                showReward(3,12,0.25,'Corriste más de 140px con Bloxy Cola');
-              }
-              p._bloxyDistPx=0;
-            }
+            if(p.bloxyTimer<=0){p.bloxyActive=false;p.speedBuff=1;}
           }
 
           // ── Slate Skin ticks ──
@@ -4760,28 +4737,18 @@ const Game={
           }
           if(p.ssActive){
             p.ssTimer=Math.max(0,p.ssTimer-dt);
-            // End naturally (timer) → grant Speed II
+            // End naturally → grant Speed II
             if(p.ssTimer<=0){
               p.ssActive=false;
               p.ssShield=0;
               p.speedBuff=SS_SPEED_BONUS_II;
               p.ssSpeedActive=true;
               p.ssSpeedTimer=SS_SPEED_DUR;
-              if(p.id===S.myId){
-                if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'noob',12);
-                Stats.addCoins(3);Stats.addMalicia(0.25);
-                showReward(3,12,0.25,'Slateskin terminó naturalmente');
-              }
             }
-            // Shield depleted by damage → also reward (player didn't cancel)
+            // Shield depleted by damage → end prematurely (no speed bonus)
             if((p.ssShield||0)<=0&&p.ssActive){
               p.ssActive=false;
               p.ssTimer=0;
-              if(p.id===S.myId){
-                if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'noob',12);
-                Stats.addCoins(3);Stats.addMalicia(0.25);
-                showReward(3,12,0.25,'Slateskin terminó naturalmente');
-              }
             }
           }
           if(p.ssSpeedActive){
@@ -4797,12 +4764,6 @@ const Game={
               p.gbEating=false;
               p.gbActive=true;
               p.gbTimer=GB_DUR;
-              // XP if activated while in layer 3 or chase (danger)
-              if(p.id===S.myId&&typeof GameAudio!=='undefined'&&(GameAudio._currentLayer>=3)&&typeof XP!=='undefined'){
-                XP.grant(Stats.equippedSurvivor||'noob',12);
-                Stats.addCoins(3);Stats.addMalicia(0.25);
-                showReward(3,12,0.25,'Te escondiste con Ghostburger en peligro');
-              }
               // Indetectable: quitar marca LMS si el survivor es el último
               if(S.lms&&S.lmsLastSurvivorId===p.id&&S.lmsTrackerT>0){
                 S.lmsTrackerT=0;
@@ -5029,20 +4990,8 @@ const Game={
                   if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
                     W.time=Math.min(W.time+KILL_TIME_BONUS,GAME_DUR*2);
                     if(S.isHost)Net.broadcast({t:'killCoin'});
-                    // Behead kill: +12 coins +36 XP
-                    if(S.myRole==='killer'&&!S.lateJoin){
-                      if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',36);
-                      Stats.addCoins(12);
-                      showReward(12,36,0,'Mataste a un Superviviente con Behead');
-                    }
                   } else {
                     s.bleedTicks=BLEED_TICKS;s.bleedTimer=BLEED_TICK;
-                    // Behead hit (non-kill): +4 coins +12 XP
-                    if(S.myRole==='killer'&&!S.lateJoin){
-                      if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',12);
-                      Stats.addCoins(4);
-                      showReward(4,12,0,'Golpeaste a un Superviviente con Behead');
-                    }
                   }
                   Game.checkWin();
                 }
@@ -5283,14 +5232,7 @@ const Game={
               const kk=Object.values(W.players).find(k=>k.role==='killer'&&k.alive);
               if(kk&&Math.hypot(kk.x-p.amaxPeaX,kk.y-p.amaxPeaY)<TILE*1.1&&kk.m1Cd>0){
                 p.amaxPeaHp=(p.amaxPeaHp||AMAX_Q_HP)-20;
-                if(p.amaxPeaHp<=0){
-                  p.amaxPeaActive=false;p.amaxPeaProjs=[];p.amaxPeaHp=0;
-                  if(p.id===S.myId){
-                    if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'amaxge5',10);
-                    Stats.addCoins(3);Stats.addMalicia(0.5);
-                    showReward(3,10,0.5,'El Killer destruyó tu torreta');
-                  }
-                }
+                if(p.amaxPeaHp<=0){p.amaxPeaActive=false;p.amaxPeaProjs=[];p.amaxPeaHp=0;}
               }
               if(p.amaxPeaActive){
                 // Re-aim toward killer
@@ -5324,12 +5266,6 @@ const Game={
                 // Slow II on killer
                 kk.amaxPeaSlow=true;kk.amaxPeaSlowTimer=AMAX_Q_PEA_SLOW_DUR;
                 kk.amaxRevealed=true;kk.amaxRevealTimer=AMAX_Q_REVEAL_DUR;
-                // XP + coin for slowing the killer
-                if(p.id===S.myId){
-                  if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'amaxge5',5);
-                  Stats.addCoins(1);
-                  showReward(1,5,0,'Tu torreta aplicó Lentitud al Killer');
-                }
                 return false; // destroy projectile
               }
               return true;
@@ -5351,21 +5287,7 @@ const Game={
                 if(ally.id===p.id)return; // ya curado arriba
                 if(ally.role!=='survivor'||!ally.alive)return;
                 if(Math.hypot(ally.x-p.x,ally.y-p.y)>healRange)return;
-                const before=ally.hp;
                 ally.hp=Math.min(ally.maxHp,ally.hp+healAmt);
-                const actualHeal=ally.hp-before;
-                // Track heal per ally for XP threshold
-                if(p.id===S.myId&&actualHeal>0){
-                  if(!p._allyHealAccum)p._allyHealAccum={};
-                  if(!p._allyHealAwarded)p._allyHealAwarded={};
-                  p._allyHealAccum[ally.id]=(p._allyHealAccum[ally.id]||0)+actualHeal;
-                  if(p._allyHealAccum[ally.id]>=18&&!p._allyHealAwarded[ally.id]){
-                    p._allyHealAwarded[ally.id]=true; // once per ally per use
-                    if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'amaxge5',12);
-                    Stats.addCoins(4);Stats.addMalicia(0.25);
-                    showReward(4,12,0.25,'Curaste 18+ HP a un aliado');
-                  }
-                }
               });
               if(p.amaxHealTimer<=0){p.amaxHealing=false;p.amaxHealMarked=false;}
             }
@@ -5380,12 +5302,6 @@ const Game={
                   // Killer just attacked
                   p.amaxShieldHit=true;
                   p.amaxShielding=false;p.amaxShieldTimer=0;
-                  // XP + coin + malicia for blocking a hit
-                  if(p.id===S.myId){
-                    if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'amaxge5',15);
-                    Stats.addCoins(5);Stats.addMalicia(0.5);
-                    showReward(5,15,0.5,'El Killer golpeó tu escudo');
-                  }
                   // Counterattack: push killer 5 studs + stun 2s
                   const ang=Math.atan2(kk.y-p.y,kk.x-p.x);
                   const pushDist=AMAX_R_PUSH_DIST*TILE;
@@ -5642,12 +5558,6 @@ const Game={
             // First hit: apply Gashing Wound stun
             s.gashingWound=true;s.gashingWoundTimer=GASHING_WOUND_DUR;
             s.comboStunned=true;s.comboStunTimer=GASHING_WOUND_DUR;
-            // Gashing Wound hit: +8 coins +24 XP
-            if(S.myRole==='killer'&&!S.lateJoin){
-              if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',24);
-              Stats.addCoins(8);
-              showReward(8,24,0,'Golpeaste a un Superviviente con Gashing Wound');
-            }
           }
           applyShieldDamage(s,dmg);
           if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
@@ -5755,8 +5665,6 @@ const Game={
     if(p.amaxECd>0||p.amaxHealing)return;
     p.amaxHealing=true;
     p.amaxHealTimer=AMAX_E_MAX_DUR;
-    p._allyHealAccum={}; // reset per-use heal tracking
-    p._allyHealAwarded={};
     p.amaxHealAccum=0;
     p.amaxECd=AMAX_E_CD;
     // Mark visible to all
@@ -6080,27 +5988,15 @@ const Game={
     if(!S.lateJoin){ // don't count stats for mid-game spectators
     if((winner==='killer'&&myRole==='killer')||(winner==='survivors'&&myRole==='survivor')){
       Stats.addWin(myRole);
-      if(myRole==='killer'){
-        Stats.addCoins(60);if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',180);
-        showReward(60,180,0,'Ganaste como Killer');
-      } else {
-        Stats.addCoins(40);if(typeof XP!=='undefined')XP.grant(Stats.equippedSurvivor||'noob',120);
-        showReward(40,120,0,'Ganaste como Superviviente');
-      }
+      if(myRole==='killer') Stats.addCoins(60); // Killer win: 60$
+      else Stats.addCoins(40);                  // Survivor win: 40$
     } else {
-      if(myRole==='killer'){
-        Stats.addCoins(15); // Killer loss: 15$
-        showReward(15,0,0,'Perdiste como Killer');
-      }
+      if(myRole==='killer') Stats.addCoins(15); // Killer loss: 15$
       // Survivor loss: 10$ if survived >= 60s
       if(myRole==='survivor'){
         const aliveMap=survAliveTime||(S.isHost?S._survAliveTime||{}:{});
         const mySurvTime=aliveMap[S.myId]||0;
-        if(mySurvTime>=60){
-          Stats.addCoins(10);
-          showReward(10,0,0,'Sobreviviste más de 60s como Superviviente');
-        }
-        // Plain survivor loss: no reward
+        if(mySurvTime>=60) Stats.addCoins(10);
       }
     }
 
@@ -9148,14 +9044,15 @@ const Shop={
 // ══════════════════════════════════════════
 const XP = {
   // XP requerida para pasar del nivel N al N+1
-  // Segmentos: 0→25 = 5400 XP total | 25→50 = 11750 | 50→75 = 16330 | 75→100 = 25920
+  // Keyframes: lvl→xpNeeded  (1:50, 10:200, 20:300, 30:400, 40:500, 50:600, 60:700, 70:800, 80:900, 90:1000, 100:1250)
   // Interpolación lineal entre keyframes
   _keyframes:[
-    [0,120],[25,320],[50,633],[75,675],[100,1429]
+    [0,50],[1,50],[10,200],[20,300],[30,400],[40,500],
+    [50,600],[60,700],[70,800],[80,900],[90,1000],[100,1250]
   ],
 
   xpForLevel(lvl){
-    if(lvl>=100)return 1429;
+    if(lvl>=100)return 1250;
     const kf=this._keyframes;
     for(let i=0;i<kf.length-1;i++){
       const [l0,x0]=kf[i],[l1,x1]=kf[i+1];
@@ -9517,21 +9414,6 @@ const LobbySettings={
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
-// ── Reward Feed helper ──
-function showReward(coins, xp, malicia, reason){
-  const feed=document.getElementById('rewardFeed');
-  if(!feed)return;
-  const parts=[];
-  if(coins) parts.push('+$'+coins);
-  if(xp)    parts.push(xp+' EXP');
-  if(malicia>0) parts.push(malicia+' Malicia');
-  const el=document.createElement('div');
-  el.className='reward-entry';
-  el.textContent=parts.join(' & ')+': '+reason;
-  feed.appendChild(el);
-  setTimeout(()=>el.remove(),3100);
-}
-
 Inp.init();
 Auth.loadRemember(); // async — handles auto-login if remembered
 
@@ -9922,9 +9804,7 @@ const GenPuzzle = (()=>{
           W.time = Math.max(1, W.time - 0); // already removed 12s via layers
         if(typeof Net !== 'undefined') Net.broadcast({t:'genDone', genId: state.genId});
         // +1 malicia
-        if(typeof Stats !== 'undefined'){Stats.addMalicia(1);Stats.addCoins(5);}
-        if(typeof XP !== 'undefined'&&typeof Stats !== 'undefined'){const _eid=Stats.equippedSurvivor||'noob';XP.grant(_eid,15);}
-        if(typeof showReward!=='undefined') showReward(5,15,0,'Completaste un Generador');
+        if(typeof Stats !== 'undefined'){Stats.addMalicia(1);Stats.addCoins(5);} // +5$ for completing objective
       }
     }
     setTimeout(()=>GenPuzzle.close(), 1800);
