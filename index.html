@@ -2615,7 +2615,7 @@ const UI={
     Stats.startSession();
     GameAudio.playLobby();
     const badge=document.getElementById('lobbyCodeBadge');
-    if(badge) badge.textContent=S.isHost?'HOST':'SALA';
+    if(badge) badge.textContent=S.code||SIO.roomCode||(S.isHost?'HOST':'SALA');
     document.getElementById('lobbyCDBig').textContent='';
     document.getElementById('lobbyWaitMsg').style.display='block';
     document.getElementById('lobbyCDLabel').textContent='ESPERANDO JUGADORES';
