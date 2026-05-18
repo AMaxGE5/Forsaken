@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>FORSAKEN — Online</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -1633,6 +1633,13 @@ const FB_CONFIG = {
   messagingSenderId: "209076582755",
   appId:             "1:209076582755:web:3bb1406f954250f728bb56"
 };
+
+// ══════════════════════════════════════════
+//  SOCKET.IO SERVER URL
+//  Cambia esta URL por la de tu servidor en Render (o donde lo despliegues)
+//  Ejemplo producción: 'https://forsaken-server.onrender.com'
+// ══════════════════════════════════════════
+const FSK_SERVER = 'https://gw22.onrender.com';
 
 let _fbDb = null;
 let _fbReady = false;
@@ -10026,5 +10033,621 @@ const GenPuzzle = (()=>{
     <div class="lvlup-sub" id="levelUpSub">Level 1 → Level 2</div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     FORSAKEN — CAPA DE RED Socket.IO
+     Reemplaza completamente PeerJS/WebRTC.
+     Mantiene la misma API pública: Net.broadcast(), Net.sendHost(),
+     fskCreatePrivate(), fskJoinRoom(), fskJoinRapida(), etc.
+════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+
+// ── Dirección del servidor ────────────────────────────────────────────
+const _FSK_SERVER = (typeof FSK_SERVER !== 'undefined')
+  ? FSK_SERVER
+  : 'http://localhost:3000';
+
+// ── Socket singleton ──────────────────────────────────────────────────
+let _socket = null;
+
+function _getSocket() {
+  if (_socket && _socket.connected) return _socket;
+  if (_socket) return _socket; // already created, may be reconnecting
+
+  _socket = io(_FSK_SERVER, {
+    transports: ['websocket', 'polling'],
+    reconnectionAttempts: 15,
+    reconnectionDelay:    1500,
+    timeout:              12000,
+  });
+
+  // ── Conectado ──────────────────────────────────────────────────────
+  _socket.on('connect', function() {
+    console.log('[NET] Conectado al servidor', _socket.id);
+    SIO.connStatus = 'connected';
+    SIO._flushQueue();
+    // Quitar banner de desconexión si había uno
+    var b = document.getElementById('_fskDiscBanner');
+    if (b) b.remove();
+    // Re-unirse si estábamos en sala y nos reconectamos
+    if (SIO.roomCode && !S.isHost) {
+      console.log('[NET] Re-uniéndose a sala', SIO.roomCode);
+      _socket.emit('joinRoom', {
+        code: SIO.roomCode,
+        id: S.myId,
+        name: Stats.username || 'JUGADOR',
+        username: Stats.username || '?',
+        malicia: Stats.malicia || 0,
+        afk: S.isAfk,
+        equippedKiller: Stats.equippedKiller || '',
+        equippedSurvivor: Stats.equippedSurvivor || '',
+        reconnect: true,
+      }, function(res) {
+        if (res && res.ok) {
+          S.players = res.players;
+          UI.renderLobbyPlayers();
+          SIO.connStatus = 'connected';
+          console.log('[NET] Reconexión exitosa');
+        }
+      });
+    }
+  });
+
+  // ── Desconectado ───────────────────────────────────────────────────
+  _socket.on('disconnect', function(reason) {
+    console.warn('[NET] Desconectado:', reason);
+    SIO.connStatus = 'disconnected';
+    if (reason === 'io server disconnect') {
+      _showDiscBanner();
+    }
+  });
+
+  _socket.on('connect_error', function(err) {
+    console.warn('[NET] Error de conexión:', err.message);
+    SIO.connStatus = 'error';
+    _showDiscBanner('⚠ No se puede conectar al servidor — reintentando...');
+  });
+
+  // ── Mensajes del juego entrantes ─────────────────────────────────
+  _socket.on('gameMsg', function(msg) {
+    if (S.isHost) {
+      Net.onHost({ _socketId: msg._fromSocketId }, msg);
+    } else {
+      Net.onClient(msg);
+    }
+  });
+
+  // ── Posición en lobby ────────────────────────────────────────────
+  _socket.on('lobbyPos', function(msg) {
+    if (!LobbyWorld.lobbyPlayers) return;
+    LobbyWorld.lobbyPlayers[msg.id] = Object.assign({}, msg);
+    if (typeof UI !== 'undefined' && UI.renderStatsPanel) UI.renderStatsPanel();
+  });
+
+  // ── Jugador entró ────────────────────────────────────────────────
+  _socket.on('playerJoined', function(d) {
+    S.players = d.players;
+    UI.renderLobbyPlayers();
+    if (S.isHost) Net.checkCd();
+  });
+
+  // ── Jugador salió ─────────────────────────────────────────────────
+  _socket.on('playerLeft', function(d) {
+    S.players = d.players;
+    UI.renderLobbyPlayers();
+    if (S.isHost) Net.checkCd();
+  });
+
+  // ── Cambio de host (host original se desconectó) ─────────────────
+  _socket.on('hostChanged', function(d) {
+    S.players = d.players;
+    var isNewHost = (d.newHostId === S.myId);
+    if (isNewHost) {
+      console.log('[NET] Yo soy el nuevo host');
+      S.isHost = true;
+      SIO.isHost = true;
+      AdminPanel.show();
+    }
+    UI.renderLobbyPlayers();
+    if (S.isHost) Net.checkCd();
+  });
+
+  return _socket;
+}
+
+// ── Banner de desconexión ─────────────────────────────────────────────
+function _showDiscBanner(msg) {
+  if (document.getElementById('_fskDiscBanner')) return;
+  var el = document.createElement('div');
+  el.id = '_fskDiscBanner';
+  el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-family:"Share Tech Mono",monospace;font-size:.78rem;letter-spacing:.18em;text-align:center;padding:13px;pointer-events:none;';
+  el.textContent = msg || '⚠ DESCONECTADO DEL SERVIDOR — reconectando...';
+  document.body.appendChild(el);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SIO — estado de la capa de red
+// ═══════════════════════════════════════════════════════════════════
+var SIO = {
+  connStatus: 'offline',
+  roomCode:   null,
+  isHost:     false,
+  _queue:     [],
+
+  _flushQueue: function() {
+    while (this._queue.length > 0) {
+      var item = this._queue.shift();
+      if (_socket && _socket.connected) _socket.emit(item.ev, item.data);
+    }
+  },
+
+  emit: function(event, data, ack) {
+    var sock = _getSocket();
+    if (sock.connected) {
+      if (ack) sock.emit(event, data, ack);
+      else sock.emit(event, data);
+    } else {
+      if (!ack) this._queue.push({ ev: event, data: data });
+    }
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  REEMPLAZAR fskCleanup y mpCleanState
+// ═══════════════════════════════════════════════════════════════════
+window.fskCleanup = function(skipSocket) {
+  SIO.roomCode = null;
+  SIO.isHost   = false;
+  if (!skipSocket && _socket) {
+    try { _socket.emit('leaveRoom'); } catch(e) {}
+  }
+};
+
+window.mpCleanState = function() {
+  if (S.raf) { cancelAnimationFrame(S.raf); S.raf = null; }
+  if (S._hostInterval) { clearInterval(S._hostInterval); S._hostInterval = null; }
+  if (S.cdInt) { clearInterval(S.cdInt); S.cdInt = null; }
+  if (Net._hbInt) { clearInterval(Net._hbInt); Net._hbInt = null; }
+  S.running = false; S.isDeadSpec = false; S.inLobbyWorld = false;
+  S.isAfk = false;
+  LobbyWorld.stop();
+  S.conns = []; S.players = []; Inp.clear();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  SOBREESCRIBIR Net — solo la capa de transporte
+// ═══════════════════════════════════════════════════════════════════
+Object.assign(Net, {
+
+  uid: function() {
+    return 'u' + Math.random().toString(36).slice(2, 10);
+  },
+
+  _hbInt: null,
+
+  // ── Host → todos los clientes ────────────────────────────────────
+  broadcast: function(msg) {
+    _applyHostSideEffect(msg);
+    SIO.emit('gameMsg', msg);
+  },
+
+  // ── Cliente → host ───────────────────────────────────────────────
+  sendHost: function(msg) {
+    SIO.emit('gameMsg', msg);
+  },
+
+  // ── Posición lobby ────────────────────────────────────────────────
+  broadcastLobbyPos: function() {
+    var entry = S.players.find(function(p){ return p.id === S.myId; }) || {};
+    var msg = {
+      t: 'lobbyPos',
+      id: S.myId,
+      x: S.lobbyP.x, y: S.lobbyP.y, facing: S.lobbyP.facing,
+      name: entry.name || Stats.username || '?',
+      username: Stats.username || '?',
+      timePlayed: Stats.timePlayed, survWins: Stats.survWins, killWins: Stats.killWins,
+      malicia: Stats.malicia || 0,
+      afk: S.isAfk,
+      equippedKiller: Stats.equippedKiller || '',
+      equippedSurvivor: Stats.equippedSurvivor || '',
+    };
+    SIO.emit('lobbyPos', msg);
+  },
+
+  // Socket.IO maneja keepalive internamente
+  _startHeartbeat: function() {},
+
+  // ── Limpieza ──────────────────────────────────────────────────────
+  cleanup: function() {
+    if (S.raf) { cancelAnimationFrame(S.raf); S.raf = null; }
+    if (S._hostInterval) { clearInterval(S._hostInterval); S._hostInterval = null; }
+    if (S.cdInt) { clearInterval(S.cdInt); S.cdInt = null; }
+    if (this._hbInt) { clearInterval(this._hbInt); this._hbInt = null; }
+    S.running = false; S.isDeadSpec = false; S.inLobbyWorld = false;
+    LobbyWorld.stop();
+    fskCleanup(false);
+    S.conns = []; S.players = []; Inp.clear();
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  //  HOST: procesar mensajes de clientes
+  // ════════════════════════════════════════════════════════════════
+  onHost: function(conn, d) {
+    if (!d || typeof d !== 'object') return;
+    if (d.t === 'ping') return;
+    if (d.t === 'probe' || d.t === 'join') return;
+
+    if (d.t === 'input') {
+      if (!S.running) return;
+      var p = W.players[d.pid];
+      if (p) {
+        p.inp = d.inp; p.shift = d.shift; p.facing = d.facing;
+        if (d.m1 && !p.m1Prev) Game.tryM1(d.pid);
+        p.m1Prev = d.m1;
+        if (d.e && !p.ePrev) Game.doActionE(d.pid);
+        p.ePrev = d.e;
+        if (d.f && !p.fPrev) Game.doActionF(d.pid);
+        p.fPrev = d.f;
+        if (d.q && !p.qPrev) Game.doQ(d.pid);
+        p.qPrev = d.q;
+        if (d.r && !p.rPrev) Game.doR(d.pid);
+        p.rPrev = d.r;
+        if (d.tk && !p.tPrev) Game.doT(d.pid);
+        p.tPrev = d.tk;
+      }
+      return;
+    }
+
+    if (d.t === 'afk') {
+      var pa = S.players.find(function(x){ return x.id === d.id; });
+      if (pa) pa.afk = !!d.afk;
+      Net.broadcast({ t: 'list', players: S.players, code: S.code || '' });
+      Net.checkCd();
+      UI.renderLobbyPlayers();
+      return;
+    }
+
+    if (d.t === 'leave' || d.t === 'disc') {
+      Net.onDisc(conn);
+      return;
+    }
+
+    if (d.t === 'genLayerDone' || d.t === 'genDone') {
+      Net.broadcast(d);
+      return;
+    }
+
+    if (d.t === 'lobbyPos') {
+      LobbyWorld.lobbyPlayers[d.id] = Object.assign({}, d);
+      if (typeof UI !== 'undefined' && UI.renderStatsPanel) UI.renderStatsPanel();
+      Net.broadcast(d);
+      return;
+    }
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  //  CLIENTE: procesar mensajes del host
+  // ════════════════════════════════════════════════════════════════
+  onClient: function(d) {
+    if (!d || typeof d !== 'object') return;
+
+    if (d.t === 'pong') return;
+
+    if (d.t === 'list') {
+      if (d.players) S.players = d.players;
+      UI.renderLobbyPlayers();
+      return;
+    }
+
+    if (d.t === 'lobby') {
+      if (d.players) S.players = d.players;
+      UI.renderLobbyPlayers();
+      return;
+    }
+
+    if (d.t === 'afk') {
+      var p = S.players.find(function(x){ return x.id === d.id; });
+      if (p) p.afk = !!d.afk;
+      UI.renderLobbyPlayers();
+      return;
+    }
+
+    if (d.t === 'lobbyPos') {
+      LobbyWorld.lobbyPlayers[d.id] = Object.assign({}, d);
+      if (typeof UI !== 'undefined' && UI.renderStatsPanel) UI.renderStatsPanel();
+      return;
+    }
+
+    if (d.t === 'stopCd') {
+      if (S.cdInt) { clearInterval(S.cdInt); S.cdInt = null; }
+      var el = document.getElementById('lobbyCDBig');
+      if (el) { el.textContent = '—'; el.classList.remove('urgent'); }
+      var wm = document.getElementById('lobbyWaitMsg');
+      if (wm) wm.textContent = 'Esperando jugadores...';
+      return;
+    }
+
+    if (d.t === 'cd') {
+      UI.startCd(d.val);
+      return;
+    }
+
+    if (d.t === 'start') {
+      S.myRole = d.role;
+      S.lateJoin = !!d.lateJoin;
+      Game.clientStart(d);
+      return;
+    }
+
+    if (d.t === 'gs') {
+      if (!S.running) return;
+      Game.applyState(d.gs, d.slashFX);
+      return;
+    }
+
+    if (d.t === 'over') {
+      Game.handleRoundEnd(d.winner, d.reason, d.lmsLastSurvivorId, d.survAliveTime);
+      return;
+    }
+
+    if (d.t === 'returnLobby') {
+      Game.doReturnToLobby();
+      return;
+    }
+
+    if (d.t === 'killCoin') {
+      if (typeof Stats !== 'undefined') Stats.addCoins(5);
+      if (typeof showReward !== 'undefined') showReward(5, 0, 0, 'Assist al Killer');
+      return;
+    }
+
+    if (d.t === 'spectate') {
+      S.players = d.players || S.players;
+      S.myRole = 'spectator';
+      Game.clientStart(Object.assign({}, d, { role: 'spectator' }));
+      return;
+    }
+
+    if (d.t === 'genLayerDone') {
+      if (typeof GenPuzzle !== 'undefined' && GenPuzzle.getState) {
+        var st = GenPuzzle.getState();
+        if (st && st.genId === d.genId) {
+          st.layer = d.layer;
+          var bar = document.getElementById('genLayerBar');
+          var lbl = document.getElementById('genLayerLabel');
+          if (bar) bar.style.width = (d.layer / 4 * 100) + '%';
+          if (lbl) lbl.textContent = d.layer + '/4';
+        }
+      }
+      return;
+    }
+
+    if (d.t === 'genDone') {
+      if (typeof W !== 'undefined' && W.gens) {
+        var g = W.gens.find(function(x){ return x.id === d.genId; });
+        if (g) { g.prog = 100; g.on = true; }
+      }
+      return;
+    }
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  //  HOST: manejar desconexión de cliente
+  // ════════════════════════════════════════════════════════════════
+  onDisc: function(conn) {
+    if (!S.isHost) return;
+    var socketId = conn._socketId || conn.id || '';
+    var idx = S.players.findIndex(function(p){ return p.socketId === socketId; });
+    if (idx === -1) return;
+    var removed = S.players.splice(idx, 1)[0];
+    console.log('[HOST] Jugador desconectado:', removed.name);
+    if (S.running && W.players && W.players[removed.id]) {
+      W.players[removed.id].alive = false;
+      W.players[removed.id].escaped = true;
+      Game.checkWin();
+    }
+    Net.broadcast({ t: 'list', players: S.players, code: S.code || '' });
+    UI.renderLobbyPlayers();
+    Net.checkCd();
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  //  HOST: arrancar countdown si hay ≥2 jugadores no-afk
+  // ════════════════════════════════════════════════════════════════
+  checkCd: function() {
+    if (!S.isHost) return;
+    var nonAfk = S.players.filter(function(p){ return !p.afk; });
+    if (nonAfk.length >= 2) {
+      if (!S.cdInt && !S.running && !S._startingRound) {
+        S.cdVal = (typeof LOBBY_CD_DUR !== 'undefined') ? LOBBY_CD_DUR : 15;
+        UI.startCd(S.cdVal);
+        Net.broadcast({ t: 'cd', val: S.cdVal });
+        S.cdInt = setInterval(function() {
+          S.cdVal--;
+          UI.startCd(S.cdVal);
+          Net.broadcast({ t: 'cd', val: S.cdVal });
+          if (S.cdVal <= 0) {
+            clearInterval(S.cdInt); S.cdInt = null;
+            Game.hostStart();
+          }
+        }, 1000);
+      }
+    } else {
+      if (S.cdInt) {
+        clearInterval(S.cdInt); S.cdInt = null;
+        Net.broadcast({ t: 'stopCd' });
+        UI.startCd(-1);
+      }
+    }
+  },
+
+});
+
+// Aplicar efectos locales en el host cuando hace broadcast
+function _applyHostSideEffect(msg) {
+  if (!S.isHost) return;
+  if (msg.t === 'list' && msg.players) S.players = msg.players;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  fskCreatePrivate — crear sala privada
+// ═══════════════════════════════════════════════════════════════════
+window.fskCreatePrivate = function() {
+  mpCleanState();
+  var sock = _getSocket();
+  S.myId = Net.uid();
+
+  return new Promise(function(resolve) {
+    sock.emit('createRoom', {
+      id: S.myId,
+      name: Stats.username || 'HOST',
+      username: Stats.username || 'HOST',
+      malicia: Stats.malicia || 0,
+      afk: false,
+      equippedKiller: Stats.equippedKiller || '',
+      equippedSurvivor: Stats.equippedSurvivor || '',
+    }, function(res) {
+      if (!res || !res.ok) {
+        MP.setStatus('Error al crear sala.', '#e74c3c');
+        resolve(null);
+        return;
+      }
+      var code = res.code;
+      S.isHost = true;
+      SIO.isHost = true;
+      SIO.roomCode = code;
+      S.code = code;
+      S.players = (res.players || []).map(function(p){ return Object.assign({}, p); });
+      var me = S.players.find(function(p){ return p.id === S.myId; }) || S.players[0];
+      if (me) me.socketId = sock.id;
+
+      var badge = document.getElementById('lobbyCodeBadge');
+      if (badge) badge.textContent = code;
+
+      AdminPanel.show();
+      UI.showLobby();
+      console.log('[NET] Sala privada creada:', code);
+      resolve(code);
+    });
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  fskJoinRoom — unirse a sala (privada)
+// ═══════════════════════════════════════════════════════════════════
+window.fskJoinRoom = function(rawCode, isReconnect) {
+  var code = String(rawCode || '').trim().toUpperCase()
+    .replace(/^FSK26-ROOM-/, '').replace(/^ROOM-/, '');
+  if (!code || code.length < 4) {
+    MP.setStatus('Ingresa un código válido.', '#e74c3c');
+    return Promise.reject(new Error('invalid code'));
+  }
+  if (!isReconnect) mpCleanState();
+  MP.setStatus(isReconnect ? 'Reconectando...' : 'Conectando...', '#a0c0ff');
+
+  var sock = _getSocket();
+  S.myId = S.myId || Net.uid();
+
+  return new Promise(function(resolve, reject) {
+    var tid = setTimeout(function() {
+      MP.setStatus('Tiempo de espera agotado — reintenta.', '#f39c12');
+      reject(new Error('timeout'));
+    }, 15000);
+
+    sock.emit('joinRoom', {
+      code: code,
+      id: S.myId,
+      name: Stats.username || 'JUGADOR',
+      username: Stats.username || '?',
+      malicia: Stats.malicia || 0,
+      afk: S.isAfk,
+      equippedKiller: Stats.equippedKiller || '',
+      equippedSurvivor: Stats.equippedSurvivor || '',
+      reconnect: !!isReconnect,
+    }, function(res) {
+      clearTimeout(tid);
+      if (!res || !res.ok) {
+        MP.setStatus(res ? res.reason : 'Error de conexión.', '#e74c3c');
+        reject(new Error(res ? res.reason : 'error'));
+        return;
+      }
+      S.isHost = !!res.isHost;
+      SIO.isHost = S.isHost;
+      SIO.roomCode = code;
+      S.code = code;
+      S.players = (res.players || []).map(function(p){ return Object.assign({}, p); });
+      S.players.forEach(function(p){ if (p.id === S.myId) p.socketId = sock.id; });
+
+      var badge = document.getElementById('lobbyCodeBadge');
+      if (badge) badge.textContent = code;
+
+      if (res.spectate) {
+        S.myRole = 'spectator';
+        Net.onClient({ t: 'spectate', gs: null, players: res.players });
+      } else {
+        UI.showLobby();
+      }
+      if (S.isHost) AdminPanel.show();
+      MP.setStatus('', '');
+      console.log('[NET] Unido a sala:', code, '| host:', S.isHost);
+      resolve();
+    });
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  fskJoinRapida — sala rápida
+// ═══════════════════════════════════════════════════════════════════
+window.fskJoinRapida = function(num) {
+  return fskJoinRoom('RAPIDA-' + num, false);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  fskProbeRapida — verificar estado de sala rápida
+// ═══════════════════════════════════════════════════════════════════
+window.fskProbeRapida = function(num, cb) {
+  var sock = _getSocket();
+  sock.emit('probeRoom', { code: 'RAPIDA-' + num }, function(res) {
+    if (!res || !res.exists) { cb(null); return; }
+    cb({ count: res.count, status: res.running ? 'playing' : 'lobby' });
+  });
+};
+
+// ── fskSend — alias de Net.sendHost ──────────────────────────────────
+window.fskSend = function(msg) { Net.sendHost(msg); };
+
+// ═══════════════════════════════════════════════════════════════════
+//  Stubs de compatibilidad PeerJS (evitan errores en código que los llame)
+// ═══════════════════════════════════════════════════════════════════
+if (typeof PeerRT !== 'undefined') {
+  Object.assign(PeerRT, {
+    peer: null, peerKind: 'socket', roomConn: null,
+    hbInterval: null, reconnTimer: null, reconnAttempts: 0,
+    peerStatus: 'open', connStatus: 'connected',
+    roomMeta: null, syncWarn: '',
+    get peerId() { return _socket ? _socket.id : ''; },
+  });
+}
+
+window.fskEnsurePeer      = function() { return Promise.resolve(_getSocket()); };
+window.fskWirePeer        = function() {};
+window.fskWireConn        = function() {};
+window.fskHandleClose     = function() {};
+window.fskHandleMsg       = function() {};
+window.fskStopHB          = function() {};
+window.fskStartHB         = function() {};
+window.fskAttemptReconnect = function() {};
+
+// ── Conectar al cargar ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  _getSocket();
+  console.log('[NET] Socket.IO → ' + _FSK_SERVER);
+});
+
+console.log('✅ [FORSAKEN] Capa de red Socket.IO lista.');
+})();
+</script>
 </body>
 </html>
