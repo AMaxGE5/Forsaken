@@ -4502,6 +4502,9 @@ const Game={
   },
 
   clientStart(d){
+    // Guard: si la ronda ya está corriendo, ignorar llamadas duplicadas
+    // (pueden ocurrir por mensajes 'start' reenviados o intervals huérfanos)
+    if(S.running)return;
     S.inLobbyWorld=false;
     S.isDeadSpec=false;
     UI.resetRoundHUD();
@@ -10381,6 +10384,7 @@ Object.assign(Net, {
     }
 
     if (d.t === 'start') {
+      if (S.running) return; // Ignorar mensajes 'start' duplicados si la ronda ya inició
       S.myRole = d.role;
       S.lateJoin = !!d.lateJoin;
       Game.clientStart(d);
@@ -10468,11 +10472,17 @@ Object.assign(Net, {
     if (nonAfk.length >= 2) {
       if (!S.cdInt && !S.running && !S._startingRound) {
         S.cdVal = (typeof LOBBY_CD_DUR !== 'undefined') ? LOBBY_CD_DUR : 15;
-        UI.startCd(S.cdVal);
+        // Actualizar UI directamente (NO llamar UI.startCd porque crea su propio interval
+        // que quedaría huérfano y dispararía hostStart en bucle indefinidamente)
+        var _lbl = document.getElementById('lobbyCDLabel');
+        if (_lbl) _lbl.textContent = 'INICIANDO EN';
+        var _wm = document.getElementById('lobbyWaitMsg');
+        if (_wm) _wm.style.display = 'none';
+        UI.tickCd(S.cdVal);
         Net.broadcast({ t: 'cd', val: S.cdVal });
         S.cdInt = setInterval(function() {
           S.cdVal--;
-          UI.startCd(S.cdVal);
+          UI.tickCd(S.cdVal);
           Net.broadcast({ t: 'cd', val: S.cdVal });
           if (S.cdVal <= 0) {
             clearInterval(S.cdInt); S.cdInt = null;
