@@ -5642,12 +5642,6 @@ const Game={
             // First hit: apply Gashing Wound stun
             s.gashingWound=true;s.gashingWoundTimer=GASHING_WOUND_DUR;
             s.comboStunned=true;s.comboStunTimer=GASHING_WOUND_DUR;
-            // Gashing Wound hit: +8 coins +24 XP
-            if(S.myRole==='killer'&&!S.lateJoin){
-              if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',24);
-              Stats.addCoins(8);
-              showReward(8,24,0,'Golpeaste a un Superviviente con Gashing Wound');
-            }
           }
           applyShieldDamage(s,dmg);
           if(s.hp<=0){s.hp=0;s.alive=false;s.bleedTicks=0;
@@ -5958,6 +5952,12 @@ const Game={
           if(pointInRotRect(s.x,s.y,cx,cy,COMBO_HB_W/2,COMBO_HB_H/2,ang)){
             s.comboStunned=true;
             s.comboStunTimer=comboDur-delay+0.10;
+            // First hit (i===0) = Gashing Wound: +8 coins +24 XP
+            if(i===0&&S.myRole==='killer'&&!S.lateJoin){
+              if(typeof XP!=='undefined')XP.grant(Stats.equippedKiller||'slasher',24);
+              Stats.addCoins(8);
+              showReward(8,24,0,'Golpeaste a un Superviviente con Gashing Wound');
+            }
             applyShieldDamage(s, hitDmg);
             if(s.hp<=0){
               s.hp=0;s.alive=false;s.bleedTicks=0;
@@ -8589,10 +8589,10 @@ const AdminPanel={
   },
   forceIntermissionEnd(){
     if(!S.isHost)return;
-    // Skip the countdown — force cdVal to 0 and fire startRound
+    // Skip the countdown — clear interval and fire hostStart immediately
     S.cdVal=0;
-    if(S._hostCdInterval){clearInterval(S._hostCdInterval);S._hostCdInterval=null;}
-    if(typeof Game!=='undefined'&&typeof Game.startRound==='function'){Game.startRound();}
+    if(S.cdInt){clearInterval(S.cdInt);S.cdInt=null;}
+    Game.hostStart();
     this.toggle();
   },
 };
