@@ -4529,6 +4529,10 @@ const Game={
   },
 
   showKillerReveal(callback){
+    // Cancel any previous reveal timeout to avoid double-firing
+    if(Game._revealT1){clearTimeout(Game._revealT1);Game._revealT1=null;}
+    if(Game._revealT2){clearTimeout(Game._revealT2);Game._revealT2=null;}
+    KillerReveal.stop();
     const killer=Object.values(W.players).find(p=>p.role==='killer');
     const killerUser=(killer?(killer.username||killer.name):'?').toUpperCase();
     const isMe=killer&&killer.id===S.myId;
@@ -4559,12 +4563,13 @@ const Game={
     ov.classList.remove('fading');
     ov.classList.add('show');
     KillerReveal.start();
-    setTimeout(()=>{
+    Game._revealT1=setTimeout(()=>{
       ov.classList.add('fading');
-      setTimeout(()=>{
+      Game._revealT2=setTimeout(()=>{
         ov.classList.remove('show');ov.classList.remove('fading');
         KillerReveal.stop();
-        callback();
+        Game._revealT1=null;Game._revealT2=null;
+        if(S.running)callback();
       },500);
     },2600);
   },
@@ -6210,6 +6215,9 @@ const Game={
     document.getElementById('killerWinOv').classList.remove('show');
     document.getElementById('killerWinOv').classList.remove('fading');
     KillerWin._stop();
+    const krOv=document.getElementById('killerRevealOv');
+    if(krOv){krOv.classList.remove('show');krOv.classList.remove('fading');}
+    KillerReveal.stop();
     S.lms=false;S.lmsTrackerT=0;S.lmsLastSurvivorId=null;S.lateJoin=false;
     slashFX=[];
 
@@ -8629,8 +8637,6 @@ const AdminPanel={
   },
   forceIntermissionEnd(){
     if(!S.isHost)return;
-    // Reset double-fire guard in case a previous start failed
-    S._startingRound=false;
     // Broadcast stopCd so clients cleanly stop their countdown display
     Net.broadcast({t:'stopCd'});
     // Skip the countdown — clear interval and fire hostStart immediately
