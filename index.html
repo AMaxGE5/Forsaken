@@ -3849,9 +3849,15 @@ async function fskCreatePrivate(){
     S.players=[{id:S.myId, name:Stats.username||'HOST', username:Stats.username||'HOST', host:true, color:PCOLORS[0], malicia:Stats.malicia||0, afk:false, equippedKiller:Stats.equippedKiller||'', equippedSurvivor:Stats.equippedSurvivor||''}];
     PeerRT.connStatus='hosting';
     PeerRT.roomMeta={ roomId, roomCode:code, isRapida:false, players:1 };
-    PeerRT.peer.on('connection', conn=>fskWireConn(conn));
+    // NOTE: fskWirePeer (called inside fskEnsurePeer) already registers peer.on('connection').
+    // Do NOT add another handler here — it causes duplicate fskWireConn calls per connection.
     MP.setStatus('', '');
-    // Returns code — MP.createPrivate() will show it and offer "Entrar al lobby"
+    // Immediately enter the lobby so the host is ready to receive connections.
+    // MP.createPrivate() will also show the code badge and "Enter Lobby" button.
+    const badge=document.getElementById('lobbyCodeBadge');
+    if(badge) badge.textContent=code;
+    UI.showLobby();
+    // Returns code — MP.createPrivate() will also show it in the UI
     return code;
   }catch(e){
     MP.setStatus('Error al crear sala: '+String(e.message||e),'#e74c3c');
@@ -4007,22 +4013,12 @@ const MP={
       if(codeEl) codeEl.textContent=code;
       if(box){
         box.style.display='flex';
-        // Add "Enter Lobby" button if not already there
-        if(!box.querySelector('#privEnterLobbyBtn')){
-          const btn=document.createElement('button');
-          btn.id='privEnterLobbyBtn';
-          btn.textContent='🚪 ENTRAR AL LOBBY';
-          btn.style.cssText='background:var(--blood);border:none;color:#fff;font-family:"Share Tech Mono",monospace;font-size:.65rem;letter-spacing:.2em;padding:9px 22px;cursor:pointer;text-transform:uppercase;margin-top:4px;';
-          btn.onclick=()=>{
-            const badge=document.getElementById('lobbyCodeBadge');
-            if(badge) badge.textContent=code;
-            UI.showLobby();
-          };
-          box.appendChild(btn);
-        }
+        // Remove old "Enter Lobby" button if it exists — host is already in lobby
+        const oldBtn=box.querySelector('#privEnterLobbyBtn');
+        if(oldBtn) oldBtn.remove();
       }
-      const badge=document.getElementById('lobbyCodeBadge');
-      if(badge) badge.textContent=code;
+      // Host is already in lobby (fskCreatePrivate calls UI.showLobby())
+      // Badge is also already set — nothing else needed
     }
   },
 
