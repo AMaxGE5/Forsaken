@@ -2741,22 +2741,243 @@ const SPAWN_DEFS=[
   {x:20,y:6},{x:44,y:6},{x:4,y:16},{x:59,y:16},
 ];
 
-// Returns a safe spawn position (tile coords) that isn't inside a wall
-function safeTileSpawn(tx,ty){
+// ══════════════════════════════════════════
+//  COOL CARNIVAL MAP
+// ══════════════════════════════════════════
+/*
+  Layout (65x45) basado en la imagen de referencia:
+  - Entrada al sur-centro con taquillas
+  - Zona elevada al oeste (tile=3 = elevated/rojo = solo bajar, no subir)
+  - Exhibit Drakobloxxer al noroeste con sección elevada
+  - Edificios pequeños: Lost&Found, Popcorn Stand, Target Building, Pizza Van
+  - Rueda de la fortuna al noreste (zona elevada con caídas)
+  - Casa pequeña al centro-este
+  Tile legend: 0=floor, 1=wall, 2=generator, 3=elevated(one-way down), 4=killer-only
+*/
+function buildCoolCarnivalMap(){
+  const m=Array.from({length:MAP_H},()=>Array(MAP_W).fill(0));
+  const W2=MAP_W,H2=MAP_H;
+
+  // helpers
+  const fill=(x1,y1,x2,y2,t=1)=>{for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)if(y>=0&&y<H2&&x>=0&&x<W2)m[y][x]=t;};
+  const hline=(y,x1,x2,t=1,gaps=[])=>{for(let x=x1;x<=x2;x++)if(!gaps.includes(x)&&y>=0&&y<H2&&x>=0&&x<W2)m[y][x]=t;};
+  const vline=(x,y1,y2,t=1,gaps=[])=>{for(let y=y1;y<=y2;y++)if(!gaps.includes(y)&&y>=0&&y<H2&&x>=0&&x<W2)m[y][x]=t;};
+  const rect=(x1,y1,x2,y2,t=1)=>{hline(y1,x1,x2,t);hline(y2,x1,x2,t);vline(x1,y1,y2,t);vline(x2,y1,y2,t);};
+
+  // Border
+  for(let x=0;x<W2;x++){m[0][x]=1;m[H2-1][x]=1;}
+  for(let y=0;y<H2;y++){m[y][0]=1;m[y][W2-1]=1;}
+
+  // ══ 1. CADENA DE BLOQUES / RUEDA (extremo izquierdo, x:1-9, y:8-36) ══
+  // La imagen muestra una cadena de plataformas rojas/naranja elevadas conectadas
+  // con un círculo grande rojo (señal) al centro-izquierda
+  // Plataformas elevadas en cadena — tile=3 (rojo elevado)
+  fill(1,8,  7,12,  3);  // bloque cadena 1 (arriba)
+  fill(1,14, 7,18,  3);  // bloque cadena 2
+  fill(1,20, 7,24,  3);  // bloque cadena 3 (con señal circular)
+  fill(1,26, 7,30,  3);  // bloque cadena 4
+  fill(1,32, 7,36,  3);  // bloque cadena 5 (abajo)
+  // Eslabones de conexión entre bloques (pasillos estrechos elevados)
+  fill(3,12, 5,14,  3);
+  fill(3,18, 5,20,  3);
+  fill(3,24, 5,26,  3);
+  fill(3,30, 5,32,  3);
+  // Pared este de la cadena (no se puede entrar desde el este)
+  vline(9, 8, 36, 1, []);
+  // Acceso único desde el sur (rampa de bajada)
+  m[36][4]=0; m[36][5]=0; m[36][6]=0;
+  // Señal circular roja: pilares decorativos en bloque del centro
+  fill(21,3, 23,7, 1);   // pilar izq señal
+  fill(21,3, 23,3, 0);   // interior señal
+
+  // ══ 2. EXHIBIT DRAKOBLOXXER (noroeste, x:10-24, y:2-18) ══
+  rect(10,2, 24,18, 1);
+  // Puerta sur (salida al pasillo)
+  m[18][16]=0; m[18][17]=0;
+  // Puerta este (conecta con zona central norte)
+  m[10][24]=0; m[11][24]=0;
+  // División interior — pasillo en L
+  hline(9,  11,23, 1, [14,15,16,17,18]);
+  vline(18,  9,17, 1, [13,14]);
+  // Plataforma elevada NW dentro del exhibit
+  fill(3,11, 8,17, 3);
+  // Pilares/displays
+  fill(11,20, 12,22, 1);
+  fill(11,11, 12,13, 1);
+  fill(15,3,  16,5,  1);
+
+  // ══ 3. ZONA NORTE-CENTRO (edificio rectangular blanco, x:26-40, y:2-14) ══
+  // El gran edificio blanco/gris del norte-centro de la imagen
+  rect(26,2, 40,14, 1);
+  // Puertas: sur-izq y sur-der
+  m[14][30]=0; m[14][31]=0;
+  m[14][35]=0; m[14][36]=0;
+  // Ventana/apertura norte
+  m[2][32]=0; m[2][33]=0;
+  // Interior: mostrador central
+  fill(6,28, 8,38, 1);
+  fill(6,29, 8,37, 0);  // vacío interior mostrador
+
+  // ══ 4. EDIFICIO MARRÓN NORESTE (x:42-56, y:2-14) ══
+  // El edificio naranja/marrón del noreste de la imagen
+  rect(42,2, 56,14, 1);
+  m[14][47]=0; m[14][48]=0;  // puerta sur
+  m[2][48]=0; m[2][49]=0;    // ventana norte
+  // Muebles interiores
+  fill(4,44, 6,46, 1);
+  fill(4,52, 6,54, 1);
+  fill(10,44, 12,50, 1);
+  fill(10,51, 12,51, 0);
+
+  // ══ 5. ZONA ELEVADA OESTE (barrera roja, x:8-10, y:16-40) ══
+  // La pared roja vertical que se ve al oeste del área central
+  fill(16,8, 40,10, 3);   // plataforma elevada — solo bajar por el este
+  vline(10, 16, 40, 1, [24,25,26,27,28]); // pared este con hueco central
+
+  // ══ 6. GRAN SALA BLANCA CENTRO (x:18-44, y:20-36) ══
+  // El gran rectángulo blanco del centro de la imagen — sala principal
+  rect(18,20, 44,36, 1);
+  // Puertas: norte (2), sur (2), oeste (1), este (1)
+  m[20][28]=0; m[20][29]=0;  // puerta norte-izq
+  m[20][34]=0; m[20][35]=0;  // puerta norte-der
+  m[36][28]=0; m[36][29]=0;  // puerta sur-izq
+  m[36][34]=0; m[36][35]=0;  // puerta sur-der
+  m[28][18]=0; m[29][18]=0;  // puerta oeste
+  m[28][44]=0; m[29][44]=0;  // puerta este
+  // Pilares interiores de la sala
+  fill(23,20, 24,21, 1);
+  fill(23,41, 24,43, 1);
+  fill(32,20, 33,21, 1);
+  fill(32,41, 33,43, 1);
+  // Generador central de la sala
+  m[28][31]=2;
+
+  // ══ 7. ZONA "COFFEMAKER" (pasillo centro-este, x:46-62, y:22-34) ══
+  // El pasillo este con texto COFFEMAKER visible en la imagen
+  rect(46,22, 62,34, 1);
+  m[22][52]=0; m[22][53]=0;  // puerta norte
+  m[34][52]=0; m[34][53]=0;  // puerta sur
+  m[28][46]=0; m[29][46]=0;  // puerta oeste (conecta con gran sala)
+  // Muebles/mesas interiores
+  fill(24,48, 25,54, 1);
+  fill(24,55, 25,55, 0);
+  fill(31,48, 32,60, 1);
+  fill(31,53, 32,53, 0);
+
+  // ══ 8. EDIFICIO RAYAS CIRCO (suroeste, x:4-16, y:32-43) ══
+  // El edificio con rayas rojas y blancas horizontales (carpa de circo)
+  rect(4,32, 16,43, 1);
+  m[43][9]=0; m[43][10]=0;   // puerta sur
+  m[38][16]=0; m[39][16]=0;  // puerta este
+  // Rayas marcadas con tile especial dentro (tile=3 para el look rojo)
+  // Filas alternas de suelo elevado (rayas)
+  for(let y=33;y<=42;y+=2) fill(y,5,y,15,3);
+  // Generador dentro
+  m[37][10]=2;
+
+  // ══ 9. ZONA ENTRADA SUR (x:18-46, y:37-43) ══
+  // La zona rosada/roja de la entrada sur
+  hline(37, 18, 46, 1, [28,29,30,31,32,33,34,35]);  // pared norte entrada con hueco
+  hline(43, 20, 44, 1, [29,30,31,32,33]);             // pared sur con hueco central
+  vline(18, 37, 43, 1, [40,41]);  // pared oeste con hueco
+  vline(44, 37, 43, 1, [40,41]);  // pared este con hueco
+  // Taquillas a los lados del hueco central
+  fill(38,25, 39,26, 1);  // taquilla izq
+  fill(38,38, 39,39, 1);  // taquilla der
+  // Zona de espera (vallas)
+  hline(41, 20, 26, 1, [22,23,24]);
+  hline(41, 38, 44, 1, [40,41]);
+
+  // ══ 10. PASILLO NORTE HORIZONTAL (conecta exhibit con edificio norte) ══
+  // Corredor abierto entre zonas norte
+  fill(15,24, 18,26, 0);  // pasillo abierto entre exhibit y sala norte
+  fill(15,40, 18,42, 0);  // pasillo abierto al este
+
+  // ══ 11. PASILLO CENTRAL VERTICAL (conecta norte con sur) ══
+  // Corredor que pasa por el centro del mapa
+  fill(14,30, 20,33, 0);  // pasillo vertical norte
+  fill(36,30, 37,33, 0);  // pasillo vertical sur (conecta sala con entrada)
+
+  // ══ 12. ZONA EXTERIOR ESTE (x:58-63, y:16-43) ══
+  // Zona naranja/marrón del borde este visible en la imagen
+  fill(16,58, 43,63, 3);  // plataforma elevada este
+  vline(58, 16, 43, 1, [22,23,30,31,38,39]); // pared con 3 puertas
+
+  // ══ 13. ZONA EXTERIOR SUR-ESTE (zona morada, x:45-63, y:35-43) ══
+  // Área morada/oscura del sureste de la imagen
+  fill(35,45, 43,63, 3);
+  vline(45, 35, 43, 1, [38,39]);
+
+  // ══ KILLER-ONLY WALLS (tile=4) ══
+  m[17][10]=4; m[18][10]=4;  // acceso killer al exhibit por el sur
+  m[20][45]=4; m[21][45]=4;  // acceso killer a zona coffemaker
+  m[38][17]=4; m[39][17]=4;  // acceso killer a entrada sur
+
+  // ══ GENERATORS ══
+  // 1. Gran sala blanca (centro) — ya colocado arriba: m[28][31]
+  // 2. Exhibit Drakobloxxer
+  m[14][20]=2;
+  // 3. Edificio norte-centro
+  m[8][32]=2;
+  // 4. Edificio noreste marrón
+  m[8][49]=2;
+  // 5. Zona coffemaker
+  m[28][54]=2;
+  // 6. Edificio circo (suroeste) — ya colocado arriba: m[37][10]
+
+  return m;
+}
+
+const CC_MAP=buildCoolCarnivalMap();
+
+// Gen spawns por mapa
+const CC_GEN_SPAWNS=[];
+for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
+  if(CC_MAP[y][x]===2) CC_GEN_SPAWNS.push({x,y});
+}
+
+// Survivor spawns — puntos blancos (derecha del mapa en la imagen)
+const CC_SPAWN_DEFS=[
+  {x:59,y:18},{x:61,y:24},{x:60,y:30},{x:62,y:36},
+  {x:59,y:38},{x:61,y:42},{x:55,y:40},{x:58,y:22},
+  {x:60,y:28},{x:62,y:34},
+];
+
+// Killer spawns — puntos F (centro-izq y entrada sur en la imagen)
+const CC_KILLER_SPAWNS=[
+  {x:31,y:28},{x:25,y:28},{x:31,y:22},{x:14,y:38},{x:31,y:40},
+];
+
+// Registro de mapas
+const MAP_REGISTRY={
+  'default':{map:BASE_MAP, gens:GEN_SPAWNS, spawns:SPAWN_DEFS,
+    killerSpawns:[{x:32,y:22},{x:30,y:20},{x:34,y:24},{x:28,y:22},{x:36,y:22}],
+    name:'Forsaken', theme:'default'},
+  'coolcarnival':{map:CC_MAP, gens:CC_GEN_SPAWNS, spawns:CC_SPAWN_DEFS,
+    killerSpawns:CC_KILLER_SPAWNS,
+    name:'C00l Carnival', theme:'carnival'},
+};
+const MAP_IDS=Object.keys(MAP_REGISTRY);
+function safeTileSpawn(tx,ty,activeMap){
+  const _m=activeMap||(W&&W.map?W.map:BASE_MAP);
   const r=TILE*.28;
   const px=tx*TILE+TILE/2,py=ty*TILE+TILE/2;
-  if(!wallAt(px,py,r))return{x:tx,y:ty};
-  // Search nearby open tiles in expanding rings
+  const _wallAt=(ppx,ppy)=>{
+    const wx=Math.floor(ppx/TILE),wy=Math.floor(ppy/TILE);
+    if(wy<0||wy>=MAP_H||wx<0||wx>=MAP_W)return true;
+    const t=_m[wy][wx];return t===1||t===4;
+  };
+  if(!_wallAt(px,py))return{x:tx,y:ty};
   for(let ring=1;ring<=4;ring++){
     for(let dy=-ring;dy<=ring;dy++)for(let dx=-ring;dx<=ring;dx++){
       if(Math.abs(dx)!==ring&&Math.abs(dy)!==ring)continue;
       const nx=tx+dx,ny=ty+dy;
       if(nx<1||ny<1||nx>=MAP_W-1||ny>=MAP_H-1)continue;
       const npx=nx*TILE+TILE/2,npy=ny*TILE+TILE/2;
-      if(!wallAt(npx,npy,r))return{x:nx,y:ny};
+      if(!_wallAt(npx,npy))return{x:nx,y:ny};
     }
   }
-  return{x:tx,y:ty}; // fallback
+  return{x:tx,y:ty};
 }
 
 // ══════════════════════════════════════════
@@ -2878,7 +3099,7 @@ function wallAt(x,y,r,role){
   return[[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]].some(([px,py])=>{
     const tx=px/TILE|0,ty=py/TILE|0;
     if(tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) return true;
-    const t=BASE_MAP[ty][tx];
+    const t=(W&&W.map?W.map:BASE_MAP)[ty][tx];
     if(t===1) return true;                        // normal wall — blocks all
     if(t===4&&role!=='killer') return true;       // red wall — only killer passes
     return false;
@@ -4821,6 +5042,7 @@ function fireM1(killerPid){
     y: k.y + Math.sin(k.facing)*(HB_M1_DIST*0.35),
     ang: k.facing,
     hw: TILE*0.95, hh: TILE*1.05,
+    rhw: HB_W/2, rhh: HB_H/2,  // dimensiones reales de hitbox para debug
     life: 0.38, maxLife: 0.38,
     slasherSwing: true, enraged
   });
@@ -4914,24 +5136,28 @@ const Game={
     const killerPick=topPlayers[Math.floor(Math.random()*topPlayers.length)];
     const killerIdx=plist.indexOf(killerPick);
     const roles={},spawns={};
-    // Killer spawns in center area; survivors spread to corners/edges
-    const killerSpawnPool=[{x:32,y:22},{x:30,y:20},{x:34,y:24},{x:28,y:22},{x:36,y:22}];
-    const survivorSpawnPool=[...SPAWN_DEFS].sort(()=>Math.random()-.5);
+    // Seleccionar mapa ANTES de calcular spawn pools
+    const mapId=MAP_IDS[Math.floor(Math.random()*MAP_IDS.length)];
+    S.currentMapId=mapId;
+    // Map-aware spawn pools
+    const _mapReg=MAP_REGISTRY[S.currentMapId||'default']||MAP_REGISTRY['default'];
+    const killerSpawnPool=_mapReg.killerSpawns||[{x:32,y:22}];
+    const survivorSpawnPool=[...(_mapReg.spawns||SPAWN_DEFS)].sort(()=>Math.random()-.5);
     let survIdx=0;
     plist.forEach((p,i)=>{
       roles[p.id]=i===killerIdx?'killer':'survivor';
       if(i===killerIdx){
         // Pick first safe killer spawn
         let ksp=killerSpawnPool[0];
-        for(const sp of killerSpawnPool){const safe=safeTileSpawn(sp.x,sp.y);if(safe){ksp=safe;break;}}
+        for(const sp of killerSpawnPool){const safe=safeTileSpawn(sp.x,sp.y,_mapReg.map);if(safe){ksp=safe;break;}}
         spawns[p.id]=ksp;
       } else {
         const raw=survivorSpawnPool[survIdx%survivorSpawnPool.length];survIdx++;
-        spawns[p.id]=safeTileSpawn(raw.x,raw.y);
+        spawns[p.id]=safeTileSpawn(raw.x,raw.y,_mapReg.map);
       }
     });
     S.myRole=roles[S.myId];
-    const d={roles,spawns,players:plist};
+    const d={roles,spawns,players:plist,mapId};
     Net.broadcast({t:'start',...d});
     Game.clientStart(d);
   },
@@ -4942,6 +5168,7 @@ const Game={
     if(S.running)return;
     S.inLobbyWorld=false;
     S.isDeadSpec=false;
+    S.currentMapId=d.mapId||'default';
     UI.resetRoundHUD();
     S.players=d.players||S.players;S.myRole=d.roles[S.myId];
     Game.initWorld(d.roles,d.spawns);
@@ -5015,11 +5242,15 @@ const Game={
   },
 
   initWorld(roles,spawns){
+    const _mr=MAP_REGISTRY[S.currentMapId||'default']||MAP_REGISTRY['default'];
+    const _activeMap=_mr.map;
+    const _activeGens=_mr.gens;
     W={
-      map:BASE_MAP.map(r=>[...r]),
-      gens:GEN_SPAWNS.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0,sharedLayers:0})),
+      map:_activeMap.map(r=>[...r]),
+      gens:_activeGens.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0,sharedLayers:0})),
       players:{},
       time:GAME_DUR,
+      mapId:S.currentMapId||'default',
     };
     S.players.forEach((p,i)=>{
       const role=roles[p.id]||'survivor';
@@ -5092,7 +5323,9 @@ const Game={
   },
 
   initFromSerial(gs){
-    W={map:BASE_MAP.map(r=>[...r]),gens:GEN_SPAWNS.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0,sharedLayers:0})),players:{},time:gs.time||300};
+    const _mrGs=MAP_REGISTRY[S.currentMapId||'default']||MAP_REGISTRY['default'];
+    const _activeMap=_mrGs.map; const _activeGens=_mrGs.gens;
+    W={map:_activeMap.map(r=>[...r]),gens:_activeGens.map((g,i)=>({id:'g'+i,x:g.x,y:g.y,on:false,prog:0,sharedLayers:0})),players:{},time:gs.time||300,mapId:S.currentMapId||'default'};
     S.players.forEach((p,i)=>{
       W.players[p.id]={id:p.id,name:p.name,role:'survivor',alive:true,escaped:false,x:0,y:0,hp:SHP,maxHp:SHP,stamina:SMAX,maxStamina:SMAX,sprinting:false,staminaCd:0,interacting:false,interactTarget:null,inp:{},shift:false,ePrev:false,facing:0,m1Cd:0,m1Prev:false,m1HitSet:null,bleedTicks:0,bleedTimer:0,color:p.color||PCOLORS[i%PCOLORS.length]};
     });
@@ -5168,7 +5401,17 @@ const Game={
         if(!S.isHost&&p.id!==S.myId)return;
         const inp=p.id===S.myId?Inp.k:p.inp;
         const sh=p.id===S.myId?Inp.sh:p.shift;
-        try{Game.moveP(p,dt,inp,sh);}catch(e){console.error('[moveP ERROR] pid='+p.id,e);}
+        // HOST: si el cliente remoto está en un dash activo, usar su posición reportada
+        // en vez de simularla — evita que el host calcule una posición distinta y la mande de vuelta
+        const isRemoteDashing=S.isHost&&p.id!==S.myId&&(
+          p.nicoCharge||p.beheadDashing||p.mankQDashing||p.mankEActive
+        );
+        if(isRemoteDashing){
+          // Solo actualizar posición del host con lo que el cliente reportó
+          if(p._cpx!==undefined){p.x=p._cpx;p.y=p._cpy;}
+        } else {
+          try{Game.moveP(p,dt,inp,sh);}catch(e){console.error('[moveP ERROR] pid='+p.id,e);}
+        }
         if(p.m1Cd>0)p.m1Cd=Math.max(0,p.m1Cd-dt);
         // qCd ticks for everyone; Nicostos: paused while charge is active
         const nicoCharging=isNicostos(p)&&p.nicoCharge;
@@ -6017,13 +6260,15 @@ const Game={
         if(S._posResyncT >= 2){
           S._posResyncT = 0;
           Object.values(W.players).forEach(p=>{
-            if(p.id === S.myId) return;          // host mueve su propio player normalmente
-            if(!p.alive) return;                 // no mover players muertos
-            if(p._cpx === undefined) return;     // no hay posición reportada aún
+            if(p.id === S.myId) return;
+            if(!p.alive) return;
+            if(p._cpx === undefined) return;
+            // No corregir posición mientras el cliente está en un dash activo
+            if(p.nicoCharge||p.beheadDashing||p.mankQDashing||p.mankEActive) return;
             const dx = p._cpx - p.x;
             const dy = p._cpy - p.y;
             const dist2 = dx*dx + dy*dy;
-            if(dist2 > 1){                       // solo si hay diferencia real (> 1px)
+            if(dist2 > 1){
               p.x = p._cpx;
               p.y = p._cpy;
             }
@@ -6203,6 +6448,7 @@ const Game={
         const fcx2=fk.x+Math.cos(fang)*(HB_M1_DIST*0.35);
         const fcy2=fk.y+Math.sin(fang)*(HB_M1_DIST*0.35);
         slashFX.push({x:fcx2,y:fcy2,ang:fang,hw:TILE*0.7,hh:TILE*0.75,
+          rhw:HB_W/2, rhh:HB_H/2,
           life:.30,maxLife:.30,idx:i,nicoKnifeSwing:true,hasKnife,creator:nicoIsCreator});
       },delay);
     }
@@ -6684,6 +6930,7 @@ const Game={
     S.running=false;
     if(S.raf){cancelAnimationFrame(S.raf);S.raf=null;}
     if(S._hostInterval){clearInterval(S._hostInterval);S._hostInterval=null;}
+    Game._mapCache=null; // invalidar cache para que la siguiente ronda la reconstruya con el mapa correcto
     GameAudio.stopAll();
     const myRole=S.myRole;
     if(!S.lateJoin){ // don't count stats for mid-game spectators
@@ -6717,8 +6964,9 @@ const Game={
     // ── Malicia ──
     const lmsLastId=lmsLastSurvivorId||(S.isHost?S.lmsLastSurvivorId||null:null);
     if(myRole==='killer'){
-      Stats.malicia=1;Stats.save();
-      const sp=S.players.find(p=>p.id===S.myId);if(sp)sp.malicia=1;
+      if(!Stats.noKillerMode){ Stats.malicia=1; Stats.save(); }
+      else { Stats.malicia=0; Stats.save(); }
+      const sp=S.players.find(p=>p.id===S.myId);if(sp)sp.malicia=Stats.malicia||0;
     } else {
       Stats.addMalicia(1);
       if(lmsLastId&&lmsLastId===S.myId&&winner==='survivors')Stats.addMalicia(1);
@@ -7028,7 +7276,9 @@ const Game={
       }
       if(d.qCd!==undefined){
         p.qCd=d.qCd;
-        p.beheadDashing=d.beheadDashing||false;p.beheadDashTimer=d.beheadDashTimer||0;p.beheadDashAng=d.beheadDashAng||0;
+        if(id!==S.myId||!p.beheadDashing){
+          p.beheadDashing=d.beheadDashing||false;p.beheadDashTimer=d.beheadDashTimer||0;p.beheadDashAng=d.beheadDashAng||0;
+        }
         p.beheadHitTimer=d.beheadHitTimer||0;p.beheadHit=d.beheadHit||false;
         p.beheadSlow=d.beheadSlow||false;p.beheadSlowTimer=d.beheadSlowTimer||0;
         p.comboCd=d.comboCd||0;p.comboActive=d.comboActive||false;
@@ -7059,9 +7309,20 @@ const Game={
           p.amaxPeaSlow=d.amaxPeaSlow||false;p.amaxPeaSlowTimer=d.amaxPeaSlowTimer||0;
         }
         if(d.mankQCd!==undefined){
-          p.mankQCd=d.mankQCd||0;p.mankQDashing=d.mankQDashing||false;p.mankQDashTimer=d.mankQDashTimer||0;p.mankQDashAng=d.mankQDashAng||0;
-          p.mankQSpeedActive=d.mankQSpeedActive||false;p.mankQSpeedTimer=d.mankQSpeedTimer||0;p.mankQHit=d.mankQHit||false;
-          p.mankECd=d.mankECd||0;p.mankEActive=d.mankEActive||false;p.mankETimer=d.mankETimer||0;p.mankEResting=d.mankEResting||false;p.mankERestTimer=d.mankERestTimer||0;p.mankENoStam=d.mankENoStam||false;
+          const isMe2=id===S.myId;
+          // Para el propio jugador: NO pisar estados de dash/movimiento activo —
+          // el cliente es autoritativo sobre su propia física durante el dash.
+          // Solo sincronizar cooldowns y estados no-de-movimiento.
+          if(!isMe2||!p.mankQDashing){
+            p.mankQDashing=d.mankQDashing||false;p.mankQDashTimer=d.mankQDashTimer||0;p.mankQDashAng=d.mankQDashAng||0;
+            p.mankQSpeedActive=d.mankQSpeedActive||false;p.mankQSpeedTimer=d.mankQSpeedTimer||0;p.mankQHit=d.mankQHit||false;
+          }
+          p.mankQCd=d.mankQCd||0;
+          if(!isMe2||!p.mankEActive){
+            p.mankEActive=d.mankEActive||false;p.mankETimer=d.mankETimer||0;
+            p.mankEResting=d.mankEResting||false;p.mankERestTimer=d.mankERestTimer||0;p.mankENoStam=d.mankENoStam||false;
+          }
+          p.mankECd=d.mankECd||0;
           p.mankRCd=d.mankRCd||0;p.mankREating=d.mankREating||false;p.mankREatTimer=d.mankREatTimer||0;p.mankRActive=d.mankRActive||false;p.mankRTimer=d.mankRTimer||0;p.mankFootprints=d.mankFootprints||[];
         }
         if(d.martQCd!==undefined){
@@ -7083,7 +7344,10 @@ const Game={
         if(d.nicoHasKnife!==undefined){
           p.nicoHasKnife=d.nicoHasKnife;p.nicoKnifeFlying=d.nicoKnifeFlying||false;
           p.nicoKnifeProjX=d.nicoKnifeProjX||0;p.nicoKnifeProjY=d.nicoKnifeProjY||0;
-          p.nicoCharge=d.nicoCharge||false;p.nicoChargeAng=d.nicoChargeAng||0;
+          // No pisar nicoCharge mientras el propio cliente está en embestida
+          if(id!==S.myId||!p.nicoCharge){
+            p.nicoCharge=d.nicoCharge||false;p.nicoChargeAng=d.nicoChargeAng||0;
+          }
           p.nicoSlow=d.nicoSlow||false;p.nicoSlowTimer=d.nicoSlowTimer||0;
           p.nicoMarkTargets=d.nicoMarkTargets||{};
           p.nicoInvis=d.nicoInvis||false;p.nicoInvisStill=d.nicoInvisStill||false;
@@ -7142,6 +7406,8 @@ const Game={
   // Los tiles tipo 4 (paredes rojas animadas) se excluyen y se dibujan
   // encima del cache cada frame en _drawWorld().
   _buildMapCache(){
+    const activeMap=(W&&W.map)?W.map:BASE_MAP;
+    const isCarnival=(W&&W.mapId==='coolcarnival');
     const cw = MAP_W * TILE, ch = MAP_H * TILE;
     const mc = (typeof OffscreenCanvas !== 'undefined')
       ? new OffscreenCanvas(cw, ch)
@@ -7149,57 +7415,62 @@ const Game={
     if(mc.width !== cw) mc.width = cw;
     if(mc.height !== ch) mc.height = ch;
     const mctx = mc.getContext('2d');
-    mctx.fillStyle = '#05050d';
+    mctx.fillStyle = isCarnival?'#0a0414':'#05050d';
     mctx.fillRect(0, 0, cw, ch);
     for(let ty = 0; ty < MAP_H; ty++){
       for(let tx = 0; tx < MAP_W; tx++){
-        const t = BASE_MAP[ty][tx];
+        const t = activeMap[ty][tx];
         const px = tx * TILE, py = ty * TILE;
         const seed = (tx*7 + ty*13) % 17;
         const seed2 = (tx*3 + ty*19) % 11;
-        if(t === 1){
-          const wallBase = seed<6?'#1c1c2a':seed<11?'#20202e':'#181826';
-          mctx.fillStyle = wallBase; mctx.fillRect(px,py,TILE,TILE);
-          mctx.fillStyle = 'rgba(255,255,255,.14)'; mctx.fillRect(px,py,TILE,4);
-          mctx.fillStyle = 'rgba(255,255,255,.08)'; mctx.fillRect(px,py,4,TILE);
-          mctx.fillStyle = 'rgba(0,0,0,.7)'; mctx.fillRect(px,py+TILE-4,TILE,4);
-          mctx.fillStyle = 'rgba(0,0,0,.5)'; mctx.fillRect(px+TILE-4,py,4,TILE);
-          mctx.fillStyle = seed2<4?'#111120':seed2<8?'#14142a':'#0e0e1e';
-          mctx.fillRect(px+4,py+4,TILE-8,TILE-8);
-          mctx.strokeStyle = 'rgba(0,0,0,.6)'; mctx.lineWidth = 1;
-          mctx.beginPath(); mctx.moveTo(px+4,py+TILE/2); mctx.lineTo(px+TILE-4,py+TILE/2); mctx.stroke();
-          if(seed<4){mctx.strokeStyle='rgba(0,0,0,.6)';mctx.lineWidth=.8;mctx.beginPath();mctx.moveTo(px+7,py+5);mctx.lineTo(px+12,py+15);mctx.lineTo(px+10,py+24);mctx.stroke();}
-          if(seed===3){mctx.fillStyle='rgba(25,50,20,.5)';mctx.fillRect(px+4,py+3,TILE-8,4);}
-          mctx.strokeStyle = 'rgba(0,0,0,1)'; mctx.lineWidth = 2.5; mctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
-          mctx.strokeStyle = 'rgba(255,255,255,.05)'; mctx.lineWidth = 1; mctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
-        } else if(t === 4){
-          // Paredes rojas: solo base en cache; la animación se pinta encima cada frame
-          mctx.fillStyle = '#1a0202'; mctx.fillRect(px,py,TILE,TILE);
+        if(t===1){
+          const wallBase=isCarnival?(seed<4?'#3a1040':seed<8?'#2a0a30':seed<12?'#1a0a2a':'#301050'):(seed<6?'#1c1c2a':seed<11?'#20202e':'#181826');
+          mctx.fillStyle=wallBase;mctx.fillRect(px,py,TILE,TILE);
+          mctx.fillStyle=isCarnival?'rgba(255,180,255,.18)':'rgba(255,255,255,.14)';mctx.fillRect(px,py,TILE,4);
+          mctx.fillStyle=isCarnival?'rgba(255,100,255,.1)':'rgba(255,255,255,.08)';mctx.fillRect(px,py,4,TILE);
+          mctx.fillStyle='rgba(0,0,0,.7)';mctx.fillRect(px,py+TILE-4,TILE,4);
+          mctx.fillStyle='rgba(0,0,0,.5)';mctx.fillRect(px+TILE-4,py,4,TILE);
+          const innerW=isCarnival?(seed2<4?'#220830':seed2<8?'#2a0a3a':'#180620'):(seed2<4?'#111120':seed2<8?'#14142a':'#0e0e1e');
+          mctx.fillStyle=innerW;mctx.fillRect(px+4,py+4,TILE-8,TILE-8);
+          if(isCarnival){
+            if(seed%3===0){mctx.fillStyle='rgba(255,60,60,.25)';mctx.fillRect(px+4,py+4,4,TILE-8);mctx.fillStyle='rgba(255,255,80,.18)';mctx.fillRect(px+TILE-8,py+4,4,TILE-8);}
+            if(seed===5){mctx.fillStyle='rgba(255,200,50,.3)';mctx.fillRect(px+4,py+4,TILE-8,4);}
+          } else {
+            mctx.strokeStyle='rgba(0,0,0,.6)';mctx.lineWidth=1;mctx.beginPath();mctx.moveTo(px+4,py+TILE/2);mctx.lineTo(px+TILE-4,py+TILE/2);mctx.stroke();
+            if(seed<4){mctx.strokeStyle='rgba(0,0,0,.6)';mctx.lineWidth=.8;mctx.beginPath();mctx.moveTo(px+7,py+5);mctx.lineTo(px+12,py+15);mctx.lineTo(px+10,py+24);mctx.stroke();}
+            if(seed===3){mctx.fillStyle='rgba(25,50,20,.5)';mctx.fillRect(px+4,py+3,TILE-8,4);}
+          }
+          mctx.strokeStyle='rgba(0,0,0,1)';mctx.lineWidth=2.5;mctx.strokeRect(px+.5,py+.5,TILE-1,TILE-1);
+          mctx.strokeStyle=isCarnival?'rgba(255,180,255,.08)':'rgba(255,255,255,.05)';mctx.lineWidth=1;mctx.strokeRect(px+3,py+3,TILE-6,TILE-6);
+        } else if(t===4){
+          mctx.fillStyle='#1a0202';mctx.fillRect(px,py,TILE,TILE);
+        } else if(t===3){
+          const elevBase=isCarnival?(seed<5?'#6a2a10':seed<10?'#7a3010':'#5a2008'):'#383838';
+          mctx.fillStyle=elevBase;mctx.fillRect(px,py,TILE,TILE);
+          if(isCarnival){
+            if((tx+ty)%4===0){mctx.fillStyle='rgba(200,50,50,.4)';mctx.fillRect(px,py,TILE,3);}
+            else{mctx.fillStyle='rgba(255,200,100,.18)';mctx.fillRect(px,py,TILE,3);}
+            mctx.strokeStyle='rgba(255,160,60,.3)';mctx.lineWidth=1;mctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+          } else {
+            mctx.fillStyle='rgba(255,255,255,.1)';mctx.fillRect(px,py,TILE,3);
+            mctx.fillStyle='rgba(0,0,0,.4)';mctx.fillRect(px,py+TILE-3,TILE,3);
+            mctx.strokeStyle='rgba(255,255,255,.12)';mctx.lineWidth=1;mctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+          }
         } else {
-          const floorBase = seed<4?'#2a2838':seed<9?'#2c2a3c':'#262434';
-          mctx.fillStyle = floorBase; mctx.fillRect(px,py,TILE,TILE);
-          mctx.strokeStyle = 'rgba(0,0,0,.55)'; mctx.lineWidth = 1.2; mctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
-          if(seed2<5){mctx.fillStyle='rgba(255,240,200,.03)';mctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
-          mctx.fillStyle = 'rgba(255,255,255,.022)'; mctx.fillRect(px+2,py+2,TILE*.45,2);
-          mctx.fillStyle = 'rgba(255,255,255,.012)'; mctx.fillRect(px+2,py+2,2,TILE*.45);
-          if(seed===5&&seed2===2){
-            mctx.save();mctx.globalAlpha=.25;mctx.fillStyle='#8a0a0a';
-            mctx.beginPath();mctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,.3,0,Math.PI*2);mctx.fill();
-            mctx.beginPath();mctx.ellipse(px+TILE*.62,py+TILE*.55,TILE*.11,TILE*.07,-.5,0,Math.PI*2);mctx.fill();
-            mctx.restore();
-          }
-          if(seed===11&&seed2===4){
-            mctx.save();mctx.globalAlpha=.15;mctx.fillStyle='#6a0505';
-            mctx.beginPath();mctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.32,TILE*.18,0,0,Math.PI*2);mctx.fill();
-            mctx.restore();
-          }
-          if(seed===8){
-            mctx.strokeStyle='rgba(0,0,0,.32)';mctx.lineWidth=.9;
-            mctx.beginPath();mctx.moveTo(px+TILE*.2,py+TILE*.1);mctx.lineTo(px+TILE*.55,py+TILE*.5);mctx.lineTo(px+TILE*.8,py+TILE*.85);mctx.stroke();
-          }
-          if((tx*3+ty*7)%29===0){
-            mctx.strokeStyle='rgba(0,0,0,.3)';mctx.lineWidth=1;
-            mctx.strokeRect(px+TILE*.32,py+TILE*.32,TILE*.36,TILE*.36);
+          const floorBase=isCarnival?(seed<4?'#1a0a28':seed<9?'#1c0c2a':'#160826'):(seed<4?'#2a2838':seed<9?'#2c2a3c':'#262434');
+          mctx.fillStyle=floorBase;mctx.fillRect(px,py,TILE,TILE);
+          mctx.strokeStyle='rgba(0,0,0,.55)';mctx.lineWidth=1.2;mctx.strokeRect(px+1,py+1,TILE-2,TILE-2);
+          if(isCarnival){
+            if(seed2<4){const dc=['rgba(255,80,80,.15)','rgba(80,200,255,.12)','rgba(255,220,50,.1)','rgba(200,80,255,.12)'];mctx.fillStyle=dc[seed%4];mctx.beginPath();mctx.arc(px+TILE*.3,py+TILE*.4,2,0,Math.PI*2);mctx.fill();mctx.fillStyle=dc[(seed+2)%4];mctx.beginPath();mctx.arc(px+TILE*.7,py+TILE*.6,1.5,0,Math.PI*2);mctx.fill();}
+            if((tx+ty)%6===0){mctx.fillStyle='rgba(255,255,255,.04)';mctx.fillRect(px,py,TILE/2,TILE/2);mctx.fillRect(px+TILE/2,py+TILE/2,TILE/2,TILE/2);}
+          } else {
+            if(seed2<5){mctx.fillStyle='rgba(255,240,200,.03)';mctx.fillRect(px+2,py+2,TILE-4,TILE-4);}
+            mctx.fillStyle='rgba(255,255,255,.022)';mctx.fillRect(px+2,py+2,TILE*.45,2);
+            mctx.fillStyle='rgba(255,255,255,.012)';mctx.fillRect(px+2,py+2,2,TILE*.45);
+            if(seed===5&&seed2===2){mctx.save();mctx.globalAlpha=.25;mctx.fillStyle='#8a0a0a';mctx.beginPath();mctx.ellipse(px+TILE*.4,py+TILE*.5,TILE*.28,TILE*.16,.3,0,Math.PI*2);mctx.fill();mctx.beginPath();mctx.ellipse(px+TILE*.62,py+TILE*.55,TILE*.11,TILE*.07,-.5,0,Math.PI*2);mctx.fill();mctx.restore();}
+            if(seed===11&&seed2===4){mctx.save();mctx.globalAlpha=.15;mctx.fillStyle='#6a0505';mctx.beginPath();mctx.ellipse(px+TILE*.5,py+TILE*.3,TILE*.32,TILE*.18,0,0,Math.PI*2);mctx.fill();mctx.restore();}
+            if(seed===8){mctx.strokeStyle='rgba(0,0,0,.32)';mctx.lineWidth=.9;mctx.beginPath();mctx.moveTo(px+TILE*.2,py+TILE*.1);mctx.lineTo(px+TILE*.55,py+TILE*.5);mctx.lineTo(px+TILE*.8,py+TILE*.85);mctx.stroke();}
+            if((tx*3+ty*7)%29===0){mctx.strokeStyle='rgba(0,0,0,.3)';mctx.lineWidth=1;mctx.strokeRect(px+TILE*.32,py+TILE*.32,TILE*.36,TILE*.36);}
           }
         }
       }
@@ -7228,7 +7499,7 @@ const Game={
     // Dibujar paredes rojas (tipo 4) encima del cache — animación por frame
     for(let ty=ty0;ty<=ty1;ty++){
       for(let tx=tx0;tx<=tx1;tx++){
-        if(BASE_MAP[ty][tx]!==4)continue;
+        if((W&&W.map?W.map:BASE_MAP)[ty][tx]!==4)continue;
         const px=tx*TILE,py=ty*TILE;
         const seed=(tx*7+ty*13)%17;
         const rPulse=(Math.sin(_rTime+tx*0.5+ty*0.7)*0.12)+0.88;
@@ -7403,6 +7674,129 @@ const Game={
         ctx.fillStyle='rgba(180,175,165,.05)';ctx.fillRect(px+4,py+7,TILE-8,TILE-14);
       });
     });
+
+    // ── CARNIVAL PROPS (solo cuando mapId=coolcarnival) ──
+    if(W&&W.mapId==='coolcarnival'){
+      const _ct=Date.now()/1000;
+
+      // Señal circular roja grande (zona cadenas, x:3-7, y:20-24)
+      drawProp(5,22,(px,py)=>{
+        ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+        const pulse=0.7+Math.sin(_ct*1.5)*0.3;
+        ctx.shadowColor=`rgba(220,30,30,${pulse*0.9})`;ctx.shadowBlur=20*pulse;
+        ctx.strokeStyle=`rgba(255,60,60,${pulse})`;ctx.lineWidth=5;
+        ctx.beginPath();ctx.arc(0,0,TILE*1.1,0,Math.PI*2);ctx.stroke();
+        ctx.fillStyle=`rgba(180,20,20,${pulse*0.4})`;
+        ctx.beginPath();ctx.arc(0,0,TILE*1.1,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle=`rgba(255,255,255,${pulse*0.9})`;
+        ctx.font=`bold ${TILE*.35}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('!',0,0);
+        ctx.shadowBlur=0;ctx.restore();
+      });
+
+      // Eslabones de cadena entre bloques (conectores)
+      [[4,13],[4,19],[4,25],[4,31]].forEach(([wx,wy])=>{
+        drawProp(wx,wy,(px,py)=>{
+          ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+          ctx.strokeStyle='#884422';ctx.lineWidth=3;
+          ctx.beginPath();ctx.ellipse(0,-TILE*.1,TILE*.22,TILE*.38,0,0,Math.PI*2);ctx.stroke();
+          ctx.strokeStyle='#cc6633';ctx.lineWidth=1.5;
+          ctx.beginPath();ctx.ellipse(0,-TILE*.1,TILE*.15,TILE*.28,0,0,Math.PI*2);ctx.stroke();
+          ctx.restore();
+        });
+      });
+
+      // Luces de carnaval — farolas en el pasillo central (y:19, entre zonas)
+      [[20,19],[26,19],[32,19],[38,19],[44,19],[50,19]].forEach(([wx,wy],i)=>{
+        drawProp(wx,wy,(px,py)=>{
+          const p2=0.65+Math.sin(_ct*2.5+i*1.1)*0.35;
+          const cols=['#ff4444','#ffcc22','#44ff88','#4488ff','#ff44cc','#ff8844'];
+          ctx.save();ctx.translate(px+TILE/2,py+TILE*.15);
+          ctx.strokeStyle='#442200';ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,TILE*.65);ctx.stroke();
+          ctx.shadowColor=cols[i%6];ctx.shadowBlur=14*p2;
+          ctx.fillStyle=cols[i%6];ctx.globalAlpha=p2*0.9;
+          ctx.beginPath();ctx.arc(0,0,TILE*.13,0,Math.PI*2);ctx.fill();
+          ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.restore();
+        });
+      });
+
+      // Rayas carpa de circo (edificio suroeste x:4-16, y:32-43)
+      // Las rayas ya están en el mapa como tile=3; aquí añadimos el cartel
+      drawProp(10,32,(px,py)=>{
+        ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+        const p2=0.6+Math.sin(_ct*2)*0.4;
+        ctx.fillStyle='rgba(10,0,20,.8)';ctx.fillRect(-TILE*.7,-TILE*.3,TILE*1.4,TILE*.6);
+        ctx.strokeStyle=`rgba(255,80,80,${p2})`;ctx.lineWidth=1.5;
+        ctx.strokeRect(-TILE*.7,-TILE*.3,TILE*1.4,TILE*.6);
+        ctx.shadowColor='#ff5555';ctx.shadowBlur=8*p2;
+        ctx.fillStyle=`rgba(255,160,160,${p2})`;
+        ctx.font=`bold ${TILE*.22}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('BIG TOP',0,0);
+        ctx.shadowBlur=0;ctx.restore();
+      });
+
+      // Cartel COFFEMAKER en pasillo este (x:46-62, y:27)
+      drawProp(54,27,(px,py)=>{
+        ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+        const p2=0.55+Math.sin(_ct*1.8)*0.45;
+        ctx.fillStyle='rgba(5,15,5,.85)';ctx.fillRect(-TILE*1.3,-TILE*.28,TILE*2.6,TILE*.56);
+        ctx.strokeStyle=`rgba(100,255,100,${p2*0.8})`;ctx.lineWidth=1.5;
+        ctx.strokeRect(-TILE*1.3,-TILE*.28,TILE*2.6,TILE*.56);
+        ctx.shadowColor='#44ff44';ctx.shadowBlur=10*p2;
+        ctx.fillStyle=`rgba(180,255,180,${p2})`;
+        ctx.font=`bold ${TILE*.2}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('☕ COFFEMAKER',0,0);
+        ctx.shadowBlur=0;ctx.restore();
+      });
+
+      // Taquillas de entrada sur (x:25-26 y 38-39, y:38)
+      [[25,38],[38,38]].forEach(([wx,wy])=>{
+        drawProp(wx,wy,(px,py)=>{
+          ctx.fillStyle='#3a0a0a';ctx.fillRect(px+3,py+4,TILE-6,TILE-8);
+          ctx.strokeStyle='#cc2222';ctx.lineWidth=1.5;ctx.strokeRect(px+3,py+4,TILE-6,TILE-8);
+          ctx.fillStyle='rgba(255,60,60,.15)';ctx.fillRect(px+5,py+6,TILE-10,TILE*.4);
+          ctx.font=`${TILE*.28}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillStyle='rgba(255,200,50,.7)';ctx.fillText('🎫',px+TILE/2,py+TILE*.55);
+        });
+      });
+
+      // Cartel entrada "C00L CARNIVAL"
+      drawProp(31,43,(px,py)=>{
+        ctx.save();ctx.translate(px+TILE/2,py+TILE/2);
+        const p2=0.55+Math.sin(_ct*3)*0.45;
+        ctx.fillStyle='rgba(25,5,35,.88)';ctx.fillRect(-TILE*1.1,-TILE*.32,TILE*2.2,TILE*.64);
+        ctx.strokeStyle=`rgba(255,100,255,${p2*0.95})`;ctx.lineWidth=2;
+        ctx.shadowColor='#ff55ff';ctx.shadowBlur=12*p2;ctx.strokeRect(-TILE*1.1,-TILE*.32,TILE*2.2,TILE*.64);
+        ctx.font=`bold ${TILE*.22}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle=`rgba(255,180,255,${p2})`;ctx.fillText('C00L CARNIVAL',0,0);
+        ctx.shadowBlur=0;ctx.restore();
+      });
+
+      // Globos dentro del exhibit (noroeste)
+      [[13,4],[17,6],[12,12],[19,13]].forEach(([wx,wy],i)=>{
+        drawProp(wx,wy,(px,py)=>{
+          const cols=['#ff4444','#ffcc22','#44aaff','#ff44ff'];
+          const sway=Math.sin(_ct*1.4+i*0.9)*3;
+          ctx.save();ctx.translate(px+TILE/2+sway,py+TILE*.25);
+          ctx.shadowColor=cols[i%4];ctx.shadowBlur=6;
+          ctx.fillStyle=cols[i%4];ctx.globalAlpha=0.75;
+          ctx.beginPath();ctx.arc(0,0,TILE*.14,0,Math.PI*2);ctx.fill();
+          ctx.globalAlpha=1;
+          ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=1;
+          ctx.beginPath();ctx.arc(-TILE*.03,-TILE*.04,TILE*.04,0,Math.PI*2);ctx.stroke();
+          ctx.strokeStyle='rgba(200,200,200,.4)';ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(0,TILE*.14);ctx.lineTo(-sway*.3,TILE*.48);ctx.stroke();
+          ctx.shadowBlur=0;ctx.restore();
+        });
+      });
+
+      // Mostrador del edificio norte-centro
+      drawProp(32,6,(px,py)=>{
+        ctx.font=`${TILE*.32}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.globalAlpha=0.65;ctx.fillText('🎪',px+TILE/2,py+TILE/2);ctx.globalAlpha=1;
+      });
+    }
 
     // Generators — máquinas de electroshock abandonadas
     W.gens.forEach(g=>{
@@ -7609,6 +8003,16 @@ const Game={
         ctx.strokeRect(-sf.hh,-sf.hw,sf.hh*2,sf.hw*2);
         ctx.strokeStyle=`rgba(255,180,180,${alpha*0.7})`;ctx.lineWidth=1;
         for(let i=0;i<3;i++){const oy=(i-1)*sf.hw*.55;ctx.beginPath();ctx.moveTo(-sf.hh,oy);ctx.lineTo(sf.hh,oy);ctx.stroke();}
+      }
+      // Hitbox debug overlay — se dibuja encima de cualquier FX visual cuando está activo
+      if(S.showHitbox&&(sf.nicoKnifeSwing||sf.slasherSwing||sf.nicoChargePulse||sf.nicoKnifeHb||sf.nicoSlash)){
+        const dw=sf.rhw!==undefined?sf.rhw:sf.hw;
+        const dh=sf.rhh!==undefined?sf.rhh:sf.hh;
+        ctx.globalAlpha=alpha*0.55;
+        ctx.fillStyle='rgba(255,30,30,0.35)';
+        ctx.fillRect(-dh,-dw,dh*2,dw*2);
+        ctx.strokeStyle='rgba(255,100,100,0.9)';ctx.lineWidth=1.5;
+        ctx.strokeRect(-dh,-dw,dh*2,dw*2);
       }
       ctx.globalAlpha=1;ctx.restore();
     });
